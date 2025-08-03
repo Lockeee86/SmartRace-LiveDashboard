@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SmartRace{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <h2 class="text-3xl font-bold text-center">📊 Race Dashboard</h2>
+    
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+            <div class="text-sm text-gray-400">Total Laps</div>
+            <div id="total-laps" class="text-2xl font-bold text-blue-400">-</div>
+        </div>
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+            <div class="text-sm text-gray-400">Active Drivers</div>
+            <div id="active-drivers" class="text-2xl font-bold text-green-400">-</div>
+        </div>
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+            <div class="text-sm text-gray-400">Fastest Lap</div>
+            <div id="fastest-lap" class="text-2xl font-bold text-yellow-400">-</div>
+        </div>
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+            <div class="text-sm text-gray-400">Current Race</div>
+            <div id="current-race" class="text-2xl font-bold text-purple-400">-</div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg">
+        <h3 class="text-xl font-bold mb-4">Quick Actions</h3>
+        <div class="space-x-4">
+            <button class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors">
+                🔄 Refresh Data
+            </button>
+            <button class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition-colors">
+                📊 View Charts
+            </button>
+            <button class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg transition-colors">
+                📱 Live View
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Load dashboard data
+    async function loadDashboard() {
+        try {
+            const response = await fetch('/api/stats');
+            const data = await response.json();
+            
+            document.getElementById('total-laps').textContent = data.total_laps;
+            document.getElementById('active-drivers').textContent = data.active_drivers;
+            document.getElementById('fastest-lap').textContent = data.fastest_lap;
+            document.getElementById('current-race').textContent = data.current_race;
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+        }
+    }
+
+    // Load data on page load
+    loadDashboard();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(loadDashboard, 30000);
+</script>
+{% endblock %}
