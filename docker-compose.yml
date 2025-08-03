@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  web:
+    image: python:3.11-slim
+    working_dir: /app
+    command: sh -c "pip install flask mysql-connector-python && python app.py"
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
+    depends_on:
+      - mysql
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: smartrace123
+      MYSQL_DATABASE: smartrace
+      MYSQL_USER: smartrace
+      MYSQL_PASSWORD: smartrace123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
