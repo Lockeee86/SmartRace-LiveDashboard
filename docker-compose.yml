@@ -9,6 +9,7 @@ services:
       - mysql
     environment:
       - FLASK_ENV=development
+      - DROPBOX_TOKEN=your_dropbox_access_token_here  # Hier deinen Dropbox Token eintragen
 
   mysql:
     image: mysql:8.0
