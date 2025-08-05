@@ -2,9 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY app.py .
-COPY templates/ templates/
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
-RUN pip install flask mysql-connector-python requests
+COPY . .
+
+EXPOSE 5000
 
 CMD ["python", "app.py"]
