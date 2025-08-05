@@ -6,9 +6,11 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - DATABASE_URL=sqlite:///smartrace.db
+      - DATABASE_URL=postgresql://smartrace:smartrace123@db:5432/smartrace
+      - DROPBOX_ACCESS_TOKEN=${DROPBOX_ACCESS_TOKEN:-}
     volumes:
       - ./data:/app/data
+      - ./exports:/app/exports
     depends_on:
       - db
     restart: unless-stopped
