@@ -53,6 +53,8 @@ class SmartRaceTestSuite:
         test_payload = {
             "time": int(time.time() * 1000),
             "event_type": "ui.lap_update",
+            "driver": "Test Driver 1",
+            "car": "Test Car Red",
             "event_data": {
                 "controller_id": "1",
                 "lap": 1,
@@ -65,8 +67,8 @@ class SmartRaceTestSuite:
                 "sector_3": "0:04.300",
                 "sector_3_pb": True,
                 "event_id": "test_event_001",
-                "driver": "Test Driver 1",
-                "car": "Test Car Red"
+                "driver_data": {"name": "Test Driver 1"},
+                "car_data": {"name": "Test Car Red", "color": "#FF0000"}
             }
         }
         
@@ -169,6 +171,8 @@ class SmartRaceTestSuite:
             payload = {
                 "time": int((time.time() - random.randint(0, 86400)) * 1000),  # Last 24 hours
                 "event_type": event_type,
+                "driver": controller["driver"],
+                "car": controller["car"],
                 "event_data": {}
             }
             
@@ -220,10 +224,10 @@ class SmartRaceTestSuite:
                     "sector_3": ms_to_timestring(max(1000, sector3_ms)),
                     "sector_3_pb": random.random() < pb_chance,
                     "event_id": event_id,
-                    "driver": controller["driver"],
-                    "car": controller["car"],
                     "track": current_track["name"],
-                    "session_type": current_session
+                    "session_type": current_session,
+                    "driver_data": {"name": controller["driver"]},
+                    "car_data": {"name": controller["car"], "color": controller["color"]}
                 }
                 
             elif event_type == "event.start":
@@ -277,14 +281,14 @@ class SmartRaceTestSuite:
         
         # Top 8 Fahrer für Live-Simulation
         controllers = [
-            {"id": "1", "driver": "Max Verstappen", "car": "Red Bull RB20", "skill": 0.92, "position": 1},
-            {"id": "3", "driver": "Lewis Hamilton", "car": "Mercedes W15", "skill": 0.94, "position": 2},
-            {"id": "5", "driver": "Charles Leclerc", "car": "Ferrari SF-24", "skill": 0.93, "position": 3},
-            {"id": "7", "driver": "Lando Norris", "car": "McLaren MCL38", "skill": 0.94, "position": 4},
-            {"id": "9", "driver": "Fernando Alonso", "car": "Aston Martin AMR24", "skill": 0.95, "position": 5},
-            {"id": "4", "driver": "George Russell", "car": "Mercedes W15", "skill": 0.95, "position": 6},
-            {"id": "6", "driver": "Carlos Sainz", "car": "Ferrari SF-24", "skill": 0.95, "position": 7},
-            {"id": "8", "driver": "Oscar Piastri", "car": "McLaren MCL38", "skill": 0.97, "position": 8}
+            {"id": "1", "driver": "Max Verstappen", "car": "Red Bull RB20", "skill": 0.92, "position": 1, "color": "#3671C6"},
+            {"id": "3", "driver": "Lewis Hamilton", "car": "Mercedes W15", "skill": 0.94, "position": 2, "color": "#27F4D2"},
+            {"id": "5", "driver": "Charles Leclerc", "car": "Ferrari SF-24", "skill": 0.93, "position": 3, "color": "#E8002D"},
+            {"id": "7", "driver": "Lando Norris", "car": "McLaren MCL38", "skill": 0.94, "position": 4, "color": "#FF8000"},
+            {"id": "9", "driver": "Fernando Alonso", "car": "Aston Martin AMR24", "skill": 0.95, "position": 5, "color": "#229971"},
+            {"id": "4", "driver": "George Russell", "car": "Mercedes W15", "skill": 0.95, "position": 6, "color": "#27F4D2"},
+            {"id": "6", "driver": "Carlos Sainz", "car": "Ferrari SF-24", "skill": 0.95, "position": 7, "color": "#E8002D"},
+            {"id": "8", "driver": "Oscar Piastri", "car": "McLaren MCL38", "skill": 0.97, "position": 8, "color": "#FF8000"}
         ]
         
         # Silverstone als Beispielstrecke
@@ -318,6 +322,8 @@ class SmartRaceTestSuite:
             payload = {
                 "time": int(time.time() * 1000),
                 "event_type": "ui.lap_update",
+                "driver": controller["driver"],
+                "car": controller["car"],
                 "event_data": {
                     "controller_id": controller["id"],
                     "lap": lap_count[controller["id"]],
@@ -330,12 +336,12 @@ class SmartRaceTestSuite:
                     "sector_3": ms_to_timestring(max(1000, sector3_ms)),
                     "sector_3_pb": random.random() < pb_chance,
                     "event_id": "live_race_silverstone",
-                    "driver": controller["driver"],
-                    "car": controller["car"],
                     "track": track_name,
                     "session_type": "race",
                     "position": controller["position"],
-                    "gap": f"+{random.uniform(0.1, 30.5):.3f}s" if controller["position"] > 1 else "Leader"
+                    "gap": f"+{random.uniform(0.1, 30.5):.3f}s" if controller["position"] > 1 else "Leader",
+                    "driver_data": {"name": controller["driver"]},
+                    "car_data": {"name": controller["car"], "color": controller["color"]}
                 }
             }
             
