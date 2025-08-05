@@ -1,507 +1,389 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Database Management</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .container {
-            max-width: 1200px;
-        }
-        .card {
-            margin-bottom: 20px;
-        }
-        .alert {
-            margin-top: 10px;
-        }
-        .table-responsive {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        .btn {
-            margin: 5px;
-        }
-        .form-control {
-            margin-bottom: 10px;
-        }
-        .stats-row {
-            display: flex;
-            justify-content: space-around;
-            flex-wrap: wrap;
-        }
-        .stats-item {
-            text-align: center;
-            padding: 10px;
-            margin: 5px;
-            background: #f8f9fa;
-            border-radius: 5px;
-            min-width: 150px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container mt-4">
-        <h1 class="text-center mb-4">🏁 Database Management</h1>
-        
-        <!-- Navigation -->
-        <div class="text-center mb-4">
-            <a href="/" class="btn btn-primary">🏠 Back to Timing</a>
-        </div>
+{% extends "base.html" %}
 
-        <!-- Database Statistics -->
-        <div class="card">
-            <div class="card-header">
-                <h3>📊 Database Statistics</h3>
-            </div>
+{% block title %}Database - SmartRace{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4">Race Database</h2>
+    </div>
+</div>
+
+<!-- Filter und Export Sektion -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <select id="driverFilter" class="form-select">
+            <option value="">Alle Fahrer</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select id="carFilter" class="form-select">
+            <option value="">Alle Autos</option>
+        </select>
+    </div>
+    <div class="col-md-6">
+        <div class="btn-group w-100" role="group">
+            <button type="button" class="btn btn-success" onclick="exportCSV()">
+                <i class="fas fa-download"></i> CSV Export
+            </button>
+            <button type="button" class="btn btn-primary" onclick="exportDropbox()" id="dropboxBtn">
+                <i class="fab fa-dropbox"></i> Zu Dropbox
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="showDropboxConfig()">
+                <i class="fas fa-cog"></i> Dropbox Setup
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Export Status -->
+<div id="exportStatus" class="alert d-none" role="alert"></div>
+
+<!-- Statistiken -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
             <div class="card-body">
-                <div class="stats-row" id="statsContainer">
-                    <div class="stats-item">
-                        <h4 id="totalLaps">-</h4>
-                        <small>Total Laps</small>
-                    </div>
-                    <div class="stats-item">
-                        <h4 id="totalDrivers">-</h4>
-                        <small>Drivers</small>
-                    </div>
-                    <div class="stats-item">
-                        <h4 id="totalCars">-</h4>
-                        <small>Cars</small>
-                    </div>
-                    <div class="stats-item">
-                        <h4 id="fastestLap">-</h4>
-                        <small>Fastest Lap</small>
-                    </div>
-                </div>
-                <button onclick="loadStats()" class="btn btn-info">🔄 Refresh Stats</button>
+                <h5 class="card-title" id="totalLaps">-</h5>
+                <p class="card-text">Gesamte Runden</p>
             </div>
         </div>
-
-        <!-- Export Options -->
-        <div class="card">
-            <div class="card-header">
-                <h3>📤 Export Data</h3>
-            </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <button onclick="exportCSV()" class="btn btn-success btn-lg w-100">
-                            📊 Export to CSV
-                        </button>
-                    </div>
-                    <div class="col-md-6">
-                        <button onclick="exportJSON()" class="btn btn-info btn-lg w-100">
-                            📋 Export to JSON
-                        </button>
-                    </div>
-                </div>
+                <h5 class="card-title" id="totalDrivers">-</h5>
+                <p class="card-text">Fahrer</p>
             </div>
         </div>
-
-        <!-- Dropbox Configuration -->
-        <div class="card">
-            <div class="card-header">
-                <h3>☁️ Dropbox Backup</h3>
-            </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-8">
-                        <label for="dropboxToken">Dropbox Access Token:</label>
-                        <input type="password" id="dropboxToken" class="form-control" 
-                               placeholder="Enter your Dropbox access token">
-                        <small class="text-muted">
-                            Get your token from: <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox App Console</a>
-                        </small>
-                    </div>
-                    <div class="col-md-4">
-                        <label>&nbsp;</label>
-                        <div>
-                            <button onclick="saveDropboxConfig()" class="btn btn-primary w-100 mb-2">
-                                💾 Setup Dropbox
-                            </button>
-                            <button onclick="testDropboxConnection()" class="btn btn-secondary w-100 mb-2">
-                                🔍 Test Connection
-                            </button>
-                            <button onclick="backupToDropbox()" class="btn btn-success w-100">
-                                ☁️ Backup Now
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div id="dropboxStatus"></div>
+                <h5 class="card-title" id="totalCars">-</h5>
+                <p class="card-text">Autos</p>
             </div>
         </div>
-
-        <!-- Data Management -->
-        <div class="card">
-            <div class="card-header">
-                <h3>🗂️ Data Management</h3>
-            </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5>View Data</h5>
-                        <button onclick="loadAllData()" class="btn btn-primary w-100 mb-2">
-                            📋 View All Lap Times
-                        </button>
-                        <button onclick="loadDrivers()" class="btn btn-info w-100">
-                            👥 View All Drivers
-                        </button>
-                    </div>
-                    <div class="col-md-6">
-                        <h5>⚠️ Danger Zone</h5>
-                        <button onclick="clearAllData()" class="btn btn-danger w-100 mb-2">
-                            🗑️ Clear All Data
-                        </button>
-                        <button onclick="resetDatabase()" class="btn btn-warning w-100">
-                            🔄 Reset Database
-                        </button>
-                    </div>
-                </div>
+                <h5 class="card-title" id="filteredRows">-</h5>
+                <p class="card-text">Gefilterte Einträge</p>
             </div>
         </div>
+    </div>
+</div>
 
-        <!-- Data Display -->
+<!-- Daten Tabelle -->
+<div class="row">
+    <div class="col-12">
         <div class="card">
-            <div class="card-header">
-                <h3>📊 Data View</h3>
-                <button onclick="hideDataView()" class="btn btn-sm btn-secondary float-end" style="display: none;" id="hideBtn">Hide</button>
-            </div>
-            <div class="card-body" id="dataDisplay" style="display: none;">
+            <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-striped" id="dataTable">
-                        <!-- Data will be loaded here -->
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Fahrer</th>
+                                <th>Auto</th>
+                                <th>Runde</th>
+                                <th>Rundenzeit</th>
+                                <th>Sektor 1</th>
+                                <th>Sektor 2</th>
+                                <th>Sektor 3</th>
+                                <th>Zeitstempel</th>
+                                <th>PB</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTable">
+                        </tbody>
                     </table>
                 </div>
             </div>
         </div>
-
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <script>
-        // Load statistics on page load
-        document.addEventListener('DOMContentLoaded', function() {
-            loadStats();
+<!-- Dropbox Konfiguration Modal -->
+<div class="modal fade" id="dropboxModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Dropbox Konfiguration</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="dropboxStatus" class="mb-3"></div>
+                
+                <div class="mb-3">
+                    <label for="dropboxToken" class="form-label">Dropbox Access Token</label>
+                    <input type="password" class="form-control" id="dropboxToken" 
+                           placeholder="Dropbox Access Token eingeben">
+                    <div class="form-text">
+                        <strong>So erhältst du einen Access Token:</strong><br>
+                        1. Gehe zu <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox App Console</a><br>
+                        2. Erstelle eine neue App (Scoped access, Full Dropbox)<br>
+                        3. Gehe zu "Settings" → "Generated access token"<br>
+                        4. Klicke "Generate" und kopiere den Token hier ein
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle"></i> 
+                        Exports werden im Ordner "/SmartRace_Exports" in deiner Dropbox gespeichert.
+                    </small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                <button type="button" class="btn btn-primary" onclick="saveDropboxConfig()">Speichern</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentData = [];
+let dropboxConfigured = false;
+
+function loadFilters() {
+    fetch('/api/filters')
+        .then(response => response.json())
+        .then(data => {
+            const driverSelect = document.getElementById('driverFilter');
+            const carSelect = document.getElementById('carFilter');
+            
+            // Clear existing options (except first)
+            driverSelect.innerHTML = '<option value="">Alle Fahrer</option>';
+            carSelect.innerHTML = '<option value="">Alle Autos</option>';
+            
+            data.drivers.forEach(driver => {
+                const option = document.createElement('option');
+                option.value = driver;
+                option.textContent = driver;
+                driverSelect.appendChild(option);
+            });
+            
+            data.cars.forEach(car => {
+                const option = document.createElement('option');
+                option.value = car;
+                option.textContent = car;
+                carSelect.appendChild(option);
+            });
+            
+            // Update statistics
+            document.getElementById('totalDrivers').textContent = data.drivers.length;
+            document.getElementById('totalCars').textContent = data.cars.length;
         });
+}
 
-        // Load database statistics
-        async function loadStats() {
-            try {
-                const response = await fetch('/api/stats');
-                const data = await response.json();
-                
-                if (data.success) {
-                    document.getElementById('totalLaps').textContent = data.stats.total_laps;
-                    document.getElementById('totalDrivers').textContent = data.stats.total_drivers;
-                    document.getElementById('totalCars').textContent = data.stats.total_cars;
-                    document.getElementById('fastestLap').textContent = data.stats.fastest_lap || 'No laps yet';
-                } else {
-                    console.error('Error loading stats:', data.error);
-                }
-            } catch (error) {
-                console.error('Network error:', error);
-            }
-        }
-
-        // Export to CSV
-        async function exportCSV() {
-            try {
-                const response = await fetch('/api/export/csv');
-                const blob = await response.blob();
-                
-                if (response.ok) {
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `laptimes_${new Date().toISOString().split('T')[0]}.csv`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                    
-                    showAlert('✅ CSV exported successfully!', 'success');
-                } else {
-                    showAlert('❌ Export failed', 'danger');
-                }
-            } catch (error) {
-                console.error('Export error:', error);
-                showAlert('❌ Export failed: ' + error.message, 'danger');
-            }
-        }
-
-        // Export to JSON
-        async function exportJSON() {
-            try {
-                const response = await fetch('/api/export/json');
-                const data = await response.json();
-                
-                if (response.ok) {
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `laptimes_${new Date().toISOString().split('T')[0]}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                    
-                    showAlert('✅ JSON exported successfully!', 'success');
-                } else {
-                    showAlert('❌ Export failed', 'danger');
-                }
-            } catch (error) {
-                console.error('Export error:', error);
-                showAlert('❌ Export failed: ' + error.message, 'danger');
-            }
-        }
-
-        // Dropbox Functions
-        async function saveDropboxConfig() {
-            const token = document.getElementById('dropboxToken').value.trim();
-            const statusDiv = document.getElementById('dropboxStatus');
+function loadData() {
+    const driverFilter = document.getElementById('driverFilter').value;
+    const carFilter = document.getElementById('carFilter').value;
+    
+    const params = new URLSearchParams();
+    if (driverFilter) params.append('driver', driverFilter);
+    if (carFilter) params.append('car', carFilter);
+    
+    fetch(`/api/database?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            currentData = data;
+            const tbody = document.getElementById('dataTable');
+            tbody.innerHTML = '';
             
-            if (!token) {
-                statusDiv.innerHTML = '<div class="alert alert-danger">Please enter a Dropbox token</div>';
-                return;
-            }
-            
-            statusDiv.innerHTML = '<div class="alert alert-info">Setting up Dropbox connection...</div>';
-            
-            try {
-                const response = await fetch('/api/dropbox/setup', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ token: token })
-                });
+            data.forEach(lap => {
+                const row = document.createElement('tr');
+                if (lap.is_pb) row.classList.add('table-success');
                 
-                const data = await response.json();
+                row.innerHTML = `
+                    <td>${lap.driver || '-'}</td>
+                    <td>${lap.car || '-'}</td>
+                    <td>${lap.lap || '-'}</td>
+                    <td>${lap.laptime || '-'}</td>
+                    <td>${lap.sector_1 || '-'}</td>
+                    <td>${lap.sector_2 || '-'}</td>
+                    <td>${lap.sector_3 || '-'}</td>
+                    <td>${new Date(lap.timestamp).toLocaleString()}</td>
+                    <td>${lap.is_pb ? '<i class="fas fa-trophy text-warning"></i>' : ''}</td>
+                `;
                 
-                if (data.success) {
-                    statusDiv.innerHTML = `<div class="alert alert-success">✅ ${data.message}</div>`;
-                } else {
-                    statusDiv.innerHTML = `<div class="alert alert-danger">❌ Error: ${data.error}</div>`;
-                }
-            } catch (error) {
-                console.error('Network error:', error);
-                statusDiv.innerHTML = `<div class="alert alert-danger">Network error: ${error.message}</div>`;
-            }
-        }
-
-        async function testDropboxConnection() {
-            const statusDiv = document.getElementById('dropboxStatus');
-            statusDiv.innerHTML = '<div class="alert alert-info">Testing Dropbox connection...</div>';
-            
-            try {
-                const response = await fetch('/api/dropbox/test');
-                const data = await response.json();
-                
-                if (data.success) {
-                    statusDiv.innerHTML = `<div class="alert alert-success">✅ Connected to: ${data.account}</div>`;
-                } else {
-                    statusDiv.innerHTML = `<div class="alert alert-danger">❌ ${data.error}</div>`;
-                }
-            } catch (error) {
-                statusDiv.innerHTML = `<div class="alert alert-danger">Network error: ${error.message}</div>`;
-            }
-        }
-
-        async function backupToDropbox() {
-            const statusDiv = document.getElementById('dropboxStatus');
-            statusDiv.innerHTML = '<div class="alert alert-info">Creating backup...</div>';
-            
-            try {
-                const response = await fetch('/api/dropbox/backup', {
-                    method: 'POST'
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    statusDiv.innerHTML = `<div class="alert alert-success">✅ ${data.message} (${data.records} records)</div>`;
-                } else {
-                    statusDiv.innerHTML = `<div class="alert alert-danger">❌ ${data.error}</div>`;
-                }
-            } catch (error) {
-                statusDiv.innerHTML = `<div class="alert alert-danger">Network error: ${error.message}</div>`;
-            }
-        }
-
-        // Load all lap times
-        async function loadAllData() {
-            try {
-                const response = await fetch('/api/export/json');
-                const data = await response.json();
-                
-                if (response.ok && data.length > 0) {
-                    displayDataTable(data, 'All Lap Times', [
-                        'Driver', 'Car', 'Lap Time', 'Timestamp'
-                    ]);
-                } else {
-                    showAlert('No data available', 'info');
-                }
-            } catch (error) {
-                console.error('Load error:', error);
-                showAlert('Error loading data: ' + error.message, 'danger');
-            }
-        }
-
-        // Load drivers summary
-        async function loadDrivers() {
-            try {
-                const response = await fetch('/api/drivers');
-                const data = await response.json();
-                
-                if (data.success && data.drivers.length > 0) {
-                    displayDriversTable(data.drivers);
-                } else {
-                    showAlert('No drivers found', 'info');
-                }
-            } catch (error) {
-                console.error('Load error:', error);
-                showAlert('Error loading drivers: ' + error.message, 'danger');
-            }
-        }
-
-        // Display data in table
-        function displayDataTable(data, title, headers) {
-            const dataDisplay = document.getElementById('dataDisplay');
-            const dataTable = document.getElementById('dataTable');
-            const hideBtn = document.getElementById('hideBtn');
-            
-            let html = `<h5>${title} (${data.length} records)</h5>`;
-            html += '<table class="table table-striped table-hover">';
-            html += '<thead class="table-dark"><tr>';
-            headers.forEach(header => {
-                html += `<th>${header}</th>`;
-            });
-            html += '</tr></thead><tbody>';
-            
-            data.forEach(row => {
-                html += '<tr>';
-                html += `<td>${row.driver_name}</td>`;
-                html += `<td>${row.car_name}</td>`;
-                html += `<td><strong>${row.laptime}</strong></td>`;
-                html += `<td>${new Date(row.timestamp).toLocaleString()}</td>`;
-                html += '</tr>';
+                tbody.appendChild(row);
             });
             
-            html += '</tbody></table>';
-            dataTable.innerHTML = html;
-            dataDisplay.style.display = 'block';
-            hideBtn.style.display = 'block';
-        }
-
-        // Display drivers table
-        function displayDriversTable(drivers) {
-            const dataDisplay = document.getElementById('dataDisplay');
-            const dataTable = document.getElementById('dataTable');
-            const hideBtn = document.getElementById('hideBtn');
+            // Update statistics
+            document.getElementById('filteredRows').textContent = data.length;
             
-            let html = `<h5>Drivers Summary (${drivers.length} drivers)</h5>`;
-            html += '<table class="table table-striped table-hover">';
-            html += '<thead class="table-dark"><tr>';
-            html += '<th>Driver</th><th>Total Laps</th><th>Best Time</th><th>Cars Used</th>';
-            html += '</tr></thead><tbody>';
-            
-            drivers.forEach(driver => {
-                html += '<tr>';
-                html += `<td><strong>${driver.name}</strong></td>`;
-                html += `<td>${driver.lap_count}</td>`;
-                html += `<td>${driver.best_time}</td>`;
-                html += `<td>${driver.cars_used}</td>`;
-                html += '</tr>';
-            });
-            
-            html += '</tbody></table>';
-            dataTable.innerHTML = html;
-            dataDisplay.style.display = 'block';
-            hideBtn.style.display = 'block';
-        }
-
-        // Hide data view
-        function hideDataView() {
-            document.getElementById('dataDisplay').style.display = 'none';
-            document.getElementById('hideBtn').style.display = 'none';
-        }
-
-        // Clear all data
-        async function clearAllData() {
-            if (!confirm('⚠️ Are you sure you want to delete ALL lap times? This cannot be undone!')) {
-                return;
-            }
-            
-            if (!confirm('🚨 FINAL WARNING: This will permanently delete all data. Continue?')) {
-                return;
-            }
-            
-            try {
-                const response = await fetch('/api/clear-all', {
-                    method: 'DELETE'
+            // Get total laps count
+            fetch('/api/database')
+                .then(response => response.json())
+                .then(allData => {
+                    document.getElementById('totalLaps').textContent = allData.length;
                 });
-                const data = await response.json();
-                
-                if (data.success) {
-                    showAlert(`✅ ${data.message}`, 'success');
-                    loadStats(); // Refresh stats
-                    hideDataView(); // Hide data view
-                } else {
-                    showAlert(`❌ Error: ${data.error}`, 'danger');
-                }
-            } catch (error) {
-                console.error('Clear error:', error);
-                showAlert('❌ Error clearing data: ' + error.message, 'danger');
-            }
-        }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showStatus('Fehler beim Laden der Daten', 'danger');
+        });
+}
 
-        // Reset database
-        async function resetDatabase() {
-            if (!confirm('⚠️ This will reset the entire database structure. Continue?')) {
-                return;
-            }
-            
-            try {
-                const response = await fetch('/api/reset-db', {
-                    method: 'POST'
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    showAlert(`✅ ${data.message}`, 'success');
-                    loadStats(); // Refresh stats
-                    hideDataView(); // Hide data view
-                } else {
-                    showAlert(`❌ Error: ${data.error}`, 'danger');
-                }
-            } catch (error) {
-                console.error('Reset error:', error);
-                showAlert('❌ Error resetting database: ' + error.message, 'danger');
-            }
-        }
+function exportCSV() {
+    const driverFilter = document.getElementById('driverFilter').value;
+    const carFilter = document.getElementById('carFilter').value;
+    
+    const params = new URLSearchParams();
+    if (driverFilter) params.append('driver', driverFilter);
+    if (carFilter) params.append('car', carFilter);
+    
+    showStatus('CSV Export wird erstellt...', 'info');
+    
+    // Download CSV
+    const link = document.createElement('a');
+    link.href = `/api/export/csv?${params}`;
+    link.download = `smartrace_export_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    setTimeout(() => {
+        showStatus(`CSV Export erfolgreich! ${currentData.length} Einträge exportiert.`, 'success');
+    }, 1000);
+}
 
-        // Show alert messages
-        function showAlert(message, type) {
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-            alertDiv.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
+function exportDropbox() {
+    if (!dropboxConfigured) {
+        showStatus('Bitte konfiguriere zuerst Dropbox über das Setup.', 'warning');
+        return;
+    }
+    
+    const driverFilter = document.getElementById('driverFilter').value;
+    const carFilter = document.getElementById('carFilter').value;
+    
+    const params = new URLSearchParams();
+    if (driverFilter) params.append('driver', driverFilter);
+    if (carFilter) params.append('car', carFilter);
+    
+    showStatus('Upload zu Dropbox...', 'info');
+    
+    fetch(`/api/export/dropbox?${params}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            let message = `✅ Export erfolgreich! ${data.records_exported} Einträge zu Dropbox hochgeladen.<br>`;
+            message += `📁 Datei: ${data.filename}<br>`;
+            if (data.share_url) {
+                message += `🔗 <a href="${data.share_url}" target="_blank">Download Link</a>`;
+            }
+            showStatus(message, 'success');
+        } else {
+            showStatus(`❌ Export fehlgeschlagen: ${data.error}`, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showStatus('❌ Netzwerkfehler beim Dropbox Export', 'danger');
+    });
+}
+
+function showDropboxConfig() {
+    checkDropboxStatus();
+    const modal = new bootstrap.Modal(document.getElementById('dropboxModal'));
+    modal.show();
+}
+
+function checkDropboxStatus() {
+    fetch('/api/dropbox/config')
+        .then(response => response.json())
+        .then(data => {
+            dropboxConfigured = data.configured;
+            const statusDiv = document.getElementById('dropboxStatus');
             
-            // Insert at top of container
-            const container = document.querySelector('.container');
-            container.insertBefore(alertDiv, container.firstChild.nextSibling);
+            if (data.configured) {
+                statusDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check"></i> Dropbox ist verbunden</div>';
+                document.getElementById('dropboxBtn').disabled = false;
+            } else {
+                statusDiv.innerHTML = '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> Dropbox nicht konfiguriert</div>';
+                document.getElementById('dropboxBtn').disabled = true;
+            }
+        });
+}
+
+function saveDropboxConfig() {
+    const token = document.getElementById('dropboxToken').value;
+    
+    if (!token) {
+        alert('Bitte gib einen Access Token ein.');
+        return;
+    }
+    
+    fetch('/api/dropbox/config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            access_token: token
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            dropboxConfigured = true;
+            document.getElementById('dropboxBtn').disabled = false;
             
-            // Auto remove after 5 seconds
+            const statusDiv = document.getElementById('dropboxStatus');
+            statusDiv.innerHTML = `<div class="alert alert-success">
+                <i class="fas fa-check"></i> Erfolgreich verbunden!<br>
+                <strong>Account:</strong> ${data.account_name}<br>
+                <strong>Email:</strong> ${data.email}
+            </div>`;
+            
+            showStatus('Dropbox erfolgreich konfiguriert!', 'success');
+            
+            // Modal nach 2 Sekunden schließen
             setTimeout(() => {
-                if (alertDiv.parentNode) {
-                    alertDiv.remove();
-                }
-            }, 5000);
+                const modal = bootstrap.Modal.getInstance(document.getElementById('dropboxModal'));
+                modal.hide();
+            }, 2000);
+        } else {
+            alert(`Konfiguration fehlgeschlagen: ${data.error}`);
         }
-    </script>
-</body>
-</html>
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Netzwerkfehler bei der Konfiguration');
+    });
+}
+
+function showStatus(message, type) {
+    const statusDiv = document.getElementById('exportStatus');
+    statusDiv.className = `alert alert-${type}`;
+    statusDiv.innerHTML = message;
+    statusDiv.classList.remove('d-none');
+    
+    // Auto-hide nach 5 Sekunden (außer bei Fehlern)
+    if (type !== 'danger') {
+        setTimeout(() => {
+            statusDiv.classList.add('d-none');
+        }, 5000);
+    }
+}
+
+// Event Listeners
+document.getElementById('driverFilter').addEventListener('change', loadData);
+document.getElementById('carFilter').addEventListener('change', loadData);
+
+// Initial load
+loadFilters();
+loadData();
+checkDropboxStatus();
+</script>
+{% endblock %}
