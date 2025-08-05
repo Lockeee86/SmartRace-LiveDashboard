@@ -1,181 +1,91 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - SmartRacer Analytics{% endblock %}
+{% block title %}Dashboard - SmartRace{% endblock %}
 
 {% block content %}
-<div class="mb-6">
-    <h2 class="text-2xl font-bold text-blue-400 mb-6">🏁 Live Dashboard</h2>
-    
-    <!-- 6 Controller Tabellen nebeneinander -->
-    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        <!-- Controller 1 - Rot -->
-        <div class="bg-red-900 bg-opacity-30 border border-red-500 rounded-lg p-4">
-            <h3 class="text-red-400 font-bold text-lg mb-3 text-center">Controller 1</h3>
-            <table class="w-full text-xs">
-                <thead>
-                    <tr class="text-red-300">
-                        <th class="text-left py-1">Fahrer</th>
-                        <th class="text-left py-1">Auto</th>
-                        <th class="text-center py-1">Runde</th>
-                        <th class="text-center py-1">Zeit</th>
-                        <th class="text-center py-1">S1</th>
-                        <th class="text-center py-1">S2</th>
-                        <th class="text-center py-1">S3</th>
-                    </tr>
-                </thead>
-                <tbody id="controller-1" class="text-red-200">
-                    <tr><td colspan="7" class="text-center py-4 text-gray-400">Keine Daten</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Controller 2 - Blau -->
-        <div class="bg-blue-900 bg-opacity-30 border border-blue-500 rounded-lg p-4">
-            <h3 class="text-blue-400 font-bold text-lg mb-3 text-center">Controller 2</h3>
-            <table class="w-full text-xs">
-                <thead>
-                    <tr class="text-blue-300">
-                        <th class="text-left py-1">Fahrer</th>
-                        <th class="text-left py-1">Auto</th>
-                        <th class="text-center py-1">Runde</th>
-                        <th class="text-center py-1">Zeit</th>
-                        <th class="text-center py-1">S1</th>
-                        <th class="text-center py-1">S2</th>
-                        <th class="text-center py-1">S3</th>
-                    </tr>
-                </thead>
-                <tbody id="controller-2" class="text-blue-200">
-                    <tr><td colspan="7" class="text-center py-4 text-gray-400">Keine Daten</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Controller 3 - Grün -->
-        <div class="bg-green-900 bg-opacity-30 border border-green-500 rounded-lg p-4">
-            <h3 class="text-green-400 font-bold text-lg mb-3 text-center">Controller 3</h3>
-            <table class="w-full text-xs">
-                <thead>
-                    <tr class="text-green-300">
-                        <th class="text-left py-1">Fahrer</th>
-                        <th class="text-left py-1">Auto</th>
-                        <th class="text-center py-1">Runde</th>
-                        <th class="text-center py-1">Zeit</th>
-                        <th class="text-center py-1">S1</th>
-                        <th class="text-center py-1">S2</th>
-                        <th class="text-center py-1">S3</th>
-                    </tr>
-                </thead>
-                <tbody id="controller-3" class="text-green-200">
-                    <tr><td colspan="7" class="text-center py-4 text-gray-400">Keine Daten</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Controller 4 - Gelb -->
-        <div class="bg-yellow-900 bg-opacity-30 border border-yellow-500 rounded-lg p-4">
-            <h3 class="text-yellow-400 font-bold text-lg mb-3 text-center">Controller 4</h3>
-            <table class="w-full text-xs">
-                <thead>
-                    <tr class="text-yellow-300">
-                        <th class="text-left py-1">Fahrer</th>
-                        <th class="text-left py-1">Auto</th>
-                        <th class="text-center py-1">Runde</th>
-                        <th class="text-center py-1">Zeit</th>
-                        <th class="text-center py-1">S1</th>
-                        <th class="text-center py-1">S2</th>
-                        <th class="text-center py-1">S3</th>
-                    </tr>
-                </thead>
-                <tbody id="controller-4" class="text-yellow-200">
-                    <tr><td colspan="7" class="text-center py-4 text-gray-400">Keine Daten</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Controller 5 - Lila -->
-        <div class="bg-purple-900 bg-opacity-30 border border-purple-500 rounded-lg p-4">
-            <h3 class="text-purple-400 font-bold text-lg mb-3 text-center">Controller 5</h3>
-            <table class="w-full text-xs">
-                <thead>
-                    <tr class="text-purple-300">
-                        <th class="text-left py-1">Fahrer</th>
-                        <th class="text-left py-1">Auto</th>
-                        <th class="text-center py-1">Runde</th>
-                        <th class="text-center py-1">Zeit</th>
-                        <th class="text-center py-1">S1</th>
-                        <th class="text-center py-1">S2</th>
-                        <th class="text-center py-1">S3</th>
-                    </tr>
-                </thead>
-                <tbody id="controller-5" class="text-purple-200">
-                    <tr><td colspan="7" class="text-center py-4 text-gray-400">Keine Daten</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Controller 6 - Orange -->
-        <div class="bg-orange-900 bg-opacity-30 border border-orange-500 rounded-lg p-4">
-            <h3 class="text-orange-400 font-bold text-lg mb-3 text-center">Controller 6</h3>
-            <table class="w-full text-xs">
-                <thead>
-                    <tr class="text-orange-300">
-                        <th class="text-left py-1">Fahrer</th>
-                        <th class="text-left py-1">Auto</th>
-                        <th class="text-center py-1">Runde</th>
-                        <th class="text-center py-1">Zeit</th>
-                        <th class="text-center py-1">S1</th>
-                        <th class="text-center py-1">S2</th>
-                        <th class="text-center py-1">S3</th>
-                    </tr>
-                </thead>
-                <tbody id="controller-6" class="text-orange-200">
-                    <tr><td colspan="7" class="text-center py-4 text-gray-400">Keine Daten</td></tr>
-                </tbody>
-            </table>
-        </div>
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4">Live Race Dashboard</h2>
     </div>
 </div>
 
+<div class="row" id="controller-tables">
+    <!-- Controller-Tabellen werden hier dynamisch eingefügt -->
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script>
-function loadLiveData() {
+let controllerColors = {};
+
+function updateDashboard() {
     fetch('/api/live-data')
         .then(response => response.json())
         .then(data => {
-            // Für jede Controller ID (1-6)
-            for (let i = 1; i <= 6; i++) {
-                const tbody = document.getElementById('controller-' + i);
-                const controllerData = data.filter(lap => lap.controller_id == i);
-                
+            const container = document.getElementById('controller-tables');
+            container.innerHTML = '';
+
+            Object.keys(data).forEach(controllerId => {
+                const controllerData = data[controllerId];
                 if (controllerData.length > 0) {
-                    let html = '';
-                    controllerData.slice(0, 5).forEach(lap => {  // Nur die letzten 5 Runden
-                        html += `
-                            <tr class="border-b border-opacity-20">
-                                <td class="py-1">${lap.driver || '-'}</td>
-                                <td class="py-1">${lap.car || '-'}</td>
-                                <td class="text-center py-1">${lap.lap_number || '-'}</td>
-                                <td class="text-center py-1">${lap.total_time ? lap.total_time.toFixed(3) + 's' : '-'}</td>
-                                <td class="text-center py-1">${lap.sector1 ? lap.sector1.toFixed(2) : '-'}</td>
-                                <td class="text-center py-1">${lap.sector2 ? lap.sector2.toFixed(2) : '-'}</td>
-                                <td class="text-center py-1">${lap.sector3 ? lap.sector3.toFixed(2) : '-'}</td>
-                            </tr>
-                        `;
-                    });
-                    tbody.innerHTML = html;
-                } else {
-                    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-gray-400">Keine Daten</td></tr>';
+                    const color = controllerData[0].color || getRandomColor();
+                    controllerColors[controllerId] = color;
+                    
+                    const colDiv = document.createElement('div');
+                    colDiv.className = 'col-md-6 col-lg-4 mb-4';
+                    
+                    colDiv.innerHTML = `
+                        <div class="card" style="border-color: ${color};">
+                            <div class="card-header" style="background-color: ${color}; color: #000;">
+                                <h5>Controller ${controllerId}</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Fahrer</th>
+                                                <th>Auto</th>
+                                                <th>Runde</th>
+                                                <th>Zeit</th>
+                                                <th>S1</th>
+                                                <th>S2</th>
+                                                <th>S3</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${controllerData.slice(0, 10).map(lap => `
+                                                <tr class="${lap.is_pb ? 'table-success' : ''}">
+                                                    <td>${lap.driver}</td>
+                                                    <td>${lap.car}</td>
+                                                    <td>${lap.lap}</td>
+                                                    <td>${lap.laptime}</td>
+                                                    <td>${lap.sector_1}</td>
+                                                    <td>${lap.sector_2}</td>
+                                                    <td>${lap.sector_3}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    container.appendChild(colDiv);
                 }
-            }
+            });
         })
-        .catch(error => {
-            console.error('Fehler beim Laden der Live-Daten:', error);
-        });
+        .catch(error => console.error('Error:', error));
 }
 
-// Live-Update alle 2 Sekunden
-setInterval(loadLiveData, 2000);
+function getRandomColor() {
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
+    return colors[Math.floor(Math.random() * colors.length)];
+}
 
-// Initial laden
-loadLiveData();
+// Update alle 2 Sekunden
+setInterval(updateDashboard, 2000);
+updateDashboard();
 </script>
 {% endblock %}
