@@ -454,26 +454,107 @@ def dropbox_status():
             'message': f'Error checking status: {str(e)}'
         })
 
-# Dropbox Test-Verbindung (separater Endpoint)
-@app.route('/api/dropbox/test')
-def test_dropbox():
+# Globale Variable für Dropbox Token
+DROPBOX_TOKEN = None
+
+# Dropbox Setup
+@app.route('/api/dropbox/setup', methods=['POST'])
+def setup_dropbox_simple():
+    global DROPBOX_TOKEN
+    
     try:
-        config = Config.query.filter_by(key='dropbox_token').first()
-        if not config or not config.value:
-            return jsonify({'success': False, 'error': 'No token configured'})
-            
-        import dropbox
-        dbx = dropbox.Dropbox(config.value, timeout=10)
+        data = request.get_json()
+        token = data.get('token', '').strip()
         
-        account_info = dbx.users_get_current_account()
+        if not token:
+            return jsonify({'success': False, 'error': 'Token required'})
+            
+        # Test Verbindung
+        import dropbox
+        dbx = dropbox.Dropbox(token)
+        account = dbx.users_get_current_account()
+        
+        # Token speichern
+        DROPBOX_TOKEN = token
+        
         return jsonify({
             'success': True, 
-            'account': account_info.name.display_name,
-            'email': account_info.email
+            'message': f'Connected to {account.name.display_name}'
         })
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+
+# Dropbox Test  
+@app.route('/api/dropbox/test')
+def test_dropbox_simple():
+    global DROPBOX_TOKEN
+    
+    try:
+        if not DROPBOX_TOKEN:
+            return jsonify({'success': False, 'error': 'No token configured'})
+            
+        import dropbox
+        dbx = dropbox.Dropbox(DROPBOX_TOKEN)
+        account = dbx.users_get_current_account()
+        
+        return jsonify({
+            'success': True, 
+            'account': account.name.display_name,
+            'message': 'Connection OK'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# Dropbox Backup
+@app.route('/api/dropbox/backup', methods=['POST'])  
+def backup_dropbox_simple():
+    global DROPBOX_TOKEN
+    
+    try:
+        if not DROPBOX_TOKEN:
+            return jsonify({'success': False, 'error': 'No token'})
+        
+        # CSV erstellen
+        import io, csv
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header
+        writer.writerow(['Timestamp', 'Driver', 'Car', 'Laptime'])
+        
+        # Daten
+        laps = LapTime.query.all()
+        for lap in laps:
+            writer.writerow([
+                lap.timestamp,
+                lap.driver_name,
+                lap.car_name, 
+                lap.laptime
+            ])
+        
+        # Upload
+        import dropbox
+        from datetime import datetime
+        
+        dbx = dropbox.Dropbox(DROPBOX_TOKEN)
+        filename = f"/backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        dbx.files_upload(
+            output.getvalue().encode('utf-8'),
+            filename
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': f'Uploaded {filename}',
+            'records': len(laps)
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 
 
 if __name__ == '__main__':
