@@ -7,11 +7,8 @@ services:
       - "5000:5000"
     depends_on:
       - mysql
-    volumes:
-      - .:/app  # <- DAS FEHLT! Mounted deinen lokalen Code in den Container
-      - /app/venv  # <- Verhindert dass venv überschrieben wird
     environment:
-      - FLASK_ENV=development  # <- Für besseres Debugging
+      - FLASK_ENV=development
 
   mysql:
     image: mysql:8.0
