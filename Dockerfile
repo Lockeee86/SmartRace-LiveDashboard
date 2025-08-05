@@ -5,6 +5,6 @@ WORKDIR /app
 COPY app.py .
 COPY templates/ templates/
 
-RUN pip install flask mysql-connector-python
+RUN pip install flask mysql-connector-python requests
 
 CMD ["python", "app.py"]
