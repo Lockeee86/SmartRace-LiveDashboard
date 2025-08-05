@@ -385,23 +385,34 @@ def backup_to_dropbox():
         # Get all lap data
         laps = LapTime.query.order_by(LapTime.timestamp.desc()).all()
         
+        if not laps:
+            return jsonify({'success': False, 'error': 'No lap data to export'})
+        
         # Create CSV in memory
         output = io.StringIO()
         writer = csv.writer(output)
         
-        # Write header
-        writer.writerow(['Driver', 'Car', 'Lap', 'Laptime', 'Sector_1', 'Sector_2', 'Sector_3', 'Timestamp', 'is_PB'])
+        # Write header with correct column names
+        writer.writerow([
+            'Event_ID', 'Controller_ID', 'Driver', 'Car', 'Lap', 
+            'Laptime_Raw', 'Laptime', 'Sector_1', 'Sector_2', 'Sector_3', 
+            'Car_Color', 'Timestamp', 'Is_PB'
+        ])
         
-        # Write data
+        # Write data using the correct attributes
         for lap in laps:
             writer.writerow([
-                lap.driver or '',
-                lap.car or '',
+                lap.event_id or '',
+                lap.controller_id or '',
+                lap.driver_name or '',
+                lap.car_name or '',
                 lap.lap or '',
+                lap.laptime_raw or '',
                 lap.laptime or '',
                 lap.sector_1 or '',
                 lap.sector_2 or '',
                 lap.sector_3 or '',
+                lap.car_color or '',
                 lap.timestamp.strftime('%Y-%m-%d %H:%M:%S') if lap.timestamp else '',
                 'Yes' if lap.is_pb else 'No'
             ])
@@ -419,13 +430,14 @@ def backup_to_dropbox():
         return jsonify({
             'success': True,
             'records': len(laps),
-            'filename': filename
+            'filename': filename,
+            'message': f'Successfully uploaded {len(laps)} records to Dropbox as {filename}'
         })
         
     except Exception as e:
+        import traceback
+        print("Dropbox backup error:", traceback.format_exc())
         return jsonify({'success': False, 'error': f'Backup failed: {str(e)}'})
-
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
