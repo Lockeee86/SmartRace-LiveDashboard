@@ -4,6 +4,8 @@ from flask_cors import CORS
 from datetime import datetime
 import json
 import os
+import csv
+
 
 app = Flask(__name__)
 CORS(app)
@@ -253,6 +255,211 @@ def get_filters():
             'drivers': [],
             'cars': []
         })
+
+# CSV Export
+@app.route('/api/export/csv')
+def export_csv():
+    try:
+        driver_filter = request.args.get('driver')
+        car_filter = request.args.get('car')
+        
+        query = LapTime.query
+        
+        if driver_filter:
+            query = query.filter(LapTime.driver_name.ilike(f'%{driver_filter}%'))
+        if car_filter:
+            query = query.filter(LapTime.car_name.ilike(f'%{car_filter}%'))
+        
+        laps = query.order_by(LapTime.timestamp.desc()).all()
+        
+        # CSV Daten erstellen
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header schreiben
+        writer.writerow([
+            'Timestamp', 'Driver', 'Car', 'Lap', 'Laptime', 
+            'Sector 1', 'Sector 2', 'Sector 3', 'Controller ID', 'Personal Best'
+        ])
+        
+        # Daten schreiben
+        for lap in laps:
+            writer.writerow([
+                lap.timestamp.strftime('%Y-%m-%d %H:%M:%S') if lap.timestamp else '',
+                lap.driver_name or f"Driver {lap.controller_id}",
+                lap.car_name or f"Car {lap.controller_id}",
+                lap.lap or 0,
+                lap.laptime or "0:00.000",
+                lap.sector_1 or "0:00.000",
+                lap.sector_2 or "0:00.000",
+                lap.sector_3 or "0:00.000",
+                lap.controller_id or "0",
+                'Yes' if lap.is_pb else 'No'
+            ])
+        
+        output.seek(0)
+        
+        # Response mit korrekten Headers
+        from flask import Response
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename=smartrace_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv',
+                'Content-Type': 'text/csv; charset=utf-8'
+            }
+        )
+        
+    except Exception as e:
+        print(f"CSV Export Error: {str(e)}")
+        return jsonify({'error': f'Export failed: {str(e)}'}), 500
+
+
+# Dropbox Setup
+@app.route('/api/dropbox/setup', methods=['POST'])
+def setup_dropbox():
+    try:
+        data = request.get_json()
+        token = data.get('token', '').strip()
+        
+        if not token:
+            return jsonify({'success': False, 'error': 'Token is required'}), 400
+            
+        # Test Dropbox Verbindung mit Timeout
+        import dropbox
+        from dropbox.exceptions import AuthError, ApiError
+        
+        try:
+            dbx = dropbox.Dropbox(token, timeout=10)  # 10 Sekunden Timeout
+            
+            # Test API call
+            account_info = dbx.users_get_current_account()
+            
+            # Token speichern
+            config = Config.query.filter_by(key='dropbox_token').first()
+            if config:
+                config.value = token
+            else:
+                config = Config(key='dropbox_token', value=token)
+                db.session.add(config)
+            
+            db.session.commit()
+            
+            return jsonify({
+                'success': True, 
+                'message': f'Dropbox connected successfully! Account: {account_info.name.display_name}'
+            })
+            
+        except AuthError:
+            return jsonify({
+                'success': False, 
+                'error': 'Invalid Dropbox token. Please check your token and try again.'
+            }), 401
+            
+        except ApiError as e:
+            return jsonify({
+                'success': False, 
+                'error': f'Dropbox API error: {str(e)}'
+            }), 400
+            
+        except Exception as e:
+            error_msg = str(e)
+            if 'timeout' in error_msg.lower() or 'connection' in error_msg.lower():
+                return jsonify({
+                    'success': False, 
+                    'error': 'Network timeout. Please check your internet connection and try again.'
+                }), 408
+            else:
+                return jsonify({
+                    'success': False, 
+                    'error': f'Connection failed: {error_msg}'
+                }), 400
+                
+    except Exception as e:
+        return jsonify({
+            'success': False, 
+            'error': f'Setup failed: {str(e)}'
+        }), 500
+
+# Dropbox Status
+@app.route('/api/dropbox/status')
+def dropbox_status():
+    try:
+        config = Config.query.filter_by(key='dropbox_token').first()
+        if not config or not config.value:
+            return jsonify({'connected': False, 'message': 'No token configured'})
+            
+        import dropbox
+        dbx = dropbox.Dropbox(config.value, timeout=5)
+        
+        try:
+            account_info = dbx.users_get_current_account()
+            return jsonify({
+                'connected': True, 
+                'account': account_info.name.display_name,
+                'message': 'Connected successfully'
+            })
+        except:
+            return jsonify({'connected': False, 'message': 'Token invalid or expired'})
+            
+    except Exception as e:
+        return jsonify({'connected': False, 'message': f'Error: {str(e)}'})
+
+# Dropbox Upload
+@app.route('/api/dropbox/upload', methods=['POST'])
+def upload_to_dropbox():
+    try:
+        config = Config.query.filter_by(key='dropbox_token').first()
+        if not config or not config.value:
+            return jsonify({'success': False, 'error': 'Dropbox not configured'}), 400
+            
+        # CSV Daten generieren
+        query = LapTime.query.order_by(LapTime.timestamp.desc())
+        laps = query.all()
+        
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header
+        writer.writerow([
+            'Timestamp', 'Driver', 'Car', 'Lap', 'Laptime', 
+            'Sector 1', 'Sector 2', 'Sector 3', 'Controller ID', 'Personal Best'
+        ])
+        
+        # Daten
+        for lap in laps:
+            writer.writerow([
+                lap.timestamp.strftime('%Y-%m-%d %H:%M:%S') if lap.timestamp else '',
+                lap.driver_name or f"Driver {lap.controller_id}",
+                lap.car_name or f"Car {lap.controller_id}",
+                lap.lap or 0,
+                lap.laptime or "0:00.000",
+                lap.sector_1 or "0:00.000",
+                lap.sector_2 or "0:00.000",
+                lap.sector_3 or "0:00.000",
+                lap.controller_id or "0",
+                'Yes' if lap.is_pb else 'No'
+            ])
+        
+        # Upload zu Dropbox
+        import dropbox
+        dbx = dropbox.Dropbox(config.value, timeout=30)
+        
+        filename = f"/SmartRace_Backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        file_data = output.getvalue().encode('utf-8')
+        
+        dbx.files_upload(file_data, filename, mode=dropbox.files.WriteMode('overwrite'))
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Backup uploaded successfully as {filename}',
+            'filename': filename
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Upload failed: {str(e)}'}), 500
 
 
 if __name__ == '__main__':
