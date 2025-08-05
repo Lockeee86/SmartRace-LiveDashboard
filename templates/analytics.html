@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - SmartRace{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4">Race Analytics</h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Rundenzeiten Vergleich</h5>
+                <canvas id="laptimesChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Beste Rundenzeiten</h5>
+                <canvas id="bestTimesChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Rundenzeiten Verlauf</h5>
+                <canvas id="progressChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let laptimesChart, bestTimesChart, progressChart;
+
+function loadAnalytics() {
+    fetch('/api/analytics')
+        .then(response => response.json())
+        .then(data => {
+            createCharts(data);
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+function createCharts(data) {
+    const drivers = Object.keys(data);
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
+
+    // Beste Zeiten Chart
+    const ctx1 = document.getElementById('bestTimesChart').getContext('2d');
+    if (bestTimesChart) bestTimesChart.destroy();
+    
+    bestTimesChart = new Chart(ctx1, {
+        type: 'bar',
+        data: {
+            labels: drivers,
+            datasets: [{
+                label: 'Beste Rundenzeit (ms)',
+                data: drivers.map(driver => data[driver].best_time),
+                backgroundColor: colors
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+
+    // Durchschnittszeiten Chart
+    const ctx2 = document.getElementById('laptimesChart').getContext('2d');
+    if (laptimesChart) laptimesChart.destroy();
+    
+    laptimesChart = new Chart(ctx2, {
+        type: 'radar',
+        data: {
+            labels: ['Beste Zeit', 'Durchschnittszeit', 'Anzahl Runden'],
+            datasets: drivers.map((driver, index) => ({
+                label: driver,
+                data: [
+                    data[driver].best_time / 1000,
+                    data[driver].avg_time / 1000,
+                    data[driver].laps.length
+                ],
+                borderColor: colors[index % colors.length],
+                backgroundColor: colors[index % colors.length] + '20'
+            }))
+        },
+        options: {
+            responsive: true,
+            scales: {
+                r: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+loadAnalytics();
+setInterval(loadAnalytics, 30000); // Update alle 30 Sekunden
+</script>
+{% endblock %}
