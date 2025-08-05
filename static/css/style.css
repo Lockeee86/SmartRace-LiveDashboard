@@ -1,0 +1,38 @@
+:root {
+    --bs-dark-rgb: 33, 37, 41;
+}
+
+body {
+    background-color: #1a1a1a;
+}
+
+.card {
+    background-color: #2d3436;
+    border: 1px solid #636e72;
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.table-dark {
+    --bs-table-bg: #2d3436;
+}
+
+.table-success {
+    --bs-table-bg: rgba(25, 135, 84, 0.3);
+}
+
+.navbar-brand {
+    font-weight: bold;
+}
+
+.nav-link.active {
+    color: #0d6efd !important;
+}
+
+canvas {
+    max-height: 400px;
+}
