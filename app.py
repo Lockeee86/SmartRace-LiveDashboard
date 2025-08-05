@@ -315,8 +315,166 @@ def export_csv():
         print(f"CSV Export Error: {str(e)}")
         return jsonify({'error': f'Export failed: {str(e)}'}), 500
 
+# Dropbox Setup - Robuste Version
+@app.route('/api/dropbox/setup', methods=['POST'])
+def setup_dropbox():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data received'}), 400
+            
+        token = data.get('token', '').strip()
+        
+        if not token:
+            return jsonify({'success': False, 'error': 'Dropbox token is required'}), 400
+            
+        if len(token) < 10:
+            return jsonify({'success': False, 'error': 'Invalid token format'}), 400
+            
+        # Versuche Dropbox Import
+        try:
+            import dropbox
+        except ImportError:
+            return jsonify({
+                'success': False, 
+                'error': 'Dropbox library not installed. Run: pip install dropbox'
+            }), 500
+            
+        # Test Dropbox Verbindung mit verschiedenen Timeouts
+        for timeout in [5, 10, 15]:
+            try:
+                print(f"Testing Dropbox connection with {timeout}s timeout...")
+                dbx = dropbox.Dropbox(token, timeout=timeout)
+                
+                # Einfacher Test-Call
+                account_info = dbx.users_get_current_account()
+                
+                # Wenn wir hier ankommen, funktioniert die Verbindung
+                print(f"Dropbox connection successful for account: {account_info.name.display_name}")
+                
+                # Token in Datenbank speichern
+                try:
+                    config = Config.query.filter_by(key='dropbox_token').first()
+                    if config:
+                        config.value = token
+                    else:
+                        config = Config(key='dropbox_token', value=token)
+                        db.session.add(config)
+                    
+                    db.session.commit()
+                    print("Dropbox token saved to database")
+                    
+                except Exception as db_error:
+                    print(f"Database error: {str(db_error)}")
+                    return jsonify({
+                        'success': False, 
+                        'error': f'Database error while saving token: {str(db_error)}'
+                    }), 500
+                
+                return jsonify({
+                    'success': True, 
+                    'message': f'Dropbox successfully connected! Account: {account_info.name.display_name}'
+                })
+                
+            except dropbox.exceptions.AuthError as auth_error:
+                print(f"Auth error: {str(auth_error)}")
+                return jsonify({
+                    'success': False, 
+                    'error': 'Invalid Dropbox token. Please check your access token and try again.'
+                }), 401
+                
+            except dropbox.exceptions.ApiError as api_error:
+                print(f"API error: {str(api_error)}")
+                return jsonify({
+                    'success': False, 
+                    'error': f'Dropbox API error: {str(api_error)}'
+                }), 400
+                
+            except (ConnectionError, TimeoutError, OSError) as conn_error:
+                print(f"Connection error with {timeout}s timeout: {str(conn_error)}")
+                if timeout == 15:  # Letzter Versuch
+                    return jsonify({
+                        'success': False, 
+                        'error': 'Network connection failed. Please check internet connection and firewall settings.'
+                    }), 408
+                continue  # Versuche nächsten Timeout
+                
+            except Exception as e:
+                error_str = str(e).lower()
+                print(f"Unexpected error with {timeout}s timeout: {str(e)}")
+                
+                if any(word in error_str for word in ['timeout', 'connection', 'network', 'unreachable']):
+                    if timeout == 15:  # Letzter Versuch
+                        return jsonify({
+                            'success': False, 
+                            'error': f'Network timeout after {timeout} seconds. Please try again or check your connection.'
+                        }), 408
+                    continue  # Versuche nächsten Timeout
+                else:
+                    return jsonify({
+                        'success': False, 
+                        'error': f'Unexpected error: {str(e)}'
+                    }), 500
+        
+        # Falls alle Timeouts fehlschlagen
+        return jsonify({
+            'success': False, 
+            'error': 'Connection failed after multiple attempts. Please check your internet connection.'
+        }), 408
+        
+    except Exception as e:
+        print(f"General setup error: {str(e)}")
+        return jsonify({
+            'success': False, 
+            'error': f'Setup failed: {str(e)}'
+        }), 500
 
-# Dropbox Setup
+# Dropbox Status - Vereinfacht
+@app.route('/api/dropbox/status')
+def dropbox_status():
+    try:
+        config = Config.query.filter_by(key='dropbox_token').first()
+        if not config or not config.value:
+            return jsonify({
+                'connected': False, 
+                'message': 'No Dropbox token configured'
+            })
+            
+        # Nur prüfen ob Token existiert, nicht testen (für bessere Performance)
+        return jsonify({
+            'connected': True,
+            'message': 'Dropbox token configured',
+            'token_preview': config.value[:10] + "..." if len(config.value) > 10 else config.value
+        })
+            
+    except Exception as e:
+        print(f"Status error: {str(e)}")
+        return jsonify({
+            'connected': False, 
+            'message': f'Error checking status: {str(e)}'
+        })
+
+# Dropbox Test-Verbindung (separater Endpoint)
+@app.route('/api/dropbox/test')
+def test_dropbox():
+    try:
+        config = Config.query.filter_by(key='dropbox_token').first()
+        if not config or not config.value:
+            return jsonify({'success': False, 'error': 'No token configured'})
+            
+        import dropbox
+        dbx = dropbox.Dropbox(config.value, timeout=10)
+        
+        account_info = dbx.users_get_current_account()
+        return jsonify({
+            'success': True, 
+            'account': account_info.name.display_name,
+            'email': account_info.email
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/api/dropbox/setup', methods=['POST'])
 def setup_dropbox():
     try:
