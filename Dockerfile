@@ -9,8 +9,6 @@ RUN pip install flask mysql-connector-python
 # COPY requirements.txt . 
 # RUN pip install -r requirements.txt
 
-# Kopiere den Code (wird durch Volume überschrieben, aber für ersten Build nötig)
-COPY . .
 
 # Expose Port
 EXPOSE 5000
