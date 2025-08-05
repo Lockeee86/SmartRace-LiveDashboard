@@ -158,25 +158,40 @@ def analytics_data():
     # Aggregate Daten für Charts
     driver_stats = {}
     for lap in laps:
-        if lap.driver_name not in driver_stats:
-            driver_stats[lap.driver_name] = {
+        # Fahrername fallback - verwende driver_name oder "Unknown Driver"
+        driver_name = lap.driver_name or f"Driver {lap.controller_id}" or "Unknown Driver"
+        
+        if driver_name not in driver_stats:
+            driver_stats[driver_name] = {
                 'laps': [],
                 'best_time': float('inf'),
-                'avg_time': 0
+                'avg_time': 0,
+                'total_laps': 0
             }
         
-        if lap.laptime_raw:
-            driver_stats[lap.driver_name]['laps'].append(lap.laptime_raw)
-            if lap.laptime_raw < driver_stats[lap.driver_name]['best_time']:
-                driver_stats[lap.driver_name]['best_time'] = lap.laptime_raw
+        if lap.laptime_raw and lap.laptime_raw > 0:
+            driver_stats[driver_name]['laps'].append(lap.laptime_raw)
+            driver_stats[driver_name]['total_laps'] += 1
+            if lap.laptime_raw < driver_stats[driver_name]['best_time']:
+                driver_stats[driver_name]['best_time'] = lap.laptime_raw
     
-    # Berechne Durchschnittswerte
+    # Berechne Durchschnittswerte und bereinige Daten
+    clean_driver_stats = {}
     for driver in driver_stats:
         laps = driver_stats[driver]['laps']
-        if laps:
-            driver_stats[driver]['avg_time'] = sum(laps) / len(laps)
+        if laps and driver:  # Nur wenn Fahrer und Rundenzeiten existieren
+            avg_time = sum(laps) / len(laps)
+            best_time = driver_stats[driver]['best_time']
+            
+            clean_driver_stats[driver] = {
+                'avg_time': round(avg_time, 0),
+                'best_time': best_time if best_time != float('inf') else 0,
+                'total_laps': len(laps),
+                'laps': laps[:50]  # Limitiere auf letzte 50 Runden für Performance
+            }
     
-    return jsonify(driver_stats)
+    return jsonify(clean_driver_stats)
+
 
 # API für Datenbank-View
 @app.route('/api/database')
