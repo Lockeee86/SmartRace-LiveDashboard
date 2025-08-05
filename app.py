@@ -210,30 +210,50 @@ def database_data():
     
     result = []
     for lap in laps:
+        # Sichere Fallback-Werte für alle Felder
         result.append({
-            'driver': lap.driver_name,
-            'car': lap.car_name,
-            'lap': lap.lap,
-            'laptime': lap.laptime,
-            'sector_1': lap.sector_1,
-            'sector_2': lap.sector_2,
-            'sector_3': lap.sector_3,
-            'timestamp': lap.timestamp.isoformat(),
-            'is_pb': lap.is_pb
+            'driver': lap.driver_name or f"Driver {lap.controller_id}" or "Unknown",
+            'car': lap.car_name or f"Car {lap.controller_id}" or "Unknown",
+            'lap': lap.lap or 0,
+            'laptime': lap.laptime or "0:00.000",
+            'sector_1': lap.sector_1 or "0:00.000",
+            'sector_2': lap.sector_2 or "0:00.000", 
+            'sector_3': lap.sector_3 or "0:00.000",
+            'timestamp': lap.timestamp.isoformat() if lap.timestamp else "",
+            'is_pb': lap.is_pb or False,
+            'controller_id': lap.controller_id or "0"
         })
     
     return jsonify(result)
 
+
 # API für Filter-Optionen
 @app.route('/api/filters')
 def get_filters():
-    drivers = db.session.query(LapTime.driver_name.distinct()).all()
-    cars = db.session.query(LapTime.car_name.distinct()).all()
-    
-    return jsonify({
-        'drivers': [d[0] for d in drivers if d[0]],
-        'cars': [c[0] for c in cars if c[0]]
-    })
+    try:
+        # Nur nicht-leere Fahrernamen holen
+        drivers = db.session.query(LapTime.driver_name.distinct()).filter(
+            LapTime.driver_name.isnot(None),
+            LapTime.driver_name != ''
+        ).all()
+        
+        # Nur nicht-leere Autonamen holen
+        cars = db.session.query(LapTime.car_name.distinct()).filter(
+            LapTime.car_name.isnot(None),
+            LapTime.car_name != ''
+        ).all()
+        
+        return jsonify({
+            'drivers': sorted([d[0] for d in drivers if d[0]]),
+            'cars': sorted([c[0] for c in cars if c[0]])
+        })
+    except Exception as e:
+        print(f"Error in get_filters: {str(e)}")
+        return jsonify({
+            'drivers': [],
+            'cars': []
+        })
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
