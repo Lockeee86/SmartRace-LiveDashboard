@@ -137,6 +137,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
+                <button type="button" class="btn btn-success" onclick="testDropboxConnection()">Test Verbindung</button>
                 <button type="button" class="btn btn-primary" onclick="saveDropboxConfig()">Speichern</button>
             </div>
         </div>
@@ -256,19 +257,16 @@ function exportCSV() {
 function exportDropbox() {
     if (!dropboxConfigured) {
         showStatus('Bitte konfiguriere zuerst Dropbox über das Setup.', 'warning');
+        showDropboxConfig();
         return;
     }
     
     const driverFilter = document.getElementById('driverFilter').value;
     const carFilter = document.getElementById('carFilter').value;
     
-    const params = new URLSearchParams();
-    if (driverFilter) params.append('driver', driverFilter);
-    if (carFilter) params.append('car', carFilter);
-    
     showStatus('Upload zu Dropbox...', 'info');
     
-    fetch(`/api/export/dropbox?${params}`, {
+    fetch('/api/dropbox/backup', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -277,11 +275,8 @@ function exportDropbox() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            let message = `✅ Export erfolgreich! ${data.records_exported} Einträge zu Dropbox hochgeladen.<br>`;
-            message += `📁 Datei: ${data.filename}<br>`;
-            if (data.share_url) {
-                message += `🔗 <a href="${data.share_url}" target="_blank">Download Link</a>`;
-            }
+            let message = `✅ Export erfolgreich! ${data.records} Einträge zu Dropbox hochgeladen.<br>`;
+            message += `📁 Datei: backup_${new Date().toISOString().slice(0, 10)}.csv`;
             showStatus(message, 'success');
         } else {
             showStatus(`❌ Export fehlgeschlagen: ${data.error}`, 'danger');
@@ -300,37 +295,49 @@ function showDropboxConfig() {
 }
 
 function checkDropboxStatus() {
-    fetch('/api/dropbox/config')
+    fetch('/api/dropbox/test')
         .then(response => response.json())
         .then(data => {
-            dropboxConfigured = data.configured;
+            dropboxConfigured = data.success;
             const statusDiv = document.getElementById('dropboxStatus');
             
-            if (data.configured) {
-                statusDiv.innerHTML = '<div class="alert alert-success"><i class="fas fa-check"></i> Dropbox ist verbunden</div>';
+            if (data.success) {
+                statusDiv.innerHTML = `<div class="alert alert-success">
+                    <i class="fas fa-check"></i> Dropbox ist verbunden<br>
+                    <strong>Account:</strong> ${data.account}
+                </div>`;
                 document.getElementById('dropboxBtn').disabled = false;
             } else {
                 statusDiv.innerHTML = '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> Dropbox nicht konfiguriert</div>';
                 document.getElementById('dropboxBtn').disabled = true;
             }
+        })
+        .catch(error => {
+            console.error('Dropbox check error:', error);
+            dropboxConfigured = false;
+            document.getElementById('dropboxBtn').disabled = true;
         });
 }
 
+// NEUE FUNKTIONEN - Verwenden die reparierte Backend API
 function saveDropboxConfig() {
-    const token = document.getElementById('dropboxToken').value;
+    const token = document.getElementById('dropboxToken').value.trim();
     
     if (!token) {
         alert('Bitte gib einen Access Token ein.');
         return;
     }
     
-    fetch('/api/dropbox/config', {
+    const statusDiv = document.getElementById('dropboxStatus');
+    statusDiv.innerHTML = '<div class="alert alert-info">Konfiguration wird gespeichert...</div>';
+    
+    fetch('/api/dropbox/setup', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            access_token: token
+            token: token
         })
     })
     .then(response => response.json())
@@ -339,14 +346,15 @@ function saveDropboxConfig() {
             dropboxConfigured = true;
             document.getElementById('dropboxBtn').disabled = false;
             
-            const statusDiv = document.getElementById('dropboxStatus');
             statusDiv.innerHTML = `<div class="alert alert-success">
                 <i class="fas fa-check"></i> Erfolgreich verbunden!<br>
-                <strong>Account:</strong> ${data.account_name}<br>
-                <strong>Email:</strong> ${data.email}
+                <strong>Nachricht:</strong> ${data.message}
             </div>`;
             
             showStatus('Dropbox erfolgreich konfiguriert!', 'success');
+            
+            // Token löschen für Sicherheit
+            document.getElementById('dropboxToken').value = '';
             
             // Modal nach 2 Sekunden schließen
             setTimeout(() => {
@@ -354,13 +362,43 @@ function saveDropboxConfig() {
                 modal.hide();
             }, 2000);
         } else {
-            alert(`Konfiguration fehlgeschlagen: ${data.error}`);
+            statusDiv.innerHTML = `<div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> Konfiguration fehlgeschlagen: ${data.error}
+            </div>`;
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Netzwerkfehler bei der Konfiguration');
+        statusDiv.innerHTML = '<div class="alert alert-danger">Netzwerkfehler bei der Konfiguration</div>';
     });
+}
+
+function testDropboxConnection() {
+    const statusDiv = document.getElementById('dropboxStatus');
+    statusDiv.innerHTML = '<div class="alert alert-info">Verbindung wird getestet...</div>';
+    
+    fetch('/api/dropbox/test')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                dropboxConfigured = true;
+                statusDiv.innerHTML = `<div class="alert alert-success">
+                    <i class="fas fa-check"></i> ✅ Verbindung erfolgreich!<br>
+                    <strong>Account:</strong> ${data.account}
+                </div>`;
+                document.getElementById('dropboxBtn').disabled = false;
+            } else {
+                dropboxConfigured = false;
+                statusDiv.innerHTML = `<div class="alert alert-danger">
+                    <i class="fas fa-times"></i> ❌ Verbindung fehlgeschlagen: ${data.error}
+                </div>`;
+                document.getElementById('dropboxBtn').disabled = true;
+            }
+        })
+        .catch(error => {
+            console.error('Test error:', error);
+            statusDiv.innerHTML = '<div class="alert alert-danger">Netzwerkfehler beim Test</div>';
+        });
 }
 
 function showStatus(message, type) {
