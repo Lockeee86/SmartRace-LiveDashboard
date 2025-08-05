@@ -4,6 +4,7 @@ import csv
 import io
 import os
 import requests
+import time
 from datetime import datetime
 
 app = Flask(__name__)
@@ -17,7 +18,24 @@ db_config = {
 }
 
 def get_db_connection():
-    return mysql.connector.connect(**db_config)
+    max_retries = 30  # 30 Versuche = 30 Sekunden
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            print(f"Verbindungsversuch {retry_count + 1}/{max_retries} zu MySQL...")
+            conn = mysql.connector.connect(**db_config)
+            print("✅ MySQL Verbindung erfolgreich!")
+            return conn
+        except mysql.connector.Error as e:
+            retry_count += 1
+            print(f"❌ MySQL Verbindung fehlgeschlagen: {e}")
+            if retry_count < max_retries:
+                print("⏳ Warte 1 Sekunde und versuche erneut...")
+                time.sleep(1)
+            else:
+                print("💥 Maximale Anzahl der Versuche erreicht!")
+                raise
 
 def init_db():
     conn = get_db_connection()
@@ -33,6 +51,7 @@ def init_db():
     conn.commit()
     cursor.close()
     conn.close()
+    print("✅ Datenbank initialisiert!")
 
 @app.route('/')
 def index():
@@ -139,5 +158,7 @@ def export_dropbox():
         return jsonify({'error': f'Fehler beim Upload: {str(e)}'}), 500
 
 if __name__ == '__main__':
+    print("🚀 SmartRace startet...")
     init_db()
+    print("🌐 Flask Server startet auf Port 5000...")
     app.run(host='0.0.0.0', port=5000, debug=True)
