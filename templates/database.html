@@ -1,8 +1,399 @@
-{% extends "base.html" %}
-{% block title %}Charts - SmartRace{% endblock %}
-{% block content %}
-<h2 class="text-3xl font-bold text-center mb-6">📈 Interactive Charts</h2>
-<div class="bg-gray-800 p-6 rounded-lg">
-    <canvas id="raceChart" width="400" height="200"></canvas>
+<!-- Database Page Content (erweitert) -->
+<div id="database-page" class="page hidden">
+    <div class="mb-6">
+        <h2 class="text-2xl font-bold text-blue-400 mb-4">🗄️ Datenbank Übersicht</h2>
+        
+        <!-- Filter Section -->
+        <div class="bg-gray-800 rounded-lg p-6 mb-6">
+            <h3 class="text-lg font-semibold mb-4 text-green-400">🔍 Filter</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Fahrer</label>
+                    <select id="driver-filter" class="bg-gray-700 border border-gray-600 text-white rounded-lg p-2 w-full focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Alle Fahrer</option>
+                        <option value="Hamilton">Lewis Hamilton</option>
+                        <option value="Verstappen">Max Verstappen</option>
+                        <option value="Leclerc">Charles Leclerc</option>
+                        <option value="Russell">George Russell</option>
+                        <option value="Norris">Lando Norris</option>
+                        <option value="Sainz">Carlos Sainz</option>
+                        <option value="Perez">Sergio Perez</option>
+                        <option value="Alonso">Fernando Alonso</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Auto</label>
+                    <select id="car-filter" class="bg-gray-700 border border-gray-600 text-white rounded-lg p-2 w-full focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Alle Autos</option>
+                        <option value="Mercedes">Mercedes W15</option>
+                        <option value="RedBull">Red Bull RB20</option>
+                        <option value="Ferrari">Ferrari SF-24</option>
+                        <option value="McLaren">McLaren MCL38</option>
+                        <option value="Aston">Aston Martin AMR24</option>
+                    </select>
+                </div>
+                <div>
+                    <button onclick="applyFilters()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 w-full mt-6">
+                        Filter anwenden
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <div class="bg-gray-800 rounded-lg p-6">
+                <div class="text-sm font-medium text-gray-400">Schnellste Runde</div>
+                <div class="text-2xl font-bold text-green-400" id="fastest-lap">1:23.234</div>
+                <div class="text-xs text-gray-500" id="fastest-driver">Max Verstappen</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-6">
+                <div class="text-sm font-medium text-gray-400">Durchschnittszeit</div>
+                <div class="text-2xl font-bold text-blue-400" id="avg-time">1:24.562</div>
+                <div class="text-xs text-gray-500">Alle Fahrer</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-6">
+                <div class="text-sm font-medium text-gray-400">Gesamte Runden</div>
+                <div class="text-2xl font-bold text-yellow-400" id="total-laps">247</div>
+                <div class="text-xs text-gray-500">Session total</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-6">
+                <div class="text-sm font-medium text-gray-400">Session Zeit</div>
+                <div class="text-2xl font-bold text-purple-400" id="session-time">02:45:33</div>
+                <div class="text-xs text-gray-500">Aktuelle Session</div>
+            </div>
+        </div>
+
+        <!-- Export Buttons -->
+        <div class="mb-6">
+            <div class="flex flex-wrap gap-4">
+                <button onclick="exportData('laptimes')" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
+                    📊 Rundenzeiten exportieren (CSV)
+                </button>
+                <button onclick="exportData('statistics')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
+                    📈 Statistiken exportieren (CSV)
+                </button>
+                <button onclick="refreshData()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200">
+                    🔄 Daten aktualisieren
+                </button>
+            </div>
+        </div>
+
+        <!-- Rundenzeiten Tabelle -->
+        <div class="bg-gray-800 rounded-lg overflow-hidden shadow-lg">
+            <div class="px-6 py-4 bg-gray-700">
+                <h3 class="text-lg font-semibold text-white">⏱️ Rundenzeiten</h3>
+                <p class="text-sm text-gray-400">Detaillierte Übersicht aller Rundenzeiten mit Sektorzeiten</p>
+            </div>
+            
+            <!-- Table Header -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead class="bg-gray-700">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Runde</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Zeit</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Fahrer</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Auto</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Rundenzeit</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">S1</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">S2</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">S3</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="laptimes-table" class="bg-gray-800 divide-y divide-gray-700">
+                        <!-- Data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="px-6 py-3 bg-gray-700 flex items-center justify-between border-t border-gray-600">
+                <div class="flex-1 flex justify-between sm:hidden">
+                    <button id="prev-mobile" onclick="previousPage()" class="relative inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">
+                        Zurück
+                    </button>
+                    <button id="next-mobile" onclick="nextPage()" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-600 text-sm font-medium rounded-md text-gray-300 bg-gray-700 hover:bg-gray-600">
+                        Weiter
+                    </button>
+                </div>
+                <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-sm text-gray-400">
+                            Zeige <span id="showing-start">1</span> bis <span id="showing-end">20</span> von <span id="total-entries">0</span> Einträgen
+                        </p>
+                    </div>
+                    <div>
+                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                            <button id="prev-desktop" onclick="previousPage()" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-600 bg-gray-700 text-sm font-medium text-gray-400 hover:bg-gray-600">
+                                <span class="sr-only">Zurück</span>
+                                ← Zurück
+                            </button>
+                            <span class="relative inline-flex items-center px-4 py-2 border border-gray-600 bg-gray-700 text-sm font-medium text-gray-300">
+                                Seite <span id="current-page">1</span> von <span id="total-pages">1</span>
+                            </span>
+                            <button id="next-desktop" onclick="nextPage()" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-600 bg-gray-700 text-sm font-medium text-gray-400 hover:bg-gray-600">
+                                <span class="sr-only">Weiter</span>
+                                Weiter →
+                            </button>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
-{% endblock %}
+
+<script>
+// Global variables for pagination
+let currentPage = 1;
+const itemsPerPage = 20;
+let filteredData = [];
+let allLaptimes = [];
+
+// Sample data
+const sampleLaptimes = [
+    {"id": 1, "lap": 1, "driver": "Hamilton", "car": "Mercedes", "laptime": "1:23.456", "s1": "28.123", "s2": "32.456", "s3": "22.877", "status": "Valid", "time": "14:30:15"},
+    {"id": 2, "lap": 2, "driver": "Verstappen", "car": "RedBull", "laptime": "1:23.234", "s1": "28.045", "s2": "32.234", "s3": "22.955", "status": "Valid", "time": "14:31:42"},
+    {"id": 3, "lap": 3, "driver": "Leclerc", "car": "Ferrari", "laptime": "1:23.789", "s1": "28.234", "s2": "32.567", "s3": "22.988", "status": "Valid", "time": "14:33:08"},
+    {"id": 4, "lap": 4, "driver": "Russell", "car": "Mercedes", "laptime": "1:24.123", "s1": "28.345", "s2": "32.678", "s3": "23.100", "status": "Valid", "time": "14:34:35"},
+    {"id": 5, "lap": 5, "driver": "Norris", "car": "McLaren", "laptime": "1:24.456", "s1": "28.567", "s2": "32.789", "s3": "23.100", "status": "Track Limits", "time": "14:36:02"},
+    {"id": 6, "lap": 6, "driver": "Sainz", "car": "Ferrari", "laptime": "1:24.789", "s1": "28.678", "s2": "32.890", "s3": "23.221", "status": "Valid", "time": "14:37:29"},
+    {"id": 7, "lap": 7, "driver": "Perez", "car": "RedBull", "laptime": "1:25.123", "s1": "28.890", "s2": "33.012", "s3": "23.221", "status": "Valid", "time": "14:38:56"},
+    {"id": 8, "lap": 8, "driver": "Alonso", "car": "Aston", "laptime": "1:25.456", "s1": "29.012", "s2": "33.234", "s3": "23.210", "status": "Valid", "time": "14:40:23"},
+    {"id": 9, "lap": 9, "driver": "Hamilton", "car": "Mercedes", "laptime": "1:23.678", "s1": "28.156", "s2": "32.445", "s3": "23.077", "status": "Valid", "time": "14:41:50"},
+    {"id": 10, "lap": 10, "driver": "Verstappen", "car": "RedBull", "laptime": "1:23.156", "s1": "27.987", "s2": "32.123", "s3": "23.046", "status": "Valid", "time": "14:43:17"},
+    {"id": 11, "lap": 11, "driver": "Leclerc", "car": "Ferrari", "laptime": "1:24.234", "s1": "28.345", "s2": "32.789", "s3": "23.100", "status": "Valid", "time": "14:44:44"},
+    {"id": 12, "lap": 12, "driver": "Russell", "car": "Mercedes", "laptime": "1:24.567", "s1": "28.456", "s2": "32.890", "s3": "23.221", "status": "Valid", "time": "14:46:11"},
+    {"id": 13, "lap": 13, "driver": "Norris", "car": "McLaren", "laptime": "1:24.890", "s1": "28.678", "s2": "33.012", "s3": "23.200", "status": "Valid", "time": "14:47:38"},
+    {"id": 14, "lap": 14, "driver": "Sainz", "car": "Ferrari", "laptime": "1:25.234", "s1": "28.890", "s2": "33.234", "s3": "23.110", "status": "Track Limits", "time": "14:49:05"},
+    {"id": 15, "lap": 15, "driver": "Perez", "car": "RedBull", "laptime": "1:25.567", "s1": "29.012", "s2": "33.445", "s3": "23.110", "status": "Valid", "time": "14:50:32"},
+    {"id": 16, "lap": 16, "driver": "Alonso", "car": "Aston", "laptime": "1:25.890", "s1": "29.234", "s2": "33.556", "s3": "23.100", "status": "Valid", "time": "14:51:59"},
+    {"id": 17, "lap": 17, "driver": "Hamilton", "car": "Mercedes", "laptime": "1:23.345", "s1": "28.067", "s2": "32.278", "s3": "23.000", "status": "Valid", "time": "14:53:26"},
+    {"id": 18, "lap": 18, "driver": "Verstappen", "car": "RedBull", "laptime": "1:23.089", "s1": "27.934", "s2": "32.055", "s3": "23.100", "status": "Valid", "time": "14:54:53"},
+    {"id": 19, "lap": 19, "driver": "Leclerc", "car": "Ferrari", "laptime": "1:23.567", "s1": "28.123", "s2": "32.344", "s3": "23.100", "status": "Valid", "time": "14:56:20"},
+    {"id": 20, "lap": 20, "driver": "Russell", "car": "Mercedes", "laptime": "1:23.890", "s1": "28.245", "s2": "32.445", "s3": "23.200", "status": "Valid", "time": "14:57:47"},
+    {"id": 21, "lap": 21, "driver": "Norris", "car": "McLaren", "laptime": "1:24.123", "s1": "28.367", "s2": "32.556", "s3": "23.200", "status": "Valid", "time": "14:59:14"},
+    {"id": 22, "lap": 22, "driver": "Sainz", "car": "Ferrari", "laptime": "1:24.456", "s1": "28.489", "s2": "32.667", "s3": "23.300", "status": "Valid", "time": "15:00:41"}
+];
+
+async function loadLaptimes() {
+    try {
+        // In production, this would be: 
+        // const response = await fetch('/api/laptimes');
+        // const data = await response.json();
+        
+        // For now, use sample data
+        allLaptimes = sampleLaptimes;
+        filteredData = [...allLaptimes];
+        
+        updateStatistics();
+        updateTable();
+        updatePagination();
+        
+    } catch (error) {
+        console.error('Error loading laptimes:', error);
+        showNotification('Fehler beim Laden der Rundenzeiten', 'error');
+    }
+}
+
+function updateStatistics() {
+    // Find fastest lap
+    let fastest = filteredData.reduce((min, current) => {
+        return current.laptime < min.laptime ? current : min;
+    });
+    
+    document.getElementById('fastest-lap').textContent = fastest.laptime;
+    document.getElementById('fastest-driver').textContent = fastest.driver;
+    
+    // Calculate average time (simplified)
+    const avgSeconds = filteredData.reduce((sum, lap) => {
+        const timeStr = lap.laptime.split(':');
+        const minutes = parseInt(timeStr[0]);
+        const seconds = parseFloat(timeStr[1]);
+        return sum + (minutes * 60 + seconds);
+    }, 0) / filteredData.length;
+    
+    const avgMinutes = Math.floor(avgSeconds / 60);
+    const avgRemainSeconds = (avgSeconds % 60).toFixed(3);
+    document.getElementById('avg-time').textContent = `${avgMinutes}:${avgRemainSeconds.padStart(6, '0')}`;
+    
+    // Total laps
+    document.getElementById('total-laps').textContent = filteredData.length;
+}
+
+function updateTable() {
+    const tableBody = document.getElementById('laptimes-table');
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const pageData = filteredData.slice(startIndex, endIndex);
+    
+    tableBody.innerHTML = '';
+    
+    pageData.forEach(lap => {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-700 transition-colors duration-200';
+        
+        const statusColor = lap.status === 'Valid' ? 'text-green-400' : 
+                          lap.status === 'Track Limits' ? 'text-yellow-400' : 'text-red-400';
+        
+        row.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">${lap.lap}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${lap.time}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${lap.driver}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-300">${lap.car}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-blue-400">${lap.laptime}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-400">${lap.s1}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-400">${lap.s2}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-400">${lap.s3}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm ${statusColor}">${lap.status}</td>
+        `;
+        
+        tableBody.appendChild(row);
+    });
+}
+
+function updatePagination() {
+    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+    const startItem = (currentPage - 1) * itemsPerPage + 1;
+    const endItem = Math.min(currentPage * itemsPerPage, filteredData.length);
+    
+    document.getElementById('current-page').textContent = currentPage;
+    document.getElementById('total-pages').textContent = totalPages;
+    document.getElementById('showing-start').textContent = startItem;
+    document.getElementById('showing-end').textContent = endItem;
+    document.getElementById('total-entries').textContent = filteredData.length;
+    
+    // Update button states
+    const prevButtons = ['prev-mobile', 'prev-desktop'];
+    const nextButtons = ['next-mobile', 'next-desktop'];
+    
+    prevButtons.forEach(id => {
+        const btn = document.getElementById(id);
+        btn.disabled = currentPage === 1;
+        btn.className = btn.className.replace(/ opacity-50 cursor-not-allowed/, '');
+        if (currentPage === 1) {
+            btn.className += ' opacity-50 cursor-not-allowed';
+        }
+    });
+    
+    nextButtons.forEach(id => {
+        const btn = document.getElementById(id);
+        btn.disabled = currentPage === totalPages;
+        btn.className = btn.className.replace(/ opacity-50 cursor-not-allowed/, '');
+        if (currentPage === totalPages) {
+            btn.className += ' opacity-50 cursor-not-allowed';
+        }
+    });
+}
+
+function previousPage() {
+    if (currentPage > 1) {
+        currentPage--;
+        updateTable();
+        updatePagination();
+    }
+}
+
+function nextPage() {
+    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+    if (currentPage < totalPages) {
+        currentPage++;
+        updateTable();
+        updatePagination();
+    }
+}
+
+function applyFilters() {
+    const driverFilter = document.getElementById('driver-filter').value;
+    const carFilter = document.getElementById('car-filter').value;
+    
+    filteredData = allLaptimes.filter(lap => {
+        const matchDriver = !driverFilter || lap.driver === driverFilter;
+        const matchCar = !carFilter || lap.car === carFilter;
+        return matchDriver && matchCar;
+    });
+    
+    currentPage = 1; // Reset to first page
+    updateStatistics();
+    updateTable();
+    updatePagination();
+    
+    showNotification(`Filter angewendet: ${filteredData.length} Einträge gefunden`);
+}
+
+function refreshData() {
+    loadLaptimes();
+    showNotification('Daten aktualisiert');
+}
+
+function exportData(type) {
+    let csvContent = '';
+    let filename = '';
+    
+    if (type === 'laptimes') {
+        csvContent = 'Runde,Zeit,Fahrer,Auto,Rundenzeit,S1,S2,S3,Status\n';
+        filteredData.forEach(lap => {
+            csvContent += `${lap.lap},${lap.time},${lap.driver},${lap.car},${lap.laptime},${lap.s1},${lap.s2},${lap.s3},${lap.status}\n`;
+        });
+        filename = `smartrace_laptimes_${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (type === 'statistics') {
+        csvContent = 'Metric,Value\n';
+        csvContent += `Schnellste Runde,${document.getElementById('fastest-lap').textContent}\n`;
+        csvContent += `Schnellster Fahrer,${document.getElementById('fastest-driver').textContent}\n`;
+        csvContent += `Durchschnittszeit,${document.getElementById('avg-time').textContent}\n`;
+        csvContent += `Gesamte Runden,${document.getElementById('total-laps').textContent}\n`;
+        filename = `smartrace_statistics_${new Date().toISOString().split('T')[0]}.csv`;
+    }
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showNotification(`${type} Daten exportiert`);
+}
+
+function showNotification(message, type = 'success') {
+    const notification = document.createElement('div');
+    const bgColor = type === 'error' ? 'bg-red-600' : 'bg-green-600';
+    notification.className = `fixed top-4 right-4 ${bgColor} text-white px-4 py-2 rounded-lg shadow-lg z-50 transition-opacity duration-300`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        setTimeout(() => {
+            if (document.body.contains(notification)) {
+                document.body.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Initialize data when database page is shown
+document.addEventListener('DOMContentLoaded', function() {
+    if (!document.getElementById('database-page').classList.contains('hidden')) {
+        loadLaptimes();
+    }
+});
+
+// Also load when page becomes visible
+function initDatabase() {
+    loadLaptimes();
+}
+
+// Auto-refresh every 30 seconds if page is visible
+setInterval(() => {
+    if (!document.getElementById('database-page').classList.contains('hidden')) {
+        loadLaptimes();
+    }
+}, 30000);
+</script>
+
