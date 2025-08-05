@@ -1,164 +1,194 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
-import mysql.connector
-import csv
-import io
-import os
-import requests
-import time
+from flask import Flask, render_template, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
 from datetime import datetime
+import json
+import os
 
 app = Flask(__name__)
+CORS(app)
 
-# Database configuration
-db_config = {
-    'host': 'mysql',
-    'user': 'root',
-    'password': 'smartrace123',
-    'database': 'smartrace'
-}
+# Konfiguration
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///smartrace.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-def get_db_connection():
-    max_retries = 30  # 30 Versuche = 30 Sekunden
-    retry_count = 0
-    
-    while retry_count < max_retries:
-        try:
-            print(f"Verbindungsversuch {retry_count + 1}/{max_retries} zu MySQL...")
-            conn = mysql.connector.connect(**db_config)
-            print("✅ MySQL Verbindung erfolgreich!")
-            return conn
-        except mysql.connector.Error as e:
-            retry_count += 1
-            print(f"❌ MySQL Verbindung fehlgeschlagen: {e}")
-            if retry_count < max_retries:
-                print("⏳ Warte 1 Sekunde und versuche erneut...")
-                time.sleep(1)
-            else:
-                print("💥 Maximale Anzahl der Versuche erreicht!")
-                raise
+db = SQLAlchemy(app)
 
-def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS race_times (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            fahrer_name VARCHAR(100) NOT NULL,
-            zeit_sekunden DECIMAL(6,3) NOT NULL,
-            datum TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    cursor.close()
-    conn.close()
-    print("✅ Datenbank initialisiert!")
+# Modelle
+class Event(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.String(100))
+    event_type = db.Column(db.String(50))
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    data = db.Column(db.Text)
 
+class LapTime(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.String(100))
+    controller_id = db.Column(db.String(10))
+    driver_name = db.Column(db.String(100))
+    car_name = db.Column(db.String(100))
+    lap = db.Column(db.Integer)
+    laptime_raw = db.Column(db.Integer)
+    laptime = db.Column(db.String(20))
+    sector_1 = db.Column(db.String(20))
+    sector_2 = db.Column(db.String(20))
+    sector_3 = db.Column(db.String(20))
+    car_color = db.Column(db.String(20))
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    is_pb = db.Column(db.Boolean, default=False)
+
+# Datenbank initialisieren
+with app.app_context():
+    db.create_all()
+
+# Routen
 @app.route('/')
-def index():
-    return render_template('index.html')
+def dashboard():
+    return render_template('dashboard.html')
+
+@app.route('/analytics')
+def analytics():
+    return render_template('analytics.html')
 
 @app.route('/database')
-def database():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM race_times ORDER BY zeit_sekunden ASC')
-    race_times = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return render_template('database.html', race_times=race_times)
+def database_view():
+    return render_template('database.html')
 
-@app.route('/add_time', methods=['POST'])
-def add_time():
-    fahrer_name = request.form['fahrer_name']
-    zeit_sekunden = float(request.form['zeit_sekunden'])
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO race_times (fahrer_name, zeit_sekunden) VALUES (%s, %s)', 
-                   (fahrer_name, zeit_sekunden))
-    conn.commit()
-    cursor.close()
-    conn.close()
-    
-    return redirect(url_for('database'))
-
-@app.route('/export_csv')
-def export_csv():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT fahrer_name, zeit_sekunden, datum FROM race_times ORDER BY zeit_sekunden ASC')
-    race_times = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    
-    # CSV in Memory erstellen
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['Fahrer', 'Zeit (Sekunden)', 'Datum'])
-    
-    for race_time in race_times:
-        writer.writerow([race_time[0], race_time[1], race_time[2]])
-    
-    # StringIO zu BytesIO konvertieren
-    mem = io.BytesIO()
-    mem.write(output.getvalue().encode('utf-8'))
-    mem.seek(0)
-    output.close()
-    
-    return send_file(
-        mem,
-        as_attachment=True,
-        download_name=f'smartrace_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv',
-        mimetype='text/csv'
-    )
-
-@app.route('/export_dropbox')
-def export_dropbox():
-    # Dropbox Access Token (muss konfiguriert werden)
-    DROPBOX_ACCESS_TOKEN = os.environ.get('DROPBOX_TOKEN', 'YOUR_DROPBOX_TOKEN_HERE')
-    
-    if DROPBOX_ACCESS_TOKEN == 'YOUR_DROPBOX_TOKEN_HERE':
-        return jsonify({'error': 'Dropbox Token nicht konfiguriert'}), 400
-    
-    # CSV Daten erstellen
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT fahrer_name, zeit_sekunden, datum FROM race_times ORDER BY zeit_sekunden ASC')
-    race_times = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    
-    # CSV erstellen
-    csv_content = "Fahrer,Zeit (Sekunden),Datum\n"
-    for race_time in race_times:
-        csv_content += f"{race_time[0]},{race_time[1]},{race_time[2]}\n"
-    
-    # Zu Dropbox hochladen
-    filename = f'/smartrace_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
-    
-    headers = {
-        'Authorization': f'Bearer {DROPBOX_ACCESS_TOKEN}',
-        'Content-Type': 'application/octet-stream',
-        'Dropbox-API-Arg': f'{{"path":"{filename}"}}'
-    }
+# SmartRace Datenschnittstelle
+@app.route('/api/smartrace', methods=['POST', 'OPTIONS'])
+def smartrace_endpoint():
+    if request.method == 'OPTIONS':
+        return '', 200
     
     try:
-        response = requests.post(
-            'https://content.dropboxapi.com/2/files/upload',
-            headers=headers,
-            data=csv_content.encode('utf-8')
-        )
+        data = request.get_json()
         
-        if response.status_code == 200:
-            return jsonify({'success': True, 'message': f'Erfolgreich zu Dropbox exportiert: {filename}'})
-        else:
-            return jsonify({'error': f'Dropbox Upload Fehler: {response.text}'}), 400
+        # Event speichern
+        event = Event(
+            event_type=data.get('event_type'),
+            data=json.dumps(data)
+        )
+        db.session.add(event)
+        
+        # Rundeninformationen verarbeiten
+        if data.get('event_type') == 'ui.lap_update':
+            event_data = data.get('event_data', {})
             
+            lap_time = LapTime(
+                controller_id=event_data.get('controller_id'),
+                driver_name=event_data.get('driver_data', {}).get('name'),
+                car_name=event_data.get('car_data', {}).get('name'),
+                lap=event_data.get('lap'),
+                laptime_raw=event_data.get('laptime_raw'),
+                laptime=event_data.get('laptime'),
+                sector_1=event_data.get('sector_1'),
+                sector_2=event_data.get('sector_2'),
+                sector_3=event_data.get('sector_3'),
+                car_color=event_data.get('car_data', {}).get('color'),
+                is_pb=event_data.get('lap_pb', False)
+            )
+            db.session.add(lap_time)
+        
+        db.session.commit()
+        return jsonify({'status': 'success'})
+    
     except Exception as e:
-        return jsonify({'error': f'Fehler beim Upload: {str(e)}'}), 500
+        return jsonify({'error': str(e)}), 400
+
+# API für Live-Daten
+@app.route('/api/live-data')
+def live_data():
+    latest_laps = db.session.query(LapTime).order_by(LapTime.timestamp.desc()).limit(60).all()
+    
+    # Gruppiere nach Controller ID
+    controller_data = {}
+    for lap in latest_laps:
+        if lap.controller_id not in controller_data:
+            controller_data[lap.controller_id] = []
+        controller_data[lap.controller_id].append({
+            'driver': lap.driver_name,
+            'car': lap.car_name,
+            'lap': lap.lap,
+            'laptime': lap.laptime,
+            'sector_1': lap.sector_1,
+            'sector_2': lap.sector_2,
+            'sector_3': lap.sector_3,
+            'color': lap.car_color,
+            'is_pb': lap.is_pb
+        })
+    
+    return jsonify(controller_data)
+
+# API für Analytics
+@app.route('/api/analytics')
+def analytics_data():
+    laps = LapTime.query.all()
+    
+    # Aggregate Daten für Charts
+    driver_stats = {}
+    for lap in laps:
+        if lap.driver_name not in driver_stats:
+            driver_stats[lap.driver_name] = {
+                'laps': [],
+                'best_time': float('inf'),
+                'avg_time': 0
+            }
+        
+        if lap.laptime_raw:
+            driver_stats[lap.driver_name]['laps'].append(lap.laptime_raw)
+            if lap.laptime_raw < driver_stats[lap.driver_name]['best_time']:
+                driver_stats[lap.driver_name]['best_time'] = lap.laptime_raw
+    
+    # Berechne Durchschnittswerte
+    for driver in driver_stats:
+        laps = driver_stats[driver]['laps']
+        if laps:
+            driver_stats[driver]['avg_time'] = sum(laps) / len(laps)
+    
+    return jsonify(driver_stats)
+
+# API für Datenbank-View
+@app.route('/api/database')
+def database_data():
+    driver_filter = request.args.get('driver')
+    car_filter = request.args.get('car')
+    
+    query = LapTime.query
+    
+    if driver_filter:
+        query = query.filter(LapTime.driver_name.ilike(f'%{driver_filter}%'))
+    if car_filter:
+        query = query.filter(LapTime.car_name.ilike(f'%{car_filter}%'))
+    
+    laps = query.order_by(LapTime.timestamp.desc()).limit(1000).all()
+    
+    result = []
+    for lap in laps:
+        result.append({
+            'driver': lap.driver_name,
+            'car': lap.car_name,
+            'lap': lap.lap,
+            'laptime': lap.laptime,
+            'sector_1': lap.sector_1,
+            'sector_2': lap.sector_2,
+            'sector_3': lap.sector_3,
+            'timestamp': lap.timestamp.isoformat(),
+            'is_pb': lap.is_pb
+        })
+    
+    return jsonify(result)
+
+# API für Filter-Optionen
+@app.route('/api/filters')
+def get_filters():
+    drivers = db.session.query(LapTime.driver_name.distinct()).all()
+    cars = db.session.query(LapTime.car_name.distinct()).all()
+    
+    return jsonify({
+        'drivers': [d[0] for d in drivers if d[0]],
+        'cars': [c[0] for c in cars if c[0]]
+    })
 
 if __name__ == '__main__':
-    print("🚀 SmartRace startet...")
-    init_db()
-    print("🌐 Flask Server startet auf Port 5000...")
     app.run(host='0.0.0.0', port=5000, debug=True)
