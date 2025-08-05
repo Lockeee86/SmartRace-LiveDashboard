@@ -314,7 +314,7 @@ def export_csv():
     except Exception as e:
         print(f"CSV Export Error: {str(e)}")
         return jsonify({'error': f'Export failed: {str(e)}'}), 500
-
+        
 # Dropbox Setup - Robuste Version
 @app.route('/api/dropbox/setup', methods=['POST'])
 def setup_dropbox():
