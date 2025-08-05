@@ -16,6 +16,35 @@ def get_db_connection():
     )
 
 # Routes
+@app.route('/api/live-data')
+def get_live_data():
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT controller_id, driver, car, lap_number, total_time, 
+                   sector1, sector2, sector3, timestamp
+            FROM laps 
+            ORDER BY timestamp DESC 
+            LIMIT 100
+        ''')
+        
+        laps = []
+        for row in cursor.fetchall():
+            laps.append({
+                'controller_id': row[0],
+                'driver': row[1],
+                'car': row[2],
+                'lap_number': row[3],
+                'total_time': row[4],
+                'sector1': row[5],
+                'sector2': row[6],
+                'sector3': row[7]
+            })
+        
+        return jsonify(laps)
+    except Exception as e:
+        return jsonify([]), 500
+
 @app.route('/api/laps')
 def get_laps():
     try:
