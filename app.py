@@ -16,6 +16,35 @@ def get_db_connection():
     )
 
 # Routes
+@app.route('/api/laps')
+def get_laps():
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT controller_id, driver, car, sector1, sector2, sector3, 
+                   lap_number, total_time, timestamp
+            FROM laps 
+            ORDER BY timestamp DESC 
+            LIMIT 50
+        ''')
+        
+        laps = []
+        for row in cursor.fetchall():
+            laps.append({
+                'controller_id': row[0],
+                'driver': row[1] or 'Unbekannt',
+                'car': row[2] or 'Unbekannt',
+                'sector1': f"{row[3]:.3f}s" if row[3] else '-',
+                'sector2': f"{row[4]:.3f}s" if row[4] else '-',
+                'sector3': f"{row[5]:.3f}s" if row[5] else '-',
+                'lap_number': row[6] or 0,
+                'total_time': f"{row[7]:.3f}s" if row[7] else '-'
+            })
+        
+        return jsonify(laps)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/')
 def dashboard():
     return render_template('dashboard.html')
