@@ -1,122 +1,74 @@
-<!-- Database Page (erweitert) - Ersetze den kompletten database-page div -->
-<div id="database-page" class="page">
-    <div class="mb-6">
-        <h2 class="text-2xl font-bold text-blue-400 mb-4">🗄️ Datenbank Übersicht</h2>
-        
-        <!-- Filter Section -->
-        <div class="bg-gray-800 rounded-lg p-6 mb-6">
-            <h3 class="text-lg font-semibold mb-4 text-green-400">🔍 Filter</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-2">Fahrer</label>
-                    <select id="driver-filter" class="bg-gray-700 border border-gray-600 text-white rounded-lg p-2 w-full focus:ring-blue-500 focus:border-blue-500">
-                        <option value="">Alle Fahrer</option>
-                        <option value="Hamilton">Lewis Hamilton</option>
-                        <option value="Verstappen">Max Verstappen</option>
-                        <option value="Leclerc">Charles Leclerc</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-2">Auto</label>
-                    <select id="car-filter" class="bg-gray-700 border border-gray-600 text-white rounded-lg p-2 w-full focus:ring-blue-500 focus:border-blue-500">
-                        <option value="">Alle Autos</option>
-                        <option value="Mercedes W14">Mercedes W14</option>
-                        <option value="Red Bull RB19">Red Bull RB19</option>
-                        <option value="Ferrari SF-23">Ferrari SF-23</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-2">Strecke</label>
-                    <select id="track-filter" class="bg-gray-700 border border-gray-600 text-white rounded-lg p-2 w-full focus:ring-blue-500 focus:border-blue-500">
-                        <option value="">Alle Strecken</option>
-                        <option value="Monza">Monza</option>
-                        <option value="Spa-Francorchamps">Spa-Francorchamps</option>
-                        <option value="Silverstone">Silverstone</option>
-                    </select>
-                </div>
-            </div>
-            <div class="flex justify-between items-center mt-4">
-                <button onclick="applyFilters()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
-                    Filter anwenden
-                </button>
-                <button onclick="clearFilters()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors">
-                    Filter zurücksetzen
-                </button>
-            </div>
-        </div>
+{% extends "base.html" %}
 
-        <!-- Statistics Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-            <div class="bg-gray-800 rounded-lg p-6">
-                <div class="text-center">
-                    <div class="text-3xl font-bold text-blue-400" id="total-laps">1,247</div>
-                    <div class="text-sm text-gray-300">Gesamt Runden</div>
-                </div>
-            </div>
-            <div class="bg-gray-800 rounded-lg p-6">
-                <div class="text-center">
-                    <div class="text-3xl font-bold text-green-400" id="best-time">1:23.456</div>
-                    <div class="text-sm text-gray-300">Beste Rundenzeit</div>
-                </div>
-            </div>
-            <div class="bg-gray-800 rounded-lg p-6">
-                <div class="text-center">
-                    <div class="text-3xl font-bold text-purple-400" id="avg-speed">195</div>
-                    <div class="text-sm text-gray-300">Durchschn. Geschw. (km/h)</div>
-                </div>
-            </div>
-            <div class="bg-gray-800 rounded-lg p-6">
-                <div class="text-center">
-                    <div class="text-3xl font-bold text-red-400" id="total-sessions">89</div>
-                    <div class="text-sm text-gray-300">Sessions</div>
-                </div>
-            </div>
-        </div>
+{% block title %}Database - SmartRacer Analytics{% endblock %}
 
-        <!-- Data Table -->
-        <div class="bg-gray-800 rounded-lg p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-semibold text-yellow-400">📊 Rundenzeiten</h3>
-                <button onclick="exportData()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors">
-                    📥 Export CSV
-                </button>
-            </div>
-            
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm text-left">
-                    <thead class="text-xs uppercase bg-gray-700 text-gray-300">
-                        <tr>
-                            <th class="px-6 py-3">Datum</th>
-                            <th class="px-6 py-3">Fahrer</th>
-                            <th class="px-6 py-3">Auto</th>
-                            <th class="px-6 py-3">Strecke</th>
-                            <th class="px-6 py-3">Rundenzeit</th>
-                            <th class="px-6 py-3">Sektor 1</th>
-                            <th class="px-6 py-3">Sektor 2</th>
-                            <th class="px-6 py-3">Sektor 3</th>
-                            <th class="px-6 py-3">Top Speed</th>
-                        </tr>
-                    </thead>
-                    <tbody id="data-table-body" class="text-gray-300">
-                        <!-- Data wird hier eingefügt -->
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Pagination -->
-            <div class="flex justify-between items-center mt-6">
-                <div class="text-sm text-gray-400">
-                    Zeige <span id="showing-start">1</span> bis <span id="showing-end">10</span> von <span id="total-records">247</span> Einträgen
-                </div>
-                <div class="flex space-x-2">
-                    <button onclick="previousPage()" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded-lg transition-colors">
-                        ← Vorherige
-                    </button>
-                    <button onclick="nextPage()" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded-lg transition-colors">
-                        Nächste →
-                    </button>
-                </div>
-            </div>
-        </div>
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-blue-400 mb-6">🗄️ Datenbank</h2>
+    
+    <!-- Einfache Tabelle -->
+    <div class="bg-gray-800 rounded-lg overflow-hidden">
+        <table class="w-full text-sm text-left">
+            <thead class="text-xs uppercase bg-gray-700 text-gray-300">
+                <tr>
+                    <th class="px-4 py-3">Controller ID</th>
+                    <th class="px-4 py-3">Fahrer</th>
+                    <th class="px-4 py-3">Auto</th>
+                    <th class="px-4 py-3">Sektor 1</th>
+                    <th class="px-4 py-3">Sektor 2</th>
+                    <th class="px-4 py-3">Sektor 3</th>
+                    <th class="px-4 py-3">Runde</th>
+                    <th class="px-4 py-3">Gesamtzeit</th>
+                </tr>
+            </thead>
+            <tbody id="data-table" class="text-gray-300">
+                <!-- Daten werden hier geladen -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Status -->
+    <div class="mt-4 text-center">
+        <span id="status" class="text-gray-400">Lade Daten...</span>
     </div>
 </div>
+
+<script>
+function loadData() {
+    fetch('/api/laps')
+        .then(response => response.json())
+        .then(data => {
+            const table = document.getElementById('data-table');
+            table.innerHTML = '';
+            
+            data.forEach(lap => {
+                const row = `
+                    <tr class="border-b border-gray-700 hover:bg-gray-750">
+                        <td class="px-4 py-3 font-mono">${lap.controller_id}</td>
+                        <td class="px-4 py-3">${lap.driver}</td>
+                        <td class="px-4 py-3">${lap.car}</td>
+                        <td class="px-4 py-3 font-mono text-green-400">${lap.sector1}</td>
+                        <td class="px-4 py-3 font-mono text-blue-400">${lap.sector2}</td>
+                        <td class="px-4 py-3 font-mono text-yellow-400">${lap.sector3}</td>
+                        <td class="px-4 py-3 text-center">${lap.lap_number}</td>
+                        <td class="px-4 py-3 font-mono font-bold text-white">${lap.total_time}</td>
+                    </tr>
+                `;
+                table.innerHTML += row;
+            });
+            
+            document.getElementById('status').textContent = `${data.length} Runden geladen`;
+        })
+        .catch(error => {
+            document.getElementById('status').textContent = 'Fehler beim Laden';
+            console.error('Error:', error);
+        });
+}
+
+// Alle 5 Sekunden aktualisieren
+setInterval(loadData, 5000);
+
+// Initial laden
+loadData();
+</script>
+{% endblock %}
