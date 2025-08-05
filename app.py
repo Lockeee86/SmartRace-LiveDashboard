@@ -1,68 +1,143 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 import mysql.connector
+import csv
+import io
 import os
+import requests
 from datetime import datetime
 
 app = Flask(__name__)
 
-# MySQL Verbindung
+# Database configuration
+db_config = {
+    'host': 'mysql',
+    'user': 'root',
+    'password': 'smartrace123',
+    'database': 'smartrace'
+}
+
 def get_db_connection():
-    try:
-        conn = mysql.connector.connect(
-            host='mysql',  # Docker service name
-            user='root',
-            password='smartrace123',
-            database='smartrace'
+    return mysql.connector.connect(**db_config)
+
+def init_db():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS race_times (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            fahrer_name VARCHAR(100) NOT NULL,
+            zeit_sekunden DECIMAL(6,3) NOT NULL,
+            datum TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        return conn
-    except Exception as e:
-        print(f"DB Error: {e}")
-        return None
+    ''')
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 @app.route('/')
-def dashboard():
-    return render_template('dashboard.html')
+def index():
+    return render_template('index.html')
 
 @app.route('/database')
 def database():
-    return render_template('database.html')
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM race_times ORDER BY zeit_sekunden ASC')
+    race_times = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('database.html', race_times=race_times)
 
-@app.route('/api/live-data')
-def get_live_data():
+@app.route('/add_time', methods=['POST'])
+def add_time():
+    fahrer_name = request.form['fahrer_name']
+    zeit_sekunden = float(request.form['zeit_sekunden'])
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('INSERT INTO race_times (fahrer_name, zeit_sekunden) VALUES (%s, %s)', 
+                   (fahrer_name, zeit_sekunden))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    
+    return redirect(url_for('database'))
+
+@app.route('/export_csv')
+def export_csv():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT fahrer_name, zeit_sekunden, datum FROM race_times ORDER BY zeit_sekunden ASC')
+    race_times = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    # CSV in Memory erstellen
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Fahrer', 'Zeit (Sekunden)', 'Datum'])
+    
+    for race_time in race_times:
+        writer.writerow([race_time[0], race_time[1], race_time[2]])
+    
+    # StringIO zu BytesIO konvertieren
+    mem = io.BytesIO()
+    mem.write(output.getvalue().encode('utf-8'))
+    mem.seek(0)
+    output.close()
+    
+    return send_file(
+        mem,
+        as_attachment=True,
+        download_name=f'smartrace_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv',
+        mimetype='text/csv'
+    )
+
+@app.route('/export_dropbox')
+def export_dropbox():
+    # Dropbox Access Token (muss konfiguriert werden)
+    DROPBOX_ACCESS_TOKEN = os.environ.get('DROPBOX_TOKEN', 'YOUR_DROPBOX_TOKEN_HERE')
+    
+    if DROPBOX_ACCESS_TOKEN == 'YOUR_DROPBOX_TOKEN_HERE':
+        return jsonify({'error': 'Dropbox Token nicht konfiguriert'}), 400
+    
+    # CSV Daten erstellen
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT fahrer_name, zeit_sekunden, datum FROM race_times ORDER BY zeit_sekunden ASC')
+    race_times = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    # CSV erstellen
+    csv_content = "Fahrer,Zeit (Sekunden),Datum\n"
+    for race_time in race_times:
+        csv_content += f"{race_time[0]},{race_time[1]},{race_time[2]}\n"
+    
+    # Zu Dropbox hochladen
+    filename = f'/smartrace_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+    
+    headers = {
+        'Authorization': f'Bearer {DROPBOX_ACCESS_TOKEN}',
+        'Content-Type': 'application/octet-stream',
+        'Dropbox-API-Arg': f'{{"path":"{filename}"}}'
+    }
+    
     try:
-        conn = get_db_connection()
-        if not conn:
-            return jsonify([])
+        response = requests.post(
+            'https://content.dropboxapi.com/2/files/upload',
+            headers=headers,
+            data=csv_content.encode('utf-8')
+        )
+        
+        if response.status_code == 200:
+            return jsonify({'success': True, 'message': f'Erfolgreich zu Dropbox exportiert: {filename}'})
+        else:
+            return jsonify({'error': f'Dropbox Upload Fehler: {response.text}'}), 400
             
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT controller_id, driver, car, lap_number, total_time, 
-                   sector1, sector2, sector3, timestamp
-            FROM laps 
-            ORDER BY timestamp DESC 
-            LIMIT 100
-        ''')
-        
-        laps = []
-        for row in cursor.fetchall():
-            laps.append({
-                'controller_id': row[0],
-                'driver': row[1] or 'Driver',
-                'car': row[2] or 'Car',
-                'lap_number': row[3] or 0,
-                'total_time': row[4] or 0,
-                'sector1': row[5],
-                'sector2': row[6],  
-                'sector3': row[7]
-            })
-        
-        conn.close()
-        return jsonify(laps)
     except Exception as e:
-        print(f"API Error: {e}")
-        return jsonify([])
+        return jsonify({'error': f'Fehler beim Upload: {str(e)}'}), 500
 
 if __name__ == '__main__':
-    print('🏁 SmartRace Analytics starting...')
-    print('🔗 Access: http://localhost:5000')
+    init_db()
     app.run(host='0.0.0.0', port=5000, debug=True)
