@@ -127,7 +127,6 @@ function updateDashboard() {
     fetch('/api/live-data')
         .then(response => {
             console.log('📡 API Response Status:', response.status);
-            
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
@@ -135,40 +134,37 @@ function updateDashboard() {
         })
         .then(data => {
             console.log('✅ Dashboard Daten erhalten:', data);
-            
-            // Prüfe ob Daten vorhanden
-            if (!data || Object.keys(data).length === 0) {
-                console.warn('⚠️ Keine Daten von API erhalten');
-                document.getElementById('standings-body').innerHTML = 
-                    '<tr><td colspan="7" class="text-warning">Keine Daten verfügbar</td></tr>';
-                return;
-            }
-            
-            // Speichere globale Daten
             dashboardData = data;
             
-            // Update alle Bereiche
+            // ⭐ EINZELN TESTEN - welche Funktion crasht?
             try {
+                console.log('🔄 Updating standings...');
                 updateStandings();
-                updateSessionInfo(); 
+                console.log('✅ Standings OK');
+            } catch (err) {
+                console.error('❌ updateStandings Fehler:', err);
+            }
+            
+            try {
+                console.log('🔄 Updating session info...');
+                updateSessionInfo();
+                console.log('✅ Session Info OK');
+            } catch (err) {
+                console.error('❌ updateSessionInfo Fehler:', err);
+            }
+            
+            try {
+                console.log('🔄 Updating sector comparison...');
                 updateSectorComparison();
-                console.log('✅ Dashboard erfolgreich aktualisiert');
-            } catch (updateError) {
-                console.error('❌ Fehler beim Update der UI:', updateError);
+                console.log('✅ Sector Comparison OK');
+            } catch (err) {
+                console.error('❌ updateSectorComparison Fehler:', err);
             }
         })
         .catch(error => {
             console.error('❌ Dashboard API Fehler:', error);
-            
-            // Fallback UI
-            document.getElementById('standings-body').innerHTML = 
-                `<tr><td colspan="7" class="text-danger">Fehler: ${error.message}</td></tr>`;
-            
-            document.getElementById('live-feed').innerHTML = 
-                `<p class="text-danger">API Fehler: ${error.message}</p>`;
         });
 }
-
 
 function updateSessionInfo() {
     // Session-schnellste Runde finden
