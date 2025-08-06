@@ -57,7 +57,7 @@ function createCharts(data) {
     const drivers = Object.keys(data);
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
 
-    // Beste Zeiten Chart
+    // 1. Beste Zeiten Chart
     const ctx1 = document.getElementById('bestTimesChart').getContext('2d');
     if (bestTimesChart) bestTimesChart.destroy();
     
@@ -66,8 +66,8 @@ function createCharts(data) {
         data: {
             labels: drivers,
             datasets: [{
-                label: 'Beste Rundenzeit (ms)',
-                data: drivers.map(driver => data[driver].best_time),
+                label: 'Beste Rundenzeit (s)',
+                data: drivers.map(driver => (data[driver].best_time / 1000).toFixed(3)),
                 backgroundColor: colors
             }]
         },
@@ -75,11 +75,19 @@ function createCharts(data) {
             responsive: true,
             plugins: {
                 legend: { display: false }
+            },
+            scales: {
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Zeit (Sekunden)'
+                    }
+                }
             }
         }
     });
 
-    // Durchschnittszeiten Chart
+    // 2. Radar Chart - Rundenzeiten Vergleich
     const ctx2 = document.getElementById('laptimesChart').getContext('2d');
     if (laptimesChart) laptimesChart.destroy();
     
@@ -107,9 +115,62 @@ function createCharts(data) {
             }
         }
     });
+
+    // 3. Rundenzeiten Verlauf Chart
+    const ctx3 = document.getElementById('progressChart').getContext('2d');
+    if (progressChart) progressChart.destroy();
+    
+    progressChart = new Chart(ctx3, {
+        type: 'line',
+        data: {
+            datasets: drivers.map((driver, index) => ({
+                label: driver,
+                data: data[driver].laps.map((lap, lapIndex) => ({
+                    x: lapIndex + 1,
+                    y: lap.laptime / 1000
+                })),
+                borderColor: colors[index % colors.length],
+                backgroundColor: colors[index % colors.length] + '20',
+                fill: false,
+                tension: 0.1,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }))
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Rundenzeiten im Verlauf'
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Runde'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Zeit (Sekunden)'
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
 }
 
+// Initial load
 loadAnalytics();
-setInterval(loadAnalytics, 30000); // Update alle 30 Sekunden
+
+// Auto-refresh alle 30 Sekunden
+setInterval(loadAnalytics, 30000);
 </script>
 {% endblock %}
