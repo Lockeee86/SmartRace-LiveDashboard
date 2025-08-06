@@ -120,17 +120,28 @@
 let dashboardData = {};
 let sessionFastestLap = null;
 let trackRecord = null;
-
+    
 function updateDashboard() {
-    fetch('/api/dashboard')
-        .then(response => response.json())
+    fetch('/api/live-data')  // ✅ Ändere hier den Endpoint
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
         .then(data => {
+            console.log('✅ Dashboard Daten geladen:', data); // Debug
             dashboardData = data;
             updateStandings();
             updateSessionInfo();
             updateSectorComparison();
         })
-        .catch(error => console.error('Error:', error));
+        .catch(error => {
+            console.error('❌ Dashboard Fehler:', error);
+            // Fallback UI
+            document.getElementById('standings-body').innerHTML = 
+                '<tr><td colspan="7" class="text-danger">Fehler beim Laden der Daten</td></tr>';
+        });
 }
 
 function updateSessionInfo() {
