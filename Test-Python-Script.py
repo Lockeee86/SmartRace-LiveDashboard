@@ -92,56 +92,17 @@ class SmartRaceTestSuite:
             return False
 
     def generate_test_data(self, num_events=50):
-        """Generiere Testdaten für verschiedene Szenarien mit erweiterten F1-Fahrern"""
+        """Generiere Testdaten für verschiedene Szenarien mit max. 6 Controllern"""
         self.log(f"Generating {num_events} test events...")
         
-        # Erweiterte F1 2024 Grid
+        # 🏎️ NUR 6 Controller - Top F1 2024 Fahrer
         controllers = [
-            # Red Bull Racing
             {"id": "1", "driver": "Max Verstappen", "car": "Red Bull RB20", "color": "#3671C6", "skill": 0.92},
-            {"id": "2", "driver": "Sergio Perez", "car": "Red Bull RB20", "color": "#3671C6", "skill": 0.96},
-            
-            # Mercedes
-            {"id": "3", "driver": "Lewis Hamilton", "car": "Mercedes W15", "color": "#27F4D2", "skill": 0.94},
-            {"id": "4", "driver": "George Russell", "car": "Mercedes W15", "color": "#27F4D2", "skill": 0.95},
-            
-            # Ferrari
-            {"id": "5", "driver": "Charles Leclerc", "car": "Ferrari SF-24", "color": "#E8002D", "skill": 0.93},
-            {"id": "6", "driver": "Carlos Sainz", "car": "Ferrari SF-24", "color": "#E8002D", "skill": 0.95},
-            
-            # McLaren
-            {"id": "7", "driver": "Lando Norris", "car": "McLaren MCL38", "color": "#FF8000", "skill": 0.94},
-            {"id": "8", "driver": "Oscar Piastri", "car": "McLaren MCL38", "color": "#FF8000", "skill": 0.97},
-            
-            # Aston Martin
-            {"id": "9", "driver": "Fernando Alonso", "car": "Aston Martin AMR24", "color": "#229971", "skill": 0.95},
-            {"id": "10", "driver": "Lance Stroll", "car": "Aston Martin AMR24", "color": "#229971", "skill": 0.98},
-            
-            # Alpine
-            {"id": "11", "driver": "Pierre Gasly", "car": "Alpine A524", "color": "#0093CC", "skill": 0.97},
-            {"id": "12", "driver": "Esteban Ocon", "car": "Alpine A524", "color": "#0093CC", "skill": 0.97},
-            
-            # Williams
-            {"id": "13", "driver": "Alex Albon", "car": "Williams FW46", "color": "#64C4FF", "skill": 0.98},
-            {"id": "14", "driver": "Logan Sargeant", "car": "Williams FW46", "color": "#64C4FF", "skill": 1.02},
-            
-            # RB F1 Team
-            {"id": "15", "driver": "Yuki Tsunoda", "car": "RB VCARB 01", "color": "#6692FF", "skill": 0.98},
-            {"id": "16", "driver": "Daniel Ricciardo", "car": "RB VCARB 01", "color": "#6692FF", "skill": 0.96},
-            
-            # Haas
-            {"id": "17", "driver": "Nico Hulkenberg", "car": "Haas VF-24", "color": "#B6BABD", "skill": 0.99},
-            {"id": "18", "driver": "Kevin Magnussen", "car": "Haas VF-24", "color": "#B6BABD", "skill": 0.99},
-            
-            # Kick Sauber
-            {"id": "19", "driver": "Valtteri Bottas", "car": "Sauber C44", "color": "#52E252", "skill": 0.98},
-            {"id": "20", "driver": "Zhou Guanyu", "car": "Sauber C44", "color": "#52E252", "skill": 1.00},
-            
-            # Zusätzliche historische Fahrer für Abwechslung
-            {"id": "21", "driver": "Michael Schumacher", "car": "Ferrari F2004", "color": "#DC143C", "skill": 0.91},
-            {"id": "22", "driver": "Ayrton Senna", "car": "McLaren MP4/4", "color": "#FF8700", "skill": 0.90},
-            {"id": "23", "driver": "Sebastian Vettel", "car": "Red Bull RB19", "color": "#3671C6", "skill": 0.93},
-            {"id": "24", "driver": "Kimi Raikkonen", "car": "Ferrari SF70H", "color": "#E8002D", "skill": 0.95}
+            {"id": "2", "driver": "Lewis Hamilton", "car": "Mercedes W15", "color": "#27F4D2", "skill": 0.94},
+            {"id": "3", "driver": "Charles Leclerc", "car": "Ferrari SF-24", "color": "#E8002D", "skill": 0.93},
+            {"id": "4", "driver": "Lando Norris", "car": "McLaren MCL38", "color": "#FF8000", "skill": 0.94},
+            {"id": "5", "driver": "Fernando Alonso", "car": "Aston Martin AMR24", "color": "#229971", "skill": 0.95},
+            {"id": "6", "driver": "George Russell", "car": "Mercedes W15", "color": "#27F4D2", "skill": 0.95}
         ]
         
         # Verschiedene Strecken mit unterschiedlichen Base-Zeiten
@@ -162,7 +123,7 @@ class SmartRaceTestSuite:
         session_types = ["practice", "qualifying", "sprint", "race"]
         current_session = random.choice(session_types)
         
-        self.log(f"Simulating session: {current_session} at {current_track['name']}")
+        self.log(f"Simulating session: {current_session} at {current_track['name']} ({len(controllers)} drivers)")
         
         for i in range(num_events):
             controller = random.choice(controllers)
@@ -236,7 +197,8 @@ class SmartRaceTestSuite:
                     "session_type": current_session,
                     "track": current_track["name"],
                     "weather": random.choice(["dry", "wet", "intermediate"]),
-                    "temperature": random.randint(15, 35)
+                    "temperature": random.randint(15, 35),
+                    "participants": len(controllers)
                 }
                 
             elif event_type == "event.end":
@@ -273,22 +235,20 @@ class SmartRaceTestSuite:
             # Small delay to simulate real data
             time.sleep(0.05)
         
-        self.log(f"Generated {num_events} test events for {current_session} at {current_track['name']}", "SUCCESS")
+        self.log(f"Generated {num_events} test events for {current_session} at {current_track['name']} - 6 controllers max", "SUCCESS")
 
     def simulate_live_race(self, duration_seconds=30):
-        """Simuliere ein Live-Rennen mit mehr Fahrern"""
+        """Simuliere ein Live-Rennen mit 6 Fahrern"""
         self.log(f"Simulating live race for {duration_seconds} seconds...")
         
-        # Top 8 Fahrer für Live-Simulation
+        # 🏎️ Nur 6 Fahrer für Live-Simulation
         controllers = [
             {"id": "1", "driver": "Max Verstappen", "car": "Red Bull RB20", "skill": 0.92, "position": 1, "color": "#3671C6"},
-            {"id": "3", "driver": "Lewis Hamilton", "car": "Mercedes W15", "skill": 0.94, "position": 2, "color": "#27F4D2"},
-            {"id": "5", "driver": "Charles Leclerc", "car": "Ferrari SF-24", "skill": 0.93, "position": 3, "color": "#E8002D"},
-            {"id": "7", "driver": "Lando Norris", "car": "McLaren MCL38", "skill": 0.94, "position": 4, "color": "#FF8000"},
-            {"id": "9", "driver": "Fernando Alonso", "car": "Aston Martin AMR24", "skill": 0.95, "position": 5, "color": "#229971"},
-            {"id": "4", "driver": "George Russell", "car": "Mercedes W15", "skill": 0.95, "position": 6, "color": "#27F4D2"},
-            {"id": "6", "driver": "Carlos Sainz", "car": "Ferrari SF-24", "skill": 0.95, "position": 7, "color": "#E8002D"},
-            {"id": "8", "driver": "Oscar Piastri", "car": "McLaren MCL38", "skill": 0.97, "position": 8, "color": "#FF8000"}
+            {"id": "2", "driver": "Lewis Hamilton", "car": "Mercedes W15", "skill": 0.94, "position": 2, "color": "#27F4D2"},
+            {"id": "3", "driver": "Charles Leclerc", "car": "Ferrari SF-24", "skill": 0.93, "position": 3, "color": "#E8002D"},
+            {"id": "4", "driver": "Lando Norris", "car": "McLaren MCL38", "skill": 0.94, "position": 4, "color": "#FF8000"},
+            {"id": "5", "driver": "Fernando Alonso", "car": "Aston Martin AMR24", "skill": 0.95, "position": 5, "color": "#229971"},
+            {"id": "6", "driver": "George Russell", "car": "Mercedes W15", "skill": 0.95, "position": 6, "color": "#27F4D2"}
         ]
         
         # Silverstone als Beispielstrecke
@@ -407,7 +367,7 @@ class SmartRaceTestSuite:
         except Exception as e:
             self.log(f"Error sending race end: {str(e)}", "ERROR")
         
-        self.log("Live race simulation completed", "SUCCESS")
+        self.log("Live race simulation completed (6 drivers)", "SUCCESS")
 
     def test_dashboard_api(self):
         """Teste Dashboard API Endpoints"""
@@ -497,6 +457,7 @@ class SmartRaceTestSuite:
     def run_all_tests(self):
         """Führe alle Tests aus"""
         self.log("Starting comprehensive SmartRace Dashboard tests...")
+        self.log("🏎️ LIMITED TO 6 CONTROLLERS MAX")
         self.log("=" * 60)
         
         tests = [
@@ -540,6 +501,7 @@ class SmartRaceTestSuite:
         
         if failed == 0:
             self.log("\n🎉 ALL TESTS PASSED! Your SmartRace Dashboard is working perfectly!", "SUCCESS")
+            self.log("🏎️ Maximum 6 controllers tested", "INFO")
         else:
             self.log(f"\n⚠️ {failed} tests failed. Check the logs above.", "WARNING")
 
