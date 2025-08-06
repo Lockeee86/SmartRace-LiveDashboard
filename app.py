@@ -129,29 +129,61 @@ def smartrace_endpoint():
         return jsonify({'error': str(e)}), 400
 
 # API für Live-Daten
-@app.route('/api/live-feed')
 @app.route('/api/live-data')
 def live_data():
-    latest_laps = db.session.query(LapTime).order_by(LapTime.timestamp.desc()).limit(60).all()
-    
-    # Gruppiere nach Controller ID
-    controller_data = {}
-    for lap in latest_laps:
-        if lap.controller_id not in controller_data:
-            controller_data[lap.controller_id] = []
-        controller_data[lap.controller_id].append({
-            'driver': lap.driver_name,
-            'car': lap.car_name,
-            'lap': lap.lap,
-            'laptime': lap.laptime,
-            'sector_1': lap.sector_1,
-            'sector_2': lap.sector_2,
-            'sector_3': lap.sector_3,
-            'color': lap.car_color,
-            'is_pb': lap.is_pb
-        })
-    
-    return jsonify(controller_data)
+    """Dashboard-optimierte Live-Daten"""
+    try:
+        # Hole die letzten 100 Runden
+        latest_laps = db.session.query(LapTime).order_by(LapTime.timestamp.desc()).limit(100).all()
+        
+        dashboard_data = {}
+        
+        # Gruppiere nach Controller/Fahrer
+        for lap in latest_laps:
+            controller_id = lap.controller_id or 'unknown'
+            
+            if controller_id not in dashboard_data:
+                dashboard_data[controller_id] = {
+                    'name': lap.driver_name or f'Driver {controller_id}',
+                    'car': lap.car_name or f'Car {controller_id}',
+                    'color': lap.car_color or '#333333',
+                    'laps': [],
+                    'best_time': None,
+                    'avg_time': None
+                }
+            
+            # Füge Runde hinzu
+            lap_data = {
+                'laptime': lap.laptime_raw or 0,
+                'laptime_formatted': lap.laptime or '--:--.---',
+                'sector_1_raw': None,  # Wenn vorhanden: convert sector_1 to ms
+                'sector_2_raw': None,  # Wenn vorhanden: convert sector_2 to ms  
+                'sector_3_raw': None,  # Wenn vorhanden: convert sector_3 to ms
+                'lap_number': lap.lap or 0,
+                'timestamp': int(lap.timestamp.timestamp() * 1000) if lap.timestamp else 0
+            }
+            
+            dashboard_data[controller_id]['laps'].append(lap_data)
+            
+            # Update beste Zeit
+            if lap.laptime_raw and lap.laptime_raw > 0:
+                if (dashboard_data[controller_id]['best_time'] is None or 
+                    lap.laptime_raw < dashboard_data[controller_id]['best_time']):
+                    dashboard_data[controller_id]['best_time'] = lap.laptime_raw
+        
+        # Sortiere Runden nach timestamps (neueste zuerst)
+        for controller_id in dashboard_data:
+            dashboard_data[controller_id]['laps'].sort(key=lambda x: x['timestamp'], reverse=True)
+            dashboard_data[controller_id]['laps'] = dashboard_data[controller_id]['laps'][:20]  # Nur letzte 20 Runden
+        
+        return jsonify(dashboard_data)
+        
+    except Exception as e:
+        print(f"❌ Live-data API Fehler: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 
 # API für Analytics
 @app.route('/api/analytics')
