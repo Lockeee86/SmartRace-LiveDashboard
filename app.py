@@ -130,6 +130,7 @@ def smartrace_endpoint():
 
 # API für Live-Daten
 @app.route('/api/live-feed')
+@app.route('/api/live-data')
 def live_data():
     latest_laps = db.session.query(LapTime).order_by(LapTime.timestamp.desc()).limit(60).all()
     
