@@ -129,7 +129,7 @@ def smartrace_endpoint():
         return jsonify({'error': str(e)}), 400
 
 # API für Live-Daten
-@app.route('/api/live-data')
+@app.route('/api/live-timing')
 def live_data():
     latest_laps = db.session.query(LapTime).order_by(LapTime.timestamp.desc()).limit(60).all()
     
