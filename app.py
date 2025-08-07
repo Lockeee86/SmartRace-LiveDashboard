@@ -473,4 +473,4 @@ def backup_to_dropbox():
         return jsonify({'success': False, 'error': f'Backup failed: {str(e)}'})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True, ssl_context='adhoc') 
+    app.run(host='0.0.0.0', port=5000, debug=True)
