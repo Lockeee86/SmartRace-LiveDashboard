@@ -60,6 +60,67 @@ class LapTime(db.Model):
 with app.app_context():
     db.create_all()
 
+# ✅ FEHLENDE FUNKTIONEN ERGÄNZEN:
+
+# Format-Funktion für Zeiten
+def format_time(milliseconds):
+    """Formatiert Millisekunden zu MM:SS.mmm"""
+    if not milliseconds or milliseconds == 0:
+        return "--:--.---"
+    
+    seconds = milliseconds / 1000
+    minutes = int(seconds // 60)
+    remaining_seconds = seconds % 60
+    
+    return f"{minutes}:{remaining_seconds:06.3f}"
+
+# Driver Cache (einfache Version)
+driver_cache = {}
+
+def get_current_event():
+    """Gibt das neueste Event zurück (vereinfacht)"""
+    try:
+        # ✅ EINFACH: Nimm die neueste LapTime und verwende deren event_id
+        latest_lap = db.session.query(LapTime).order_by(LapTime.timestamp.desc()).first()
+        
+        if latest_lap and latest_lap.event_id:
+            print(f"🎯 Current Event gefunden: {latest_lap.event_id}")
+            return {'id': latest_lap.event_id}
+        
+        print("❌ Kein Current Event gefunden")
+        return None
+        
+    except Exception as e:
+        print(f"❌ get_current_event Fehler: {e}")
+        return None
+
+def update_driver_cache():
+    """Aktualisiert den Driver-Cache aus der DB"""
+    global driver_cache
+    try:
+        # Hole die neuesten Fahrer-Daten pro Controller
+        latest_laps = db.session.query(LapTime).order_by(LapTime.timestamp.desc()).limit(50).all()
+        
+        for lap in latest_laps:
+            controller_id = str(lap.controller_id)
+            if controller_id not in driver_cache:
+                driver_cache[controller_id] = {
+                    'name': lap.driver_name or f'Driver {controller_id}',
+                    'car': lap.car_name or f'Car {controller_id}',
+                    'color': lap.controller_color or '#333333'
+                }
+        
+        print(f"🗂️ Driver Cache aktualisiert: {list(driver_cache.keys())}")
+        
+    except Exception as e:
+        print(f"❌ Driver Cache Update Fehler: {e}")
+
+# Cache beim Start initialisieren
+with app.app_context():
+    db.create_all()
+    update_driver_cache()  # ✅ Cache initialisieren
+
+
 # Routen
 @app.route('/')
 def dashboard():
