@@ -5,6 +5,8 @@ from datetime import datetime
 import json
 import os
 import csv
+import logging
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
 
 app = Flask(__name__)
