@@ -288,7 +288,7 @@ function updateDashboard() {
         });
 }
 
-// NEU: Controller-Tabellen Update Funktion mit echten Farben
+// KORRIGIERTE Controller-Tabellen Update Funktion
 function updateControllerTables() {
     for (let controllerId = 1; controllerId <= 6; controllerId++) {
         const controllerData = dashboardData[controllerId.toString()];
@@ -302,38 +302,43 @@ function updateControllerTables() {
             driverName.textContent = controllerData.name || `Driver ${controllerId}`;
             carName.textContent = controllerData.car || `Car ${controllerId}`;
             
-            // ✨ NEUE Farb-Integration aus der Datenbank
+            // ✨ Controller-Farbe aus der Datenbank
             const controllerColor = controllerData.color || getDefaultControllerColor(controllerId);
+            console.log(`🎨 Controller ${controllerId} Farbe:`, controllerColor);
             
-            // Tabellen-Hintergrund mit Controller-Farbe (abgeschwächt für Lesbarkeit)
-            const lightColor = hexToRgba(controllerColor, 0.15); // 15% Transparenz
-            const borderColor = controllerColor;
+            // 🎯 KORREKTUR: Direkte Background-Styles setzen
+            const lightColor = hexToRgba(controllerColor, 0.2); // 20% für bessere Sichtbarkeit
+            const mediumColor = hexToRgba(controllerColor, 0.3); // 30% für Driver-Info
             
-            // Styling anwenden
-            controllerTable.style.background = `linear-gradient(135deg, ${lightColor} 0%, #f8f9fa 100%)`;
-            controllerTable.style.borderLeft = `5px solid ${borderColor}`;
-            controllerTable.style.borderColor = borderColor;
+            // ✅ HAUPT-TABELLE Background und Border
+            controllerTable.style.setProperty('background', lightColor, 'important');
+            controllerTable.style.setProperty('border-left', `6px solid ${controllerColor}`, 'important');
+            controllerTable.style.setProperty('border-color', controllerColor, 'important');
+            controllerTable.style.setProperty('box-shadow', `0 2px 8px ${hexToRgba(controllerColor, 0.3)}`, 'important');
             
-            // Header mit Controller-Farbe
-            const header = controllerTable.querySelector('.controller-header');
-            header.style.color = borderColor;
-            header.style.textShadow = '1px 1px 2px rgba(0,0,0,0.1)';
-            
-            // Driver-Info Box mit Farbe
+            // ✅ DRIVER-INFO Background
             const driverInfo = controllerTable.querySelector('.driver-info');
-            driverInfo.style.background = hexToRgba(controllerColor, 0.25);
-            driverInfo.style.border = `1px solid ${borderColor}`;
+            driverInfo.style.setProperty('background', mediumColor, 'important');
+            driverInfo.style.setProperty('border', `1px solid ${controllerColor}`, 'important');
+            driverInfo.style.setProperty('color', '#000', 'important'); // Schwarzer Text für Lesbarkeit
             
-            // Zeige letzte 6 Zeiten (neueste zuerst)
+            // ✅ HEADER Farbe zurücksetzen (nicht den Namen färben)
+            const header = controllerTable.querySelector('.controller-header');
+            header.style.color = '#000'; // Schwarz für Lesbarkeit
+            header.style.fontWeight = 'bold';
+            
+            // ✅ TABLE Background
+            const table = controllerTable.querySelector('table');
+            table.style.setProperty('background', 'rgba(255,255,255,0.9)', 'important');
+            
+            // Zeige letzte 6 Zeiten
             const lastSixLaps = controllerData.laps.slice(-6).reverse();
             let html = '';
             
             lastSixLaps.forEach((lap, index) => {
-                // Bestimme ob es die persönliche Bestzeit ist
                 const isPersonalBest = lap.laptime === controllerData.best_time;
                 const isLatest = index === 0;
                 
-                // Status-Klassen für Styling
                 let statusClass = '';
                 let statusText = '';
                 let rowStyle = '';
@@ -341,18 +346,15 @@ function updateControllerTables() {
                 if (isPersonalBest) {
                     statusClass = 'text-success fw-bold';
                     statusText = '🏆 PB';
-                    rowStyle = `style="background: linear-gradient(90deg, ${hexToRgba('#28a745', 0.2)}, transparent);"`;
+                    // PB-Zeile mit Gold-Highlight
+                    rowStyle = `style="background: linear-gradient(90deg, rgba(255,215,0,0.4), rgba(255,215,0,0.1)) !important;"`;
                 } else if (isLatest) {
-                    statusClass = 'text-primary';
+                    statusClass = 'text-primary fw-bold';
                     statusText = '🏁 Last';
-                    rowStyle = `style="background: linear-gradient(90deg, ${hexToRgba(controllerColor, 0.3)}, transparent);"`;
-                } else {
-                    statusClass = '';
-                    statusText = '';
-                    rowStyle = '';
+                    // Neueste Runde mit Controller-Farbe
+                    rowStyle = `style="background: linear-gradient(90deg, ${hexToRgba(controllerColor, 0.4)}, transparent) !important;"`;
                 }
                 
-                // Berechne Runden-Nummer (rückwärts von aktueller Runde)
                 const lapNumber = controllerData.laps.length - index;
                 
                 html += `
@@ -367,59 +369,68 @@ function updateControllerTables() {
             tableBody.innerHTML = html;
             
         } else {
-            // Inaktiver Controller - Standard-Grau-Design
+            // ✅ INAKTIVE Controller - Grau
             driverName.textContent = '-';
             carName.textContent = '-';
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="3" class="text-muted text-center" style="font-style: italic;">
-                        <small>Keine Daten verfügbar</small>
+                    <td colspan="3" class="text-muted text-center">
+                        <small><em>Keine Daten verfügbar</em></small>
                     </td>
                 </tr>
             `;
             
             // Neutrales Styling für inaktive Controller
-            controllerTable.style.background = '#f8f9fa';
-            controllerTable.style.borderLeft = '5px solid #dee2e6';
-            controllerTable.style.borderColor = '#dee2e6';
+            controllerTable.style.setProperty('background', '#f8f9fa', 'important');
+            controllerTable.style.setProperty('border-left', '6px solid #dee2e6', 'important');
+            controllerTable.style.setProperty('border-color', '#dee2e6', 'important');
+            controllerTable.style.setProperty('box-shadow', '0 2px 8px rgba(0,0,0,0.1)', 'important');
+            
+            const driverInfo = controllerTable.querySelector('.driver-info');
+            driverInfo.style.setProperty('background', '#e9ecef', 'important');
+            driverInfo.style.setProperty('border', '1px solid #dee2e6', 'important');
+            driverInfo.style.setProperty('color', '#6c757d', 'important');
             
             const header = controllerTable.querySelector('.controller-header');
             header.style.color = '#6c757d';
-            header.style.textShadow = 'none';
-            
-            const driverInfo = controllerTable.querySelector('.driver-info');
-            driverInfo.style.background = '#e9ecef';
-            driverInfo.style.border = '1px solid #dee2e6';
         }
     }
 }
 
-// ✨ Hilfsfunktionen für Farbkonvertierung
+// ✅ Verbesserte Farb-Konvertierung
 function hexToRgba(hex, alpha) {
-    // Konvertiert HEX zu RGBA mit Transparenz
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    // Entferne # falls vorhanden
+    hex = hex.replace('#', '');
+    
+    // 3-stellige HEX zu 6-stellig konvertieren
+    if (hex.length === 3) {
+        hex = hex.split('').map(char => char + char).join('');
+    }
+    
+    const result = /^([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    
     if (result) {
         const r = parseInt(result[1], 16);
         const g = parseInt(result[2], 16);
         const b = parseInt(result[3], 16);
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
-    return `rgba(128, 128, 128, ${alpha})`; // Fallback grau
+    
+    // Fallback
+    return `rgba(128, 128, 128, ${alpha})`;
 }
 
 function getDefaultControllerColor(controllerId) {
-    // Fallback-Farben falls keine Farbe aus der DB kommt
     const defaultColors = {
-        1: '#FF0000', // Rot
-        2: '#0066FF', // Blau  
-        3: '#00AA00', // Grün
+        1: '#FF4444', // Helles Rot
+        2: '#4488FF', // Helles Blau  
+        3: '#44AA44', // Helles Grün
         4: '#FFD700', // Gold
-        5: '#FF6600', // Orange
-        6: '#9932CC'  // Violett
+        5: '#FF8844', // Orange
+        6: '#AA44FF'  // Violett
     };
-    return defaultColors[controllerId] || '#333333';
+    return defaultColors[controllerId] || '#666666';
 }
-
 
 function updateSessionInfo() {
     // Session-schnellste Runde finden
@@ -604,7 +615,7 @@ function formatTime(timeMs) {
     }
 }
 
-// Erweiterte CSS Animation und Styling
+// VEREINFACHTE CSS (entfernt störende Background-Rules)
 const style = document.createElement('style');
 style.textContent = `
     @keyframes pulse {
@@ -613,7 +624,6 @@ style.textContent = `
         100% { transform: scale(1); }
     }
     
-    /* Controller Grid Styling */
     .controllers-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -622,22 +632,17 @@ style.textContent = `
     }
     
     .controller-table {
-        border: 2px solid #dee2e6;
         border-radius: 12px;
         padding: 15px;
-        background: #f8f9fa;
-        border-left: 5px solid #dee2e6;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         transition: all 0.3s ease;
+        /* Background wird via JavaScript gesetzt - KEINE CSS Background-Rules! */
     }
     
     .controller-table:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     
     .controller-header {
-        color: #495057;
         margin: 0 0 15px 0;
         text-align: center;
         font-weight: bold;
@@ -650,29 +655,25 @@ style.textContent = `
         text-align: center;
         margin-bottom: 15px;
         padding: 12px;
-        background: #e9ecef;
         border-radius: 8px;
-        border: 1px solid #dee2e6;
         transition: all 0.3s ease;
+        /* Background wird via JavaScript gesetzt! */
     }
     
     .driver-name {
         font-weight: bold;
         font-size: 15px;
-        color: #dc3545;
         display: block;
         margin-bottom: 4px;
     }
     
     .car-name {
         font-size: 13px;
-        color: #6c757d;
         font-style: italic;
     }
     
     .controller-table table {
         margin-bottom: 0;
-        background: rgba(255,255,255,0.8);
         border-radius: 6px;
         overflow: hidden;
     }
@@ -684,8 +685,6 @@ style.textContent = `
         padding: 8px;
         text-align: center;
         font-weight: bold;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
     }
     
     .controller-table td {
@@ -695,44 +694,19 @@ style.textContent = `
         border-bottom: 1px solid rgba(0,0,0,0.1);
     }
     
-    .controller-table tr:last-child td {
-        border-bottom: none;
-    }
-    
-    /* Spezielle Zeilen-Highlights */
-    .pb-row {
-        background: linear-gradient(90deg, rgba(40, 167, 69, 0.2), transparent) !important;
-        border-left: 3px solid #28a745;
-    }
-    
-    .latest-row {
-        border-left: 3px solid #007bff;
-    }
-    
     /* Responsive */
     @media (max-width: 1200px) {
         .controllers-grid {
             grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
         }
     }
     
     @media (max-width: 768px) {
         .controllers-grid {
             grid-template-columns: 1fr;
-            gap: 10px;
-        }
-        
-        .controller-table {
-            padding: 12px;
-        }
-        
-        .controller-header {
-            font-size: 14px;
         }
     }
 `;
-
 document.head.appendChild(style);
 
 // Initial load und regelmäßige Updates
