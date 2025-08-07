@@ -311,6 +311,27 @@ function updateMainStats() {
             });
         }
     });
+    Object.keys(dashboardData).forEach(controllerId => {
+    const controllerData = dashboardData[controllerId];
+    console.log(`🔍 Controller ${controllerId}:`, controllerData);
+    
+    if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
+        activeDrivers++;
+        
+        // ✅ DEBUG: Zeige ALLE Rundennummern
+        const allLapNumbers = controllerData.laps.map(lap => lap.lap || 0);
+        console.log(`🔥 Controller ${controllerId} Rundennummern:`, allLapNumbers);
+        console.log(`🔥 Controller ${controllerId} Einträge gesamt:`, controllerData.laps.length);
+        
+        const controllerMaxLap = Math.max(...allLapNumbers);
+        console.log(`🔥 Controller ${controllerId}: höchste Runde: ${controllerMaxLap}`);
+        
+        if (controllerMaxLap > maxLapNumber) {
+            maxLapNumber = controllerMaxLap;
+        }
+    }
+});
+
     
     console.log(`📊 FINAL Stats: maxLapNumber=${maxLapNumber}, activeDrivers=${activeDrivers}`);
     console.log(`📊 Session Fastest:`, sessionFastestLap);
