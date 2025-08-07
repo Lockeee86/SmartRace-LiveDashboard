@@ -5,6 +5,7 @@ from datetime import datetime
 import json
 import os
 import csv
+import re
 
 app = Flask(__name__)
 CORS(app)
@@ -14,6 +15,21 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///sma
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+
+def rgb_to_hex(rgb_string):
+    """Konvertiert rgb(r,g,b) zu #rrggbb"""
+    try:
+        if rgb_string and rgb_string.startswith('rgb'):
+            numbers = re.findall(r'\d+', rgb_string)
+            if len(numbers) >= 3:
+                r, g, b = int(numbers[0]), int(numbers[1]), int(numbers[2])
+                hex_color = f"#{r:02x}{g:02x}{b:02x}"
+                print(f"🎨 RGB→HEX: {rgb_string} → {hex_color}")
+                return hex_color
+        return rgb_string or '#333333'
+    except Exception as e:
+        print(f"❌ RGB conversion error: {e}")
+        return '#333333'
 
 # Modelle
 class Event(db.Model):
@@ -36,6 +52,7 @@ class LapTime(db.Model):
     sector_2 = db.Column(db.String(20))
     sector_3 = db.Column(db.String(20))
     car_color = db.Column(db.String(20))
+    controller_color = db.Column(db.String(20))  # ✅ NEUE Spalte für Controller-Farbe!
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     is_pb = db.Column(db.Boolean, default=False)
 
@@ -77,6 +94,14 @@ def smartrace_endpoint():
         if data.get('event_type') == 'ui.lap_update':
             event_data = data.get('event_data', {})
             
+            # ✅ CONTROLLER-FARBE aus controller_data extrahieren!
+            controller_color = '#333333'  # Fallback
+            if 'controller_data' in event_data and event_data['controller_data']:
+                color_bg = event_data['controller_data'].get('color_bg')
+                if color_bg:
+                    controller_color = rgb_to_hex(color_bg)
+                    print(f"🎨 Controller-Farbe gefunden: {color_bg} → {controller_color}")
+            
             # Fahrer und Auto Namen extrahieren
             driver_name = None
             car_name = None
@@ -114,23 +139,26 @@ def smartrace_endpoint():
                 sector_2=event_data.get('sector_2'),
                 sector_3=event_data.get('sector_3'),
                 car_color=event_data.get('car_data', {}).get('color') if event_data.get('car_data') else '#000000',
+                controller_color=controller_color,  # ✅ Controller-Farbe speichern!
                 is_pb=event_data.get('lap_pb', False)
             )
             db.session.add(lap_time)
             
-            print(f"💾 Saved lap: Driver={driver_name}, Car={car_name}")  # Debug
+            print(f"💾 Saved lap: Driver={driver_name}, Car={car_name}, Controller-Color={controller_color}")  # Debug
         
         db.session.commit()
         return jsonify({'status': 'success'})
     
     except Exception as e:
         print(f"❌ Error: {str(e)}")  # Debug
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 400
 
 # API für Live-Daten
 @app.route('/api/live-data')
 def live_data():
-    """Dashboard-optimierte Live-Daten"""
+    """Dashboard-optimierte Live-Daten mit echten Controller-Farben"""
     try:
         # Hole die letzten 100 Runden
         latest_laps = db.session.query(LapTime).order_by(LapTime.timestamp.desc()).limit(100).all()
@@ -142,10 +170,14 @@ def live_data():
             controller_id = lap.controller_id or 'unknown'
             
             if controller_id not in dashboard_data:
+                # ✅ ECHTE Controller-Farbe aus der Datenbank verwenden!
+                controller_color = lap.controller_color or '#333333'
+                print(f"🎮 Controller {controller_id} → echte Farbe: {controller_color}")
+                
                 dashboard_data[controller_id] = {
                     'name': lap.driver_name or f'Driver {controller_id}',
                     'car': lap.car_name or f'Car {controller_id}',
-                    'color': lap.car_color or '#333333',
+                    'color': controller_color,  # ✅ ECHTE Farbe aus ui.lap_update!
                     'laps': [],
                     'best_time': None,
                     'avg_time': None
@@ -155,9 +187,9 @@ def live_data():
             lap_data = {
                 'laptime': lap.laptime_raw or 0,
                 'laptime_formatted': lap.laptime or '--:--.---',
-                'sector_1_raw': None,  # Wenn vorhanden: convert sector_1 to ms
-                'sector_2_raw': None,  # Wenn vorhanden: convert sector_2 to ms  
-                'sector_3_raw': None,  # Wenn vorhanden: convert sector_3 to ms
+                'sector_1_raw': None,
+                'sector_2_raw': None,
+                'sector_3_raw': None,
                 'lap_number': lap.lap or 0,
                 'timestamp': int(lap.timestamp.timestamp() * 1000) if lap.timestamp else 0
             }
@@ -175,6 +207,7 @@ def live_data():
             dashboard_data[controller_id]['laps'].sort(key=lambda x: x['timestamp'], reverse=True)
             dashboard_data[controller_id]['laps'] = dashboard_data[controller_id]['laps'][:20]  # Nur letzte 20 Runden
         
+        print(f"🚀 Live-Data Response mit echten Farben: {dashboard_data}")  # Debug
         return jsonify(dashboard_data)
         
     except Exception as e:
@@ -182,8 +215,7 @@ def live_data():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
-
+        
 # API für Analytics
 @app.route('/api/analytics')
 def analytics_data():
