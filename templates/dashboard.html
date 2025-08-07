@@ -319,17 +319,38 @@ function updateStandingsTable() {
     const tbody = document.getElementById('standings-body');
     const drivers = Object.keys(dashboardData).map(controllerId => {
         const driver = dashboardData[controllerId];
+        
+        // ✅ KORRIGIERT: Runden richtig zählen
+        const sortedLaps = driver.laps ? [...driver.laps].sort((a, b) => 
+            new Date(b.timestamp || 0) - new Date(a.timestamp || 0)) : [];
+            
         return {
             controllerId,
             name: driver.name,
             car: driver.car,
             color: driver.color || '#333',
             bestTime: driver.best_time,
-            lastLap: driver.laps && driver.laps.length > 0 ? driver.laps[0] : null, // Neueste Runde
-            totalLaps: driver.laps ? driver.laps.length : 0,
-            avgTime: driver.avg_time
+            lastLap: sortedLaps[0] || null, // ✅ Wirklich neueste Runde
+            totalLaps: sortedLaps.length,   // ✅ Korrekte Rundenzahl
+            avgTime: driver.avg_time,
+            allLaps: sortedLaps             // ✅ Für Debug
         };
     }).filter(driver => driver.totalLaps > 0);
+    
+    // ✅ KORRIGIERT: Sortiere primär nach Rundenzahl, sekundär nach Zeit
+    drivers.sort((a, b) => {
+        if (b.totalLaps !== a.totalLaps) {
+            return b.totalLaps - a.totalLaps; // Mehr Runden = besser
+        }
+        return (a.bestTime || Infinity) - (b.bestTime || Infinity); // Bei gleichen Runden: bessere Zeit
+    });
+    
+    console.log('🏆 Standings Debug:', drivers.map(d => ({
+        name: d.name, 
+        laps: d.totalLaps, 
+        bestTime: d.bestTime,
+        lastLap: d.lastLap?.lap || 'N/A'
+    })));
     
     // Sortiere nach bester Zeit
     drivers.sort((a, b) => (a.bestTime || Infinity) - (b.bestTime || Infinity));
