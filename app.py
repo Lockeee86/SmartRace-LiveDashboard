@@ -158,103 +158,63 @@ def smartrace_endpoint():
 @app.route('/api/live-data')
 def live_data():
     try:
-        # ✅ KORRIGIERT: Nutze current_event_id statt alle Events
-        current_event = get_current_event()
-        if not current_event:
+        print("🔍 === LIVE-DATA START ===")
+        
+        # ✅ EINFACH: Nimm alle LapTimes aus der DB (erstmal ohne Event-Filter)
+        laps = db.session.query(LapTime).order_by(LapTime.timestamp.desc()).limit(100).all()
+        print(f"📊 Gefundene Runden: {len(laps)}")
+        
+        if len(laps) == 0:
+            print("❌ Keine Runden gefunden!")
             return jsonify({})
         
-        event_id = current_event['id']
-        print(f"🎯 Live-Data für Event ID: {event_id}")
-        
-        # ✅ Nur Runden der aktuellen Session
-        laps = db.session.query(LapTime).filter(
-            LapTime.event_id == event_id
-        ).order_by(LapTime.timestamp.desc()).all()
-        
-        print(f"📊 Gefundene Runden für Event {event_id}: {len(laps)}")
-        
-        # ✅ Organisiere Daten nach Controller
+        # ✅ Organisiere nach Controller
         controller_data = {}
         
         for lap in laps:
             controller_id = str(lap.controller_id)
             
             if controller_id not in controller_data:
-                # ✅ Fahrer-Info aus Cache oder Event-Daten
-                driver_name = None
-                car_name = None
-                controller_color = lap.controller_color or '#333333'
-                
-                # Versuche aus Cache zu laden
-                if controller_id in driver_cache:
-                    cache_data = driver_cache[controller_id]
-                    driver_name = cache_data.get('name')
-                    car_name = cache_data.get('car')
-                    if cache_data.get('color'):
-                        controller_color = cache_data['color']
-                
-                # Fallback: Aus Event-Daten laden
-                if not driver_name:
-                    event_data = db.session.query(Event).filter(Event.id == event_id).first()
-                    if event_data and event_data.session_data:
-                        session_data = json.loads(event_data.session_data)
-                        for controller in session_data.get('controllers', []):
-                            if str(controller.get('id')) == controller_id:
-                                driver_name = controller.get('name', f'Controller {controller_id}')
-                                car_name = controller.get('car', 'Unknown Car')
-                                break
-                
                 controller_data[controller_id] = {
-                    'name': driver_name or f'Driver {controller_id}',
-                    'car': car_name or 'Unknown Car',
-                    'color': controller_color,
+                    'name': lap.driver_name or f'Driver {controller_id}',
+                    'car': lap.car_name or f'Car {controller_id}',
+                    'color': lap.controller_color or '#FF6B6B',
                     'laps': [],
                     'best_time': None,
                     'total_time': 0,
                     'lap_count': 0
                 }
             
-            # ✅ Runde hinzufügen
-            lap_data = {
+            # Runde hinzufügen
+            controller_data[controller_id]['laps'].append({
                 'lap': lap.lap,
-                'laptime_raw': lap.laptime,  # Millisekunden
-                'laptime_formatted': format_time(lap.laptime),
-                'sector_1': lap.sector_1,
-                'sector_2': lap.sector_2, 
-                'sector_3': lap.sector_3,
+                'laptime_raw': lap.laptime_raw,
+                'laptime_formatted': lap.laptime,  # Schon formatiert from SmartRace
                 'timestamp': lap.timestamp.isoformat() if lap.timestamp else None,
                 'is_pb': lap.is_pb or False
-            }
+            })
             
-            controller_data[controller_id]['laps'].append(lap_data)
-            
-            # ✅ Beste Zeit berechnen
-            current_best = controller_data[controller_id]['best_time']
-            if current_best is None or lap.laptime < current_best:
-                controller_data[controller_id]['best_time'] = lap.laptime
-            
-            # ✅ Statistiken
-            controller_data[controller_id]['total_time'] += lap.laptime
-            controller_data[controller_id]['lap_count'] += 1
+            # Statistiken
+            if lap.laptime_raw:
+                controller_data[controller_id]['lap_count'] += 1
+                controller_data[controller_id]['total_time'] += lap.laptime_raw
+                
+                # Beste Zeit
+                if (controller_data[controller_id]['best_time'] is None or 
+                    lap.laptime_raw < controller_data[controller_id]['best_time']):
+                    controller_data[controller_id]['best_time'] = lap.laptime_raw
         
-        # ✅ Durchschnittszeiten berechnen
-        for controller_id in controller_data:
-            data = controller_data[controller_id]
-            if data['lap_count'] > 0:
-                data['avg_time'] = data['total_time'] / data['lap_count']
-            else:
-                data['avg_time'] = None
-        
-        print(f"🎮 Controller Data Summary:")
+        print(f"🎮 Controller gefunden: {list(controller_data.keys())}")
         for cid, data in controller_data.items():
-            print(f"   Controller {cid}: {data['name']} - {len(data['laps'])} laps, best: {data['best_time']}")
+            print(f"   Controller {cid}: {data['name']} - {data['lap_count']} laps")
         
         return jsonify(controller_data)
         
     except Exception as e:
         print(f"❌ Live-Data Fehler: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({}), 500
-
         
 # API für Analytics
 @app.route('/api/analytics')
