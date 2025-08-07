@@ -282,7 +282,12 @@ function updateMainStats() {
         const driver = dashboardData[controllerId];
         if (driver.laps && driver.laps.length > 0) {
             activeDrivers++;
-            totalLaps += driver.laps.length;
+            
+            // ✅ KORRIGIERT: Rundenzählung - höchste Rundennummer statt Anzahl
+            const maxLapNumber = Math.max(...driver.laps.map(lap => lap.lap || 0));
+            totalLaps = Math.max(totalLaps, maxLapNumber); // Höchste aller Controller
+            
+            console.log(`🔍 Controller ${controllerId}: ${driver.laps.length} Einträge, höchste Runde: ${maxLapNumber}`);
             
             // Prüfe jede Runde für die schnellste Session-Zeit
             driver.laps.forEach(lap => {
@@ -298,6 +303,8 @@ function updateMainStats() {
         }
     });
     
+    console.log(`📊 Stats Update: totalLaps=${totalLaps}, activeDrivers=${activeDrivers}`);
+    
     // Session Info aktualisieren
     if (sessionFastestLap) {
         document.getElementById('fastest-lap-time').textContent = formatTime(sessionFastestLap.time);
@@ -307,12 +314,12 @@ function updateMainStats() {
         document.getElementById('fastest-lap-driver').textContent = 'Kein Fahrer';
     }
     
-    // Streckenrekord simulieren
-    updateTrackRecord();
-    
-    // Stats aktualisieren
+    // ✅ KORRIGIERT: Richtige Element-IDs verwenden
     document.getElementById('total-laps').textContent = totalLaps;
     document.getElementById('active-drivers').textContent = activeDrivers;
+    
+    // Streckenrekord simulieren
+    updateTrackRecord();
 }
 
 function updateStandingsTable() {
