@@ -445,7 +445,7 @@ function updateControllerTables() {
                 
                 return `
                     <tr class="${rowClass}" style="${rowStyle}">
-                        <td>#${lap.lap_number || '-'}</td>
+                        <td>#${lap.lap || '-'}</td>
                         <td>${lap.laptime_formatted || formatTime(lapTime)}</td>
                         <td>${isPersonalBest ? '🏆' : (isLatest ? '🏁' : '')}</td>
                     </tr>
