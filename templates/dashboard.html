@@ -240,53 +240,38 @@ let dashboardData = {};
 let sessionFastestLap = null;
 let trackRecord = null;
     
-function updateDashboard() {
-    console.log('🔄 Dashboard wird aktualisiert...');
-    
-    fetch('/api/live-data')
-        .then(response => {
-            console.log('📡 API Response Status:', response.status);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            console.log('✅ Dashboard Daten erhalten:', data);
-            
-            // Prüfe ob Daten vorhanden
-            if (!data || Object.keys(data).length === 0) {
-                console.warn('⚠️ Keine Daten von API erhalten');
-                document.getElementById('standings-body').innerHTML = 
-                    '<tr><td colspan="7" class="text-warning">Keine Daten verfügbar</td></tr>';
-                return;
-            }
-            
-            // Speichere globale Daten
-            dashboardData = data;
-            
-            // Update alle Bereiche
-            try {
-                updateStandings();
-                updateSessionInfo(); 
-                updateControllerTables(); // NEU! Controller-Tabellen Update
-                console.log('✅ Dashboard erfolgreich aktualisiert');
-            } catch (updateError) {
-                console.error('❌ Fehler beim Update der UI:', updateError);
-            }
-        })
-        .catch(error => {
-            console.error('❌ Dashboard API Fehler:', error);
-            
-            // Fallback UI
-            document.getElementById('standings-body').innerHTML = 
-                `<tr><td colspan="7" class="text-danger">Fehler: ${error.message}</td></tr>`;
-            
-            document.getElementById('live-feed').innerHTML = 
-                `<p class="text-danger">API Fehler: ${error.message}</p>`;
+async function updateDashboard() {
+    try {
+        console.log('🚀 Lade Live-Daten...');
+        // ✅ KORRIGIERT: Richtiger API-Endpunkt!
+        const response = await fetch('/api/live-data');
+        console.log('📡 Response Status:', response.status);
+        
+        const rawText = await response.text();
+        console.log('📄 Raw Response:', rawText);
+        
+        dashboardData = JSON.parse(rawText);
+        console.log('📊 Live-Daten erhalten:', dashboardData);
+        
+        // Detaillierte Controller-Analyse
+        Object.keys(dashboardData).forEach(controllerId => {
+            const controller = dashboardData[controllerId];
+            console.log(`🎮 Controller ${controllerId}:`);
+            console.log(`   👤 Name: ${controller.name}`);
+            console.log(`   🚗 Car: ${controller.car}`);
+            console.log(`   🎨 Color: ${controller.color}`);
+            console.log(`   🏁 Laps: ${controller.laps ? controller.laps.length : 0} Runden`);
         });
+        
+        updateMainStats();
+        updateStandingsTable();
+        updateControllerTables();
+        
+    } catch (error) {
+        console.error('❌ Live-Daten Fehler:', error);
+    }
 }
+
 
 /// DEBUG Controller-Tabellen Update Funktion
 function updateControllerTables() {
