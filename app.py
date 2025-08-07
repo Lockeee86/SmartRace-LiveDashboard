@@ -221,14 +221,14 @@ def live_data():
     try:
         print("🔍 === LIVE-DATA START ===")
         
-        # ✅ Hole alle LapTimes, neueste zuerst
+        # ✅ Hole alle LapTimes wie database.html es macht
         laps = db.session.query(LapTime).order_by(LapTime.timestamp.desc()).all()
         print(f"📊 Gesamt Runden in DB: {len(laps)}")
         
         if len(laps) == 0:
             return jsonify({})
         
-        # ✅ Organisiere nach Controller (RICHTIGE Sortierung!)
+        # ✅ Organisiere nach Controller (wie database.html)
         controller_data = {}
         
         for lap in laps:
@@ -240,62 +240,43 @@ def live_data():
                     'car': lap.car_name or f'Car {controller_id}',
                     'color': lap.controller_color or '#FF6B6B',
                     'laps': [],
+                    'lap_count': 0,
                     'best_time_raw': None,
                     'best_time_formatted': '--:--.---',
-                    'lap_count': 0,
-                    'total_time': 0,
-                    'avg_time': None
+                    'total_time': 0
                 }
             
-            # ✅ Runde hinzufügen (mit allen Daten!)
-            lap_data = {
+            # ✅ Runde hinzufügen (GLEICHE Struktur wie database.html)
+            controller_data[controller_id]['laps'].append({
                 'lap': lap.lap or 0,
                 'laptime_raw': lap.laptime_raw or 0,
                 'laptime_formatted': lap.laptime or '--:--.---',
                 'timestamp': lap.timestamp.isoformat() if lap.timestamp else None,
                 'is_pb': lap.is_pb or False,
-                'sector_1': lap.sector_1,
-                'sector_2': lap.sector_2,
-                'sector_3': lap.sector_3
-            }
+                'driver': lap.driver_name,
+                'car': lap.car_name
+            })
             
-            controller_data[controller_id]['laps'].append(lap_data)
-            
-            # ✅ Statistiken (nur für gültige Zeiten!)
+            # ✅ Bestzeit aktualisieren
             if lap.laptime_raw and lap.laptime_raw > 0:
-                controller_data[controller_id]['lap_count'] += 1
-                controller_data[controller_id]['total_time'] += lap.laptime_raw
-                
-                # Beste Zeit prüfen
-                current_best = controller_data[controller_id]['best_time_raw']
-                if current_best is None or lap.laptime_raw < current_best:
+                if (controller_data[controller_id]['best_time_raw'] is None or 
+                    lap.laptime_raw < controller_data[controller_id]['best_time_raw']):
                     controller_data[controller_id]['best_time_raw'] = lap.laptime_raw
-                    controller_data[controller_id]['best_time_formatted'] = lap.laptime
+                    controller_data[controller_id]['best_time_formatted'] = lap.laptime or '--:--.---'
         
-        # ✅ WICHTIG: Laps pro Controller nach Runden-Nummer sortieren!
+        # ✅ Lap Count richtig berechnen (höchste Rundennummer)
         for controller_id in controller_data:
-            controller_data[controller_id]['laps'].sort(key=lambda x: x['lap'])
-            
-            # Durchschnittszeit berechnen
-            if controller_data[controller_id]['lap_count'] > 0:
-                avg_raw = controller_data[controller_id]['total_time'] / controller_data[controller_id]['lap_count']
-                controller_data[controller_id]['avg_time'] = format_time(avg_raw)
-            else:
-                controller_data[controller_id]['avg_time'] = '--:--.---'
+            if controller_data[controller_id]['laps']:
+                controller_data[controller_id]['lap_count'] = max(
+                    lap['lap'] for lap in controller_data[controller_id]['laps']
+                )
         
-        # ✅ Debug-Ausgabe
-        print(f"🎮 Controller Summary:")
-        for cid, data in controller_data.items():
-            laps_info = f"Runden 1-{max([l['lap'] for l in data['laps']] + [0])}" if data['laps'] else "Keine Runden"
-            print(f"   Controller {cid}: {data['name']} - {laps_info} ({data['lap_count']} gültige Zeiten)")
-        
+        print(f"✅ Controller-Daten: {len(controller_data)} Controller")
         return jsonify(controller_data)
         
     except Exception as e:
-        print(f"❌ Live-Data Fehler: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({})
+        print(f"❌ Live-Data Error: {e}")
+        return jsonify({}), 500
 
         
 # API für Analytics
