@@ -79,7 +79,7 @@
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">Live Activity</h5>
-                <div id="live-feed" style="height: 400px; overflow-y: auto;">
+                <div id="live-feed" style="height: 400px; overflow-y:auto;">
                     <p class="text-muted">Warten auf Daten...</p>
                 </div>
             </div>
@@ -87,27 +87,146 @@
     </div>
 </div>
 
-<!-- Sector Times Comparison -->
+<!-- Controller Overview - 6 Tables -->
 <div class="row mt-4">
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title">Sektor-Zeiten Vergleich (Beste Session-Zeiten)</h5>
-                <div class="table-responsive">
-                    <table class="table table-sm" id="sector-comparison">
-                        <thead>
-                            <tr>
-                                <th>Fahrer</th>
-                                <th>Sektor 1</th>
-                                <th>Sektor 2</th>
-                                <th>Sektor 3</th>
-                                <th>Gesamtzeit</th>
-                                <th>Gap zum Besten</th>
-                            </tr>
-                        </thead>
-                        <tbody id="sector-body">
-                        </tbody>
-                    </table>
+                <h5 class="card-title">🎮 Controller Overview - Letzte 6 Zeiten</h5>
+                <div class="controllers-grid">
+                    
+                    <!-- Controller 1 -->
+                    <div class="controller-table" id="controller-1">
+                        <h6 class="controller-header">🎮 Controller 1</h6>
+                        <div class="driver-info">
+                            <div class="driver-name">-</div>
+                            <div class="car-name">-</div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Runde</th>
+                                        <th>Zeit</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="controller-1-times">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Controller 2 -->
+                    <div class="controller-table" id="controller-2">
+                        <h6 class="controller-header">🎮 Controller 2</h6>
+                        <div class="driver-info">
+                            <div class="driver-name">-</div>
+                            <div class="car-name">-</div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Runde</th>
+                                        <th>Zeit</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="controller-2-times">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Controller 3 -->
+                    <div class="controller-table" id="controller-3">
+                        <h6 class="controller-header">🎮 Controller 3</h6>
+                        <div class="driver-info">
+                            <div class="driver-name">-</div>
+                            <div class="car-name">-</div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Runde</th>
+                                        <th>Zeit</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="controller-3-times">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Controller 4 -->
+                    <div class="controller-table" id="controller-4">
+                        <h6 class="controller-header">🎮 Controller 4</h6>
+                        <div class="driver-info">
+                            <div class="driver-name">-</div>
+                            <div class="car-name">-</div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Runde</th>
+                                        <th>Zeit</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="controller-4-times">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Controller 5 -->
+                    <div class="controller-table" id="controller-5">
+                        <h6 class="controller-header">🎮 Controller 5</h6>
+                        <div class="driver-info">
+                            <div class="driver-name">-</div>
+                            <div class="car-name">-</div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Runde</th>
+                                        <th>Zeit</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="controller-5-times">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Controller 6 -->
+                    <div class="controller-table" id="controller-6">
+                        <h6 class="controller-header">🎮 Controller 6</h6>
+                        <div class="driver-info">
+                            <div class="driver-name">-</div>
+                            <div class="car-name">-</div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Runde</th>
+                                        <th>Zeit</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="controller-6-times">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -151,7 +270,7 @@ function updateDashboard() {
             try {
                 updateStandings();
                 updateSessionInfo(); 
-                updateSectorComparison();
+                updateControllerTables(); // NEU! Controller-Tabellen Update
                 console.log('✅ Dashboard erfolgreich aktualisiert');
             } catch (updateError) {
                 console.error('❌ Fehler beim Update der UI:', updateError);
@@ -169,6 +288,79 @@ function updateDashboard() {
         });
 }
 
+// NEU: Controller-Tabellen Update Funktion
+function updateControllerTables() {
+    for (let controllerId = 1; controllerId <= 6; controllerId++) {
+        const controllerData = dashboardData[controllerId.toString()];
+        const tableBody = document.getElementById(`controller-${controllerId}-times`);
+        const driverName = document.querySelector(`#controller-${controllerId} .driver-name`);
+        const carName = document.querySelector(`#controller-${controllerId} .car-name`);
+        
+        if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
+            // Update Fahrer/Auto Info
+            driverName.textContent = controllerData.name || `Driver ${controllerId}`;
+            carName.textContent = controllerData.car || `Car ${controllerId}`;
+            
+            // Zeige letzte 6 Zeiten (neueste zuerst)
+            const lastSixLaps = controllerData.laps.slice(-6).reverse();
+            let html = '';
+            
+            lastSixLaps.forEach((lap, index) => {
+                // Bestimme ob es die persönliche Bestzeit ist
+                const isPersonalBest = lap.laptime === controllerData.best_time;
+                const isLatest = index === 0;
+                
+                // Status-Klassen für Styling
+                let statusClass = '';
+                let statusText = '';
+                
+                if (isPersonalBest) {
+                    statusClass = 'text-success fw-bold';
+                    statusText = '🏆 PB';
+                } else if (isLatest) {
+                    statusClass = 'text-primary';
+                    statusText = '🏁 Last';
+                } else {
+                    statusClass = '';
+                    statusText = '';
+                }
+                
+                // Berechne Runden-Nummer (rückwärts von aktueller Runde)
+                const lapNumber = controllerData.laps.length - index;
+                
+                html += `
+                    <tr>
+                        <td>${lapNumber}</td>
+                        <td class="${statusClass}">${formatTime(lap.laptime)}</td>
+                        <td><small>${statusText}</small></td>
+                    </tr>
+                `;
+            });
+            
+            tableBody.innerHTML = html;
+            
+            // Highlight Controller wenn aktiv
+            const controllerTable = document.getElementById(`controller-${controllerId}`);
+            controllerTable.style.borderLeft = `4px solid ${controllerData.color || '#007bff'}`;
+            
+        } else {
+            // Leer wenn keine Daten
+            driverName.textContent = '-';
+            carName.textContent = '-';
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="3" class="text-muted text-center" style="font-style: italic;">
+                        <small>Keine Daten verfügbar</small>
+                    </td>
+                </tr>
+            `;
+            
+            // Neutrales Styling für inaktive Controller
+            const controllerTable = document.getElementById(`controller-${controllerId}`);
+            controllerTable.style.borderLeft = '4px solid #dee2e6';
+        }
+    }
+}
 
 function updateSessionInfo() {
     // Session-schnellste Runde finden
@@ -299,76 +491,6 @@ function updateStandings() {
     updateLiveFeed(drivers);
 }
 
-function updateSectorComparison() {
-    const tbody = document.getElementById('sector-body');
-    const drivers = Object.keys(dashboardData).map(controllerId => {
-        const driver = dashboardData[controllerId];
-        if (!driver.laps || driver.laps.length === 0) return null;
-        
-        // Finde beste Sektorzeiten des Fahrers
-        let bestSector1 = Infinity, bestSector2 = Infinity, bestSector3 = Infinity;
-        let bestLap = null;
-        
-        driver.laps.forEach(lap => {
-            if (lap.sector_1_raw && lap.sector_1_raw < bestSector1) bestSector1 = lap.sector_1_raw;
-            if (lap.sector_2_raw && lap.sector_2_raw < bestSector2) bestSector2 = lap.sector_2_raw;
-            if (lap.sector_3_raw && lap.sector_3_raw < bestSector3) bestSector3 = lap.sector_3_raw;
-            if (!bestLap || lap.laptime < bestLap.laptime) bestLap = lap;
-        });
-        
-        return {
-            name: driver.name,
-            color: driver.color || '#333',
-            sector1: bestSector1 !== Infinity ? bestSector1 : null,
-            sector2: bestSector2 !== Infinity ? bestSector2 : null,
-            sector3: bestSector3 !== Infinity ? bestSector3 : null,
-            bestTime: driver.best_time,
-            bestLap: bestLap
-        };
-    }).filter(Boolean);
-    
-    // Sortiere nach bester Gesamtzeit
-    drivers.sort((a, b) => (a.bestTime || Infinity) - (b.bestTime || Infinity));
-    
-    // Finde beste Sektorzeiten overall
-    const overallBestSector1 = Math.min(...drivers.filter(d => d.sector1).map(d => d.sector1));
-    const overallBestSector2 = Math.min(...drivers.filter(d => d.sector2).map(d => d.sector2));
-    const overallBestSector3 = Math.min(...drivers.filter(d => d.sector3).map(d => d.sector3));
-    const overallBestTime = Math.min(...drivers.filter(d => d.bestTime).map(d => d.bestTime));
-    
-    tbody.innerHTML = drivers.map(driver => {
-        const gapToBest = driver.bestTime && overallBestTime ? 
-            `+${((driver.bestTime - overallBestTime) / 1000).toFixed(3)}s` : '--';
-        
-        return `
-            <tr>
-                <td>
-                    <div style="border-left: 4px solid ${driver.color}; padding-left: 8px;">
-                        ${driver.name}
-                    </div>
-                </td>
-                <td class="${driver.sector1 === overallBestSector1 ? 'text-success fw-bold' : ''}">
-                    ${driver.sector1 ? formatTime(driver.sector1) : '--:--.---'}
-                    ${driver.sector1 === overallBestSector1 ? ' 🚀' : ''}
-                </td>
-                <td class="${driver.sector2 === overallBestSector2 ? 'text-success fw-bold' : ''}">
-                    ${driver.sector2 ? formatTime(driver.sector2) : '--:--.---'}
-                    ${driver.sector2 === overallBestSector2 ? ' 🚀' : ''}
-                </td>
-                <td class="${driver.sector3 === overallBestSector3 ? 'text-success fw-bold' : ''}">
-                    ${driver.sector3 ? formatTime(driver.sector3) : '--:--.---'}
-                    ${driver.sector3 === overallBestSector3 ? ' 🚀' : ''}
-                </td>
-                <td class="${driver.bestTime === overallBestTime ? 'text-primary fw-bold' : ''}">
-                    <strong>${driver.bestTime ? formatTime(driver.bestTime) : '--:--.---'}</strong>
-                    ${driver.bestTime === overallBestTime ? ' 🏆' : ''}
-                </td>
-                <td>${gapToBest}</td>
-            </tr>
-        `;
-    }).join('');
-}
-
 function updateLiveFeed(drivers) {
     const liveFeed = document.getElementById('live-feed');
     
@@ -430,6 +552,79 @@ style.textContent = `
         0% { transform: scale(1); }
         50% { transform: scale(1.05); }
         100% { transform: scale(1); }
+    }
+    
+    /* Controller Grid Styling */
+    .controllers-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+        margin-top: 15px;
+    }
+    
+    .controller-table {
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-left: 4px solid #dee2e6;
+    }
+    
+    .controller-header {
+        color: #495057;
+        margin: 0 0 10px 0;
+        text-align: center;
+        font-weight: bold;
+    }
+    
+    .driver-info {
+        text-align: center;
+        margin-bottom: 15px;
+        padding: 8px;
+        background: #e9ecef;
+        border-radius: 4px;
+    }
+    
+    .driver-name {
+        font-weight: bold;
+        font-size: 14px;
+        color: #dc3545;
+    }
+    
+    .car-name {
+        font-size: 12px;
+        color: #6c757d;
+    }
+    
+    .controller-table table {
+        margin-bottom: 0;
+    }
+    
+    .controller-table th {
+        background: #6c757d;
+        color: white;
+        font-size: 11px;
+        padding: 6px;
+        text-align: center;
+    }
+    
+    .controller-table td {
+        padding: 6px;
+        text-align: center;
+        font-size: 12px;
+    }
+    
+    /* Responsive */
+    @media (max-width: 1200px) {
+        .controllers-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .controllers-grid {
+            grid-template-columns: 1fr;
+        }
     }
 `;
 document.head.appendChild(style);
