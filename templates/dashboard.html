@@ -9,41 +9,55 @@
     </div>
 </div>
 
-<!-- Session Info Row -->
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <h5 class="card-title">🏁 Schnellste Runde (Session)</h5>
-                <h3 id="fastest-lap-time">--:--.---</h3>
-                <p id="fastest-lap-driver" class="mb-0">Kein Fahrer</p>
+<!-- Session Info Card - ERWEITERT -->
+<div class="col-md-4">
+    <div class="card h-100" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+        <div class="card-body">
+            <h5 class="card-title">
+                <i class="fas fa-flag-checkered"></i> Current Session
+            </h5>
+            
+            <!-- SESSION NAME -->
+            <div class="mb-2">
+                <strong>Session:</strong> {{ current_session.session_id if current_session else 'None' }}
             </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <h5 class="card-title">🏆 Streckenrekord</h5>
-                <h3 id="track-record-time">--:--.---</h3>
-                <p id="track-record-driver" class="mb-0">Unbekannt</p>
-                <small id="track-record-date" class="text-light">--</small>
+            
+            <!-- EVENT TYPE - NEU! -->
+            <div class="mb-2">
+                <strong>Event:</strong>
+                <span class="badge badge-light text-dark px-2 py-1" style="font-size: 12px;">
+                    {% if current_session and current_session.event_type %}
+                        {% if current_session.event_type == 'Race' %}🏆 {{ current_session.event_type }}
+                        {% elif current_session.event_type == 'Qualifying' %}⏱️ {{ current_session.event_type }}
+                        {% elif current_session.event_type == 'Practice' %}🔧 {{ current_session.event_type }}
+                        {% elif current_session.event_type == 'Time Trial' %}⚡ {{ current_session.event_type }}
+                        {% else %}🏁 {{ current_session.event_type }}
+                        {% endif %}
+                    {% else %}
+                        🔧 Practice
+                    {% endif %}
+                </span>
             </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <h5 class="card-title">📊 Session Stats</h5>
-                <div class="row">
-                    <div class="col-6">
-                        <strong id="total-laps">0</strong><br>
-                        <small>Runden</small>
-                    </div>
-                    <div class="col-6">
-                        <strong id="active-drivers">0</strong><br>
-                        <small>Fahrer</small>
-                    </div>
-                </div>
+            
+            <!-- TRACK NAME -->
+            <div class="mb-2">
+                <strong>Track:</strong> {{ current_session.track_name if current_session and current_session.track_name else 'Unknown Track' }}
+            </div>
+            
+            <!-- START TIME -->
+            <div class="mb-3">
+                <strong>Started:</strong>
+                <br><small>{{ current_session.start_time[:19].replace('T', ' ') if current_session and current_session.start_time else 'Not started' }}</small>
+            </div>
+            
+            <!-- SESSION CONTROLS -->
+            <div class="btn-group w-100" role="group">
+                <a href="{{ url_for('session_stats') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-chart-bar"></i> Stats
+                </a>
+                <button class="btn btn-outline-light btn-sm" onclick="exportSession()">
+                    <i class="fas fa-download"></i> Export
+                </button>
             </div>
         </div>
     </div>
