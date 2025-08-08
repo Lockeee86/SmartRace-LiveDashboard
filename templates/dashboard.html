@@ -335,11 +335,30 @@ function updateControllerTables() {
         }
         
         if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
-            // Update Fahrer/Auto Info
-            const bestTimeText = controllerData.best_time ? 
-                ` (🏁 ${formatTime(controllerData.best_time)})` : '';
-            driverName.textContent = (controllerData.name || `Driver ${controllerId}`) + bestTimeText;
+            // ✅ Update Fahrer/Auto Info mit Debug
+            driverName.textContent = controllerData.name || `Driver ${controllerId}`;
             carName.textContent = controllerData.car || `Car ${controllerId}`;
+            
+            // ✅ DEBUG: Beste Zeit berechnen und anzeigen
+            if (controllerData.laps && controllerData.laps.length > 0) {
+                const allTimes = controllerData.laps
+                    .map(lap => lap.laptime_raw || 0)
+                    .filter(time => time > 0);
+                
+                console.log(`🔍 Controller ${controllerId} - alle Zeiten:`, allTimes);
+                
+                if (allTimes.length > 0) {
+                    const bestTime = Math.min(...allTimes);
+                    const bestTimeText = ` (🏁 ${formatTime(bestTime)})`;
+                    
+                    console.log(`🔍 Controller ${controllerId} - beste Zeit:`, bestTime);
+                    console.log(`✅ Controller ${controllerId} - finaler Text:`, (controllerData.name || `Driver ${controllerId}`) + bestTimeText);
+                    
+                    // ✅ Text mit bester Zeit setzen
+                    driverName.textContent = (controllerData.name || `Driver ${controllerId}`) + bestTimeText;
+                }
+            }
+
             
             // Letzte 6 Zeiten holen
             const recentLaps = controllerData.laps.slice(0, 6);
