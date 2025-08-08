@@ -260,7 +260,7 @@ function updateSessionFastestLap() {
 }
     
 function updateMainStats() {
-    let maxLapNumber = 0;
+    let totalLaps = 0;  // ✅ SUMME statt Maximum
     let activeDrivers = 0;
 
     Object.keys(dashboardData).forEach(controllerId => {
@@ -269,24 +269,21 @@ function updateMainStats() {
         if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
             activeDrivers++;
             
-            // ✅ FIX: Höchste Rundennummer finden (NICHT Array-Länge!)
-            const lapNumbers = controllerData.laps.map(lap => lap.lap || 0);
-            const controllerMaxLap = Math.max(...lapNumbers);
+            // ✅ EINFACH: Array-Länge = Rundenzahl
+            const controllerLaps = controllerData.laps.length;
+            totalLaps += controllerLaps;
             
-            console.log(`🔍 Controller ${controllerId}: ${controllerData.laps.length} Einträge, höchste Runde: ${controllerMaxLap}`);
-            
-            if (controllerMaxLap > maxLapNumber) {
-                maxLapNumber = controllerMaxLap;
-            }
+            console.log(`🔍 Controller ${controllerId}: ${controllerLaps} Runden`);
         }
     });
 
-    // ✅ Stats Updates
-    document.getElementById('total-laps').textContent = maxLapNumber;  // ✅ Höchste Runde
+    // ✅ Total Laps = Summe aller Runden
+    document.getElementById('total-laps').textContent = totalLaps;
     document.getElementById('active-drivers').textContent = activeDrivers;
     
-    console.log(`📊 Final: Höchste Runde: ${maxLapNumber}, Aktive Fahrer: ${activeDrivers}`);
+    console.log(`📊 Gesamt: ${totalLaps} Runden, ${activeDrivers} Fahrer`);
 }
+
 
 
 
