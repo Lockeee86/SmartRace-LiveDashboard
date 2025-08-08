@@ -11,14 +11,20 @@
 
 <!-- Filter und Export Sektion -->
 <div class="row mb-4">
-    <div class="col-md-3">
+    <div class="col-md-2">
         <select id="driverFilter" class="form-select">
             <option value="">Alle Fahrer</option>
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <select id="carFilter" class="form-select">
             <option value="">Alle Autos</option>
+        </select>
+    </div>
+    <!-- ✅ NEU: Event Filter -->
+    <div class="col-md-2">
+        <select id="eventFilter" class="form-select">
+            <option value="">Alle Events</option>
         </select>
     </div>
     <div class="col-md-6">
@@ -35,6 +41,7 @@
         </div>
     </div>
 </div>
+
 
 <!-- Export Status -->
 <div id="exportStatus" class="alert d-none" role="alert"></div>
