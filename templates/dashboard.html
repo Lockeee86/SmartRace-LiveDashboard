@@ -262,63 +262,7 @@ function updateMainStats() {
     console.log(`📊 Final: Höchste Runde: ${maxLapNumber}, Aktive Fahrer: ${activeDrivers}`);
 }
 
-function updateStandingsTable() {
-    const tbody = document.getElementById('standings-body');
-    const drivers = Object.keys(dashboardData).map(controllerId => {
-        const driver = dashboardData[controllerId];
-        return {
-            controllerId,
-            name: driver.name,
-            car: driver.car,
-            color: driver.color || '#333',
-            bestTime: driver.best_time,
-            lastLap: driver.laps && driver.laps.length > 0 ? driver.laps[0] : null, // Neueste Runde
-            totalLaps: driver.laps ? driver.laps.length : 0,
-            avgTime: driver.avg_time
-        };
-    }).filter(driver => driver.totalLaps > 0);
-    
-    // Sortiere nach bester Zeit
-    drivers.sort((a, b) => (a.bestTime || Infinity) - (b.bestTime || Infinity));
-    
-    const fastestTime = drivers.length > 0 ? drivers[0].bestTime : null;
-    
-    tbody.innerHTML = drivers.map((driver, index) => {
-        const position = index + 1;
-        const diff = fastestTime && driver.bestTime ? 
-            `+${((driver.bestTime - fastestTime) / 1000).toFixed(3)}s` : '--';
-        
-        const lastLapTime = driver.lastLap ? driver.lastLap.laptime_formatted || formatTime(driver.lastLap.laptime_raw) : '--:--.---';
-        const bestTimeFormatted = driver.bestTime ? formatTime(driver.bestTime) : '--:--.---';
-        
-        // Highlight für P1 und schnellste Session-Runde
-        let rowClass = '';
-        if (position === 1) rowClass += ' table-warning';
-        if (sessionFastestLap && driver.name === sessionFastestLap.driver) {
-            rowClass += ' border border-primary';
-        }
-        
-        return `
-            <tr class="${rowClass}">
-                <td><strong>${position}</strong></td>
-                <td>
-                    <div style="border-left: 4px solid ${driver.color}; padding-left: 8px;">
-                        ${driver.name}
-                        ${sessionFastestLap && driver.name === sessionFastestLap.driver ? ' 🚀' : ''}
-                        ${position === 1 ? ' 🏆' : ''}
-                    </div>
-                </td>
-                <td>${driver.car}</td>
-                <td><strong>${bestTimeFormatted}</strong></td>
-                <td>${lastLapTime}</td>
-                <td>${driver.totalLaps}</td>
-                <td>${diff}</td>
-            </tr>
-        `;
-    }).join('');
-    
-    updateLiveFeed(drivers);
-}
+
 
 function updateControllerTables() {
     console.log('🔍 DEBUG: dashboardData =', dashboardData);
@@ -439,47 +383,6 @@ function updateTrackRecord() {
         document.getElementById('track-record-time').textContent = '1:23.456';
         document.getElementById('track-record-driver').textContent = 'Max Verstappen';
         document.getElementById('track-record-date').textContent = '2024-01-15';
-    }
-}
-
-function updateLiveFeed(drivers) {
-    const liveFeed = document.getElementById('live-feed');
-    
-    // Zeige letzte Aktivitäten
-    const recentActivity = [];
-    
-    drivers.forEach(driver => {
-        if (driver.lastLap) {
-            recentActivity.push({
-                time: driver.lastLap.timestamp || Date.now(),
-                driver: driver.name,
-                laptime: driver.lastLap.laptime_raw || 0,
-                lapNumber: driver.totalLaps,
-                isFastest: sessionFastestLap && driver.name === sessionFastestLap.driver && 
-                           driver.lastLap.laptime_raw === sessionFastestLap.time
-            });
-        }
-    });
-    
-    // Sortiere nach Zeit (neueste zuerst)
-    recentActivity.sort((a, b) => b.time - a.time);
-    
-    if (recentActivity.length > 0) {
-        liveFeed.innerHTML = recentActivity.slice(0, 10).map(activity => {
-            const timeAgo = Math.floor((Date.now() - activity.time) / 1000);
-            const timeString = timeAgo < 60 ? `${timeAgo}s` : `${Math.floor(timeAgo/60)}m`;
-            
-            return `
-                <div class="border-bottom pb-2 mb-2 ${activity.isFastest ? 'bg-light border-primary' : ''}">
-                    <small class="text-muted">${timeString} ago</small><br>
-                    <strong>${activity.driver}</strong><br>
-                    Runde ${activity.lapNumber}: <span class="text-primary">${formatTime(activity.laptime)}</span>
-                    ${activity.isFastest ? ' <span class="badge bg-primary">Fastest!</span>' : ''}
-                </div>
-            `;
-        }).join('');
-    } else {
-        liveFeed.innerHTML = '<p class="text-muted">Keine aktuellen Aktivitäten</p>';
     }
 }
 
