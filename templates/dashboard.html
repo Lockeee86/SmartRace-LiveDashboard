@@ -9,41 +9,55 @@
     </div>
 </div>
 
-<!-- Session Info Row -->
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <h5 class="card-title">🏁 Schnellste Runde (Session)</h5>
-                <h3 id="fastest-lap-time">--:--.---</h3>
-                <p id="fastest-lap-driver" class="mb-0">Kein Fahrer</p>
+<!-- Session Info Card - ERWEITERT -->
+<div class="col-md-4">
+    <div class="card h-100" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+        <div class="card-body">
+            <h5 class="card-title">
+                <i class="fas fa-flag-checkered"></i> Current Session
+            </h5>
+            
+            <!-- SESSION NAME -->
+            <div class="mb-2">
+                <strong>Session:</strong> {{ current_session.session_id if current_session else 'None' }}
             </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <h5 class="card-title">🏆 Streckenrekord</h5>
-                <h3 id="track-record-time">--:--.---</h3>
-                <p id="track-record-driver" class="mb-0">Unbekannt</p>
-                <small id="track-record-date" class="text-light">--</small>
+            
+            <!-- EVENT TYPE - NEU! -->
+            <div class="mb-2">
+                <strong>Event:</strong>
+                <span class="badge badge-light text-dark px-2 py-1" style="font-size: 12px;">
+                    {% if current_session and current_session.event_type %}
+                        {% if current_session.event_type == 'Race' %}🏆 {{ current_session.event_type }}
+                        {% elif current_session.event_type == 'Qualifying' %}⏱️ {{ current_session.event_type }}
+                        {% elif current_session.event_type == 'Practice' %}🔧 {{ current_session.event_type }}
+                        {% elif current_session.event_type == 'Time Trial' %}⚡ {{ current_session.event_type }}
+                        {% else %}🏁 {{ current_session.event_type }}
+                        {% endif %}
+                    {% else %}
+                        🔧 Practice
+                    {% endif %}
+                </span>
             </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <h5 class="card-title">📊 Session Stats</h5>
-                <div class="row">
-                    <div class="col-6">
-                        <strong id="total-laps">0</strong><br>
-                        <small>Runden</small>
-                    </div>
-                    <div class="col-6">
-                        <strong id="active-drivers">0</strong><br>
-                        <small>Fahrer</small>
-                    </div>
-                </div>
+            
+            <!-- TRACK NAME -->
+            <div class="mb-2">
+                <strong>Track:</strong> {{ current_session.track_name if current_session and current_session.track_name else 'Unknown Track' }}
+            </div>
+            
+            <!-- START TIME -->
+            <div class="mb-3">
+                <strong>Started:</strong>
+                <br><small>{{ current_session.start_time[:19].replace('T', ' ') if current_session and current_session.start_time else 'Not started' }}</small>
+            </div>
+            
+            <!-- SESSION CONTROLS -->
+            <div class="btn-group w-100" role="group">
+                <a href="{{ url_for('session_stats') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-chart-bar"></i> Stats
+                </a>
+                <button class="btn btn-outline-light btn-sm" onclick="exportSession()">
+                    <i class="fas fa-download"></i> Export
+                </button>
             </div>
         </div>
     </div>
@@ -214,51 +228,25 @@ async function updateDashboard() {
         dashboardData = JSON.parse(rawText);
         console.log('📊 Live-Daten erhalten:', dashboardData);
         
-        // ✅ NEU: Session Stats aus Analytics API
-        await updateSessionStats();
+        // Detaillierte Controller-Analyse
+        Object.keys(dashboardData).forEach(controllerId => {
+            const controller = dashboardData[controllerId];
+            console.log(`🎮 Controller ${controllerId}:`);
+            console.log(`   👤 Name: ${controller.name}`);
+            console.log(`   🚗 Car: ${controller.car}`);
+            console.log(`   🎨 Color: ${controller.color}`);
+            console.log(`   🏁 Laps: ${controller.laps ? controller.laps.length : 0} Runden`);
+        });
         
-        updateControllerTables();
-        updateTrackRecord();
+        updateMainStats();         // ✅ Session Stats
+        updateControllerTables();  // ✅ Controller-Tabellen  
+        updateTrackRecord();       // ✅ Streckenrekord
+        
+        // Session fastest lap berechnen
         updateSessionFastestLap();
         
     } catch (error) {
         console.error('❌ Live-Daten Fehler:', error);
-    }
-}
-
-// ✅ NEU: Session Stats aus Analytics API laden
-async function updateSessionStats() {
-    try {
-        const response = await fetch('/api/analytics');
-        const analyticsData = await response.json();
-        console.log('📊 Analytics Daten:', analyticsData);
-        
-        // SESSION FASTEST LAP
-        if (analyticsData.session_fastest && analyticsData.session_fastest.lap_time) {
-            document.getElementById('fastest-lap-time').textContent = formatTime(analyticsData.session_fastest.lap_time * 1000);
-            document.getElementById('fastest-lap-driver').textContent = `Driver ${analyticsData.session_fastest.controller_id}`;
-        } else {
-            document.getElementById('fastest-lap-time').textContent = '--:--.---';
-            document.getElementById('fastest-lap-driver').textContent = 'Kein Fahrer';
-        }
-        
-        // TRACK RECORD
-        if (analyticsData.track_record && analyticsData.track_record.lap_time) {
-            document.getElementById('track-record-time').textContent = formatTime(analyticsData.track_record.lap_time * 1000);
-            document.getElementById('track-record-driver').textContent = `Driver ${analyticsData.track_record.controller_id}`;
-            document.getElementById('track-record-date').textContent = new Date(analyticsData.track_record.timestamp).toLocaleDateString('de-DE');
-        }
-        
-        // SESSION STATS
-        if (analyticsData.session_stats) {
-            document.getElementById('total-laps').textContent = analyticsData.session_stats.total_laps || 0;
-            document.getElementById('active-drivers').textContent = analyticsData.session_stats.active_drivers || 0;
-        }
-        
-    } catch (error) {
-        console.error('❌ Analytics Fehler:', error);
-        // Fallback auf alte Berechnung
-        updateMainStatsOld();
     }
 }
 
@@ -280,122 +268,198 @@ function updateSessionFastestLap() {
     
     if (fastestLap) {
         sessionFastestLap = fastestLap;
+        document.getElementById('fastest-lap-time').textContent = formatTime(fastestLap.time);
+        document.getElementById('fastest-lap-driver').textContent = fastestLap.driver;
     }
 }
+    
+function getCurrentSessionLaps(controllerData) {
+    if (!controllerData.laps || controllerData.laps.length === 0) return [];
+    
+    // ✅ Sortiere Runden nach Timestamp (neueste zuerst)
+    const sortedLaps = [...controllerData.laps].sort((a, b) => 
+        new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    
+    // ✅ Neuester Timestamp = aktuelle Session
+    const latestTimestamp = new Date(sortedLaps[0].timestamp);
+    
+    // ✅ Definiere Session-Grenze (z.B. 30 Minuten Pause = neue Session)
+    const sessionGapMinutes = 30;
+    const sessionStartTime = new Date(latestTimestamp.getTime() - (sessionGapMinutes * 60 * 1000));
+    
+    // ✅ Filtere nur Runden der aktuellen Session
+    const currentSessionLaps = controllerData.laps.filter(lap => {
+        const lapTime = new Date(lap.timestamp);
+        return lapTime >= sessionStartTime;
+    });
+    
+    console.log(`🔍 Controller: ${currentSessionLaps.length} Runden in aktueller Session`);
+    return currentSessionLaps;
+}
 
-// Fallback für alte Stats-Berechnung
-function updateMainStatsOld() {
-    // Session Fastest Lap (fallback)
-    if (sessionFastestLap) {
-        document.getElementById('fastest-lap-time').textContent = formatTime(sessionFastestLap.time);
-        document.getElementById('fastest-lap-driver').textContent = sessionFastestLap.driver || 'Unbekannt';
-    }
-    
-    // Track Record (fallback hardcoded)
-    document.getElementById('track-record-time').textContent = '1:23.456';
-    document.getElementById('track-record-driver').textContent = 'Max Verstappen';
-    document.getElementById('track-record-date').textContent = '2024-01-15';
-    
-    // Session Stats (fallback berechnet)
-    const totalLaps = Object.values(dashboardData).reduce((sum, controller) => {
-        return sum + (controller?.lap_count || 0);
-    }, 0);
-    
-    const activeDrivers = Object.values(dashboardData).filter(controller => 
-        controller && controller.lap_count > 0
-    ).length;
-    
+function updateMainStats() {
+    let totalLaps = 0;
+    let activeDrivers = 0;
+
+    Object.keys(dashboardData).forEach(controllerId => {
+        const controllerData = dashboardData[controllerId];
+        
+        if (controllerData && controllerData.laps) {
+            // ✅ Nur aktuelle Session-Runden
+            const currentSessionLaps = getCurrentSessionLaps(controllerData);
+            
+            if (currentSessionLaps.length > 0) {
+                activeDrivers++;
+                
+                // ✅ Höchste Rundennummer der aktuellen Session
+                const lapNumbers = currentSessionLaps.map(lap => lap.lap || 0);
+                const sessionMaxLap = Math.max(...lapNumbers);
+                
+                totalLaps += sessionMaxLap;
+                
+                console.log(`🏁 Controller ${controllerId}: Runde ${sessionMaxLap} in aktueller Session`);
+            }
+        }
+    });
+
     document.getElementById('total-laps').textContent = totalLaps;
     document.getElementById('active-drivers').textContent = activeDrivers;
+    
+    console.log(`📊 Aktuelle Session: ${totalLaps} Runden, ${activeDrivers} Fahrer`);
 }
 
+
+
+
+
 function updateControllerTables() {
-    for (let i = 1; i <= 6; i++) {
-        const controllerData = dashboardData[i.toString()];
-        const tableElement = document.getElementById(`controller-${i}`);
-        const timesBody = document.getElementById(`controller-${i}-times`);
+    console.log('🔍 DEBUG: dashboardData =', dashboardData);
+    
+    for (let controllerId = 1; controllerId <= 6; controllerId++) {
+        const controllerData = dashboardData[controllerId.toString()];
+        console.log(`🔍 DEBUG Controller ${controllerId}:`, controllerData);
         
-        if (!tableElement || !timesBody) continue;
+        const tableBody = document.getElementById(`controller-${controllerId}-times`);
+        const driverName = document.querySelector(`#controller-${controllerId} .driver-name`);
+        const carName = document.querySelector(`#controller-${controllerId} .car-name`);
+        const controllerTable = document.getElementById(`controller-${controllerId}`);
         
-        if (controllerData && controllerData.recent_times && controllerData.recent_times.length > 0) {
-            // Controller aktiv - Styling setzen
-            const color = controllerData.color || getDefaultControllerColor(i);
-            const rgbaColor = hexToRgba(color, 0.15);
-            const borderColor = hexToRgba(color, 0.5);
+        // ✅ IMMER eine Farbe setzen (auch ohne Daten)
+        let controllerColor;
+        
+        if (controllerData && controllerData.color) {
+            // Farbe aus Datenbank
+            controllerColor = controllerData.color;
+            console.log(`🎨 DB-Farbe Controller ${controllerId}:`, controllerColor);
+        } else {
+            // Fallback-Farbe
+            controllerColor = getDefaultControllerColor(controllerId);
+            console.log(`🎨 Fallback-Farbe Controller ${controllerId}:`, controllerColor);
+        }
+        
+        // ✅ IMMER Background setzen
+        const lightColor = hexToRgba(controllerColor, 0.2);
+        const mediumColor = hexToRgba(controllerColor, 0.3);
+        
+        console.log(`🎨 Setze Farben für Controller ${controllerId}: light=${lightColor}, medium=${mediumColor}`);
+        
+        // Background setzen (auch ohne Daten!)
+        controllerTable.style.setProperty('background', lightColor, 'important');
+        controllerTable.style.setProperty('border-left', `6px solid ${controllerColor}`, 'important');
+        controllerTable.style.setProperty('box-shadow', `0 2px 8px ${hexToRgba(controllerColor, 0.3)}`, 'important');
+        
+        // Driver-Info Background
+        const driverInfo = controllerTable.querySelector('.driver-info');
+        if (driverInfo) {
+            driverInfo.style.setProperty('background', mediumColor, 'important');
+            driverInfo.style.setProperty('border', `1px solid ${controllerColor}`, 'important');
+            driverInfo.style.setProperty('color', '#000', 'important');
+        }
+        
+        if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
+            // ✅ Update Fahrer/Auto Info
+            driverName.textContent = controllerData.name || `Driver ${controllerId}`;
+            carName.textContent = controllerData.car || `Car ${controllerId}`;
             
-            tableElement.style.backgroundColor = rgbaColor;
-            tableElement.style.borderColor = borderColor;
-            tableElement.style.borderWidth = '2px';
-            tableElement.style.borderStyle = 'solid';
-            
-            // Driver Info aktualisieren
-            const driverNameEl = tableElement.querySelector('.driver-name');
-            const carNameEl = tableElement.querySelector('.car-name');
-            const driverInfoEl = tableElement.querySelector('.driver-info');
-            
-            if (driverNameEl) driverNameEl.textContent = controllerData.name || `Driver ${i}`;
-            if (carNameEl) carNameEl.textContent = controllerData.car_name || 'Unbekanntes Auto';
-            
-            if (driverInfoEl) {
-                driverInfoEl.style.backgroundColor = hexToRgba(color, 0.3);
-                driverInfoEl.style.color = '#333';
-            }
-            
-            // Zeiten-Tabelle füllen
-            timesBody.innerHTML = '';
-            
-            // Letzte 6 Zeiten (neueste zuerst)
-            const recentTimes = controllerData.recent_times.slice(-6).reverse();
-            
-            recentTimes.forEach((timeEntry, index) => {
-                const row = document.createElement('tr');
+            // ✅ SESSION-weite beste Zeit berechnen
+            if (controllerData.laps && controllerData.laps.length > 0) {
+                // Alle Zeiten von ALLEN Controllern sammeln
+                let allSessionTimes = [];
                 
-                // Runden-Nummer (rückwärts zählen)
-                const lapNumber = (controllerData.lap_count || 0) - index;
-                
-                // Status bestimmen
-                let status = '⏱️';
-                let statusClass = '';
-                
-                if (timeEntry === controllerData.best_time) {
-                    status = '🏆 BEST';
-                    statusClass = 'text-warning fw-bold';
-                } else if (index === 0) {
-                    status = '🔄 LAST';
-                    statusClass = 'text-info';
+                // Durch alle Controller gehen
+                for (let i = 1; i <= 6; i++) {
+                    const otherControllerData = window.currentLogData ? window.currentLogData[`controller_${i}`] : null;
+                    if (otherControllerData && otherControllerData.laps) {
+                        const times = otherControllerData.laps
+                            .map(lap => lap.laptime_raw || 0)
+                            .filter(time => time > 0);
+                        allSessionTimes = allSessionTimes.concat(times);
+                    }
                 }
                 
-                row.innerHTML = `
-                    <td><strong>#${lapNumber}</strong></td>
-                    <td><strong>${formatTime(timeEntry)}</strong></td>
-                    <td><span class="${statusClass}">${status}</span></td>
-                `;
+                console.log(`🔍 Alle Session-Zeiten:`, allSessionTimes);
                 
-                timesBody.appendChild(row);
-            });
+                if (allSessionTimes.length > 0) {
+                    const sessionBestTime = Math.min(...allSessionTimes);
+                    
+                    // Prüfen ob DIESER Controller die beste Zeit hat
+                    const myTimes = controllerData.laps
+                        .map(lap => lap.laptime_raw || 0)
+                        .filter(time => time > 0);
+                        
+                    const myBestTime = myTimes.length > 0 ? Math.min(...myTimes) : null;
+                    
+                    // Nur anzeigen wenn dieser Controller die Session-Bestzeit hat
+                    if (myBestTime === sessionBestTime) {
+                        const bestTimeText = ` (🏆 ${formatTime(sessionBestTime)})`;
+                        driverName.textContent = (controllerData.name || `Driver ${controllerId}`) + bestTimeText;
+                        console.log(`🏆 Controller ${controllerId} hat die Session-Bestzeit!`);
+                    }
+                }
+            }
+
+
+            
+            // Letzte 6 Zeiten holen
+            const recentLaps = controllerData.laps.slice(0, 6);
+            
+            let personalBest = controllerData.best_time;
+            
+            tableBody.innerHTML = recentLaps.map((lap, index) => {
+                const lapTime = lap.laptime_raw || 0;
+                const isPersonalBest = personalBest && lapTime === personalBest;
+                const isLatest = index === 0;
+                
+                let rowClass = '';
+                let rowStyle = '';
+                
+                if (isPersonalBest) {
+                    rowClass = 'table-warning';
+                    rowStyle = 'background: linear-gradient(90deg, #ffd700, #ffed4a) !important;';
+                } else if (isLatest) {
+                    const gradientColor = hexToRgba(controllerColor, 0.4);
+                    rowStyle = `background: linear-gradient(90deg, ${gradientColor}, rgba(248,249,250,0.8)) !important;`;
+                }
+                
+                return `
+                    <tr class="${rowClass}" style="${rowStyle}">
+                        <td>#${lap.lap || '-'}</td>
+                        <td>${lap.laptime_formatted || formatTime(lapTime)}</td>
+                        <td>${isPersonalBest ? '🏆' : (isLatest ? '🏁' : '')}</td>
+                    </tr>
+                `;
+            }).join('');
             
         } else {
-            // Controller inaktiv - Styling zurücksetzen
-            tableElement.style.backgroundColor = '#f8f9fa';
-            tableElement.style.borderColor = '#e0e0e0';
+            // Keine Daten - aber trotzdem Farbe setzen!
+            driverName.textContent = `Controller ${controllerId}`;
+            carName.textContent = 'Keine Daten';
             
-            // Driver Info zurücksetzen
-            const driverNameEl = tableElement.querySelector('.driver-name');
-            const carNameEl = tableElement.querySelector('.car-name');
-            const driverInfoEl = tableElement.querySelector('.driver-info');
-            
-            if (driverNameEl) driverNameEl.textContent = '-';
-            if (carNameEl) carNameEl.textContent = '-';
-            if (driverInfoEl) {
-                driverInfoEl.style.backgroundColor = '#e9ecef';
-                driverInfoEl.style.color = '#6c757d';
-            }
-            
-            // Leere Tabelle
-            timesBody.innerHTML = `
+            tableBody.innerHTML = `
                 <tr>
-                    <td colspan="3" class="text-muted text-center">
-                        <em>Keine Daten</em>
+                    <td colspan="3" class="text-muted text-center py-3">
+                        Noch keine Runden gefahren
                     </td>
                 </tr>
             `;
@@ -404,11 +468,29 @@ function updateControllerTables() {
 }
 
 function updateTrackRecord() {
-    // Wird von updateSessionStats() übernommen
+    // Simuliere Streckenrekord basierend auf aktueller Session
+    if (sessionFastestLap && (!trackRecord || sessionFastestLap.time < trackRecord.time)) {
+        trackRecord = {
+            time: sessionFastestLap.time,
+            driver: sessionFastestLap.driver,
+            date: new Date().toLocaleDateString('de-DE')
+        };
+        
+        // Visual feedback für neuen Rekord
+        const recordCard = document.querySelector('.bg-success');
+        recordCard.classList.add('border', 'border-warning');
+        recordCard.style.animation = 'pulse 1s ease-in-out 3';
+    }
+    
     if (trackRecord) {
         document.getElementById('track-record-time').textContent = formatTime(trackRecord.time);
         document.getElementById('track-record-driver').textContent = trackRecord.driver;
         document.getElementById('track-record-date').textContent = trackRecord.date;
+    } else {
+        // Fallback-Rekord
+        document.getElementById('track-record-time').textContent = '1:23.456';
+        document.getElementById('track-record-driver').textContent = 'Max Verstappen';
+        document.getElementById('track-record-date').textContent = '2024-01-15';
     }
 }
 
@@ -451,14 +533,8 @@ function hexToRgba(hex, alpha) {
     return `rgba(128, 128, 128, ${alpha})`;
 }
 
-// Zeit formatieren - ✅ FIX für Sekunden vs Millisekunden  
 function formatTime(timeMs) {
     if (!timeMs || timeMs === 0) return '--:--.---';
-    
-    // Falls es schon in Sekunden ist (< 1000), zu ms konvertieren
-    if (timeMs < 1000) {
-        timeMs = timeMs * 1000;
-    }
     
     const minutes = Math.floor(timeMs / 60000);
     const seconds = ((timeMs % 60000) / 1000).toFixed(3);
@@ -565,6 +641,6 @@ document.head.appendChild(style);
 
 // Initial load und regelmäßige Updates
 updateDashboard();
-setInterval(updateDashboard, 3000); // Update alle 3 Sekunden
+setInterval(updateDashboard, 2000); // Update alle 2 Sekunden
 </script>
 {% endblock %}
