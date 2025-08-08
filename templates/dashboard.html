@@ -224,15 +224,41 @@ async function updateDashboard() {
             console.log(`   🏁 Laps: ${controller.laps ? controller.laps.length : 0} Runden`);
         });
         
-        updateMainStats();      // ✅ KORRIGIERT: Richtige Funktion!
-        updateStandingsTable(); // ✅ KORRIGIERT: Richtige Funktion!
-        updateControllerTables();
+        updateMainStats();         // ✅ Session Stats
+        updateControllerTables();  // ✅ Controller-Tabellen  
+        updateTrackRecord();       // ✅ Streckenrekord
+        
+        // Session fastest lap berechnen
+        updateSessionFastestLap();
         
     } catch (error) {
         console.error('❌ Live-Daten Fehler:', error);
     }
 }
 
+function updateSessionFastestLap() {
+    let fastestLap = null;
+    
+    Object.keys(dashboardData).forEach(controllerId => {
+        const controllerData = dashboardData[controllerId];
+        
+        if (controllerData && controllerData.best_time) {
+            if (!fastestLap || controllerData.best_time < fastestLap.time) {
+                fastestLap = {
+                    time: controllerData.best_time,
+                    driver: controllerData.name
+                };
+            }
+        }
+    });
+    
+    if (fastestLap) {
+        sessionFastestLap = fastestLap;
+        document.getElementById('fastest-lap-time').textContent = formatTime(fastestLap.time);
+        document.getElementById('fastest-lap-driver').textContent = fastestLap.driver;
+    }
+}
+    
 function updateMainStats() {
     let maxLapNumber = 0;
     let activeDrivers = 0;
