@@ -221,6 +221,66 @@ def smartrace_endpoint():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 400
 
+@app.route('/session-stats')
+def session_stats():
+    conn = sqlite3.connect('smartrace.db')
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Aktuelle Session ermitteln
+    cursor.execute("""
+        SELECT session_id, event_type, track_name, start_time 
+        FROM sessions 
+        ORDER BY start_time DESC 
+        LIMIT 1
+    """)
+    current_session = cursor.fetchone()
+    
+    if not current_session:
+        conn.close()
+        return render_template('session-stats.html', 
+                             session=None, 
+                             stats=[], 
+                             recent_laps=[])
+    
+    session_id = current_session['session_id']
+    
+    # Session-Statistiken
+    cursor.execute("""
+        SELECT 
+            controller_id,
+            COUNT(*) as total_laps,
+            MIN(lap_time) as best_lap,
+            AVG(lap_time) as avg_lap,
+            MAX(lap_time) as worst_lap,
+            SUM(lap_time) as total_time
+        FROM lap_times 
+        WHERE session_id = ? AND lap_time > 0
+        GROUP BY controller_id
+        ORDER BY best_lap ASC
+    """, (session_id,))
+    
+    stats = cursor.fetchall()
+    
+    # Letzte Runden
+    cursor.execute("""
+        SELECT controller_id, lap_time, lap_number, timestamp
+        FROM lap_times 
+        WHERE session_id = ? AND lap_time > 0
+        ORDER BY timestamp DESC 
+        LIMIT 10
+    """, (session_id,))
+    
+    recent_laps = cursor.fetchall()
+    
+    conn.close()
+    
+    return render_template('session-stats.html', 
+                         session=current_session,
+                         stats=stats, 
+                         recent_laps=recent_laps)
+
+
 @app.route('/api/live-data')
 def live_data():
     try:
