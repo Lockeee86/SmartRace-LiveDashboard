@@ -130,6 +130,11 @@ def dashboard():
 def analytics():
     return render_template('analytics.html')
 
+@app.route('/leaderboard')
+def leaderboard():
+    """Live Race Leaderboard"""
+    return render_template('leaderboard.html')
+
 @app.route('/database')
 def database_view():
     return render_template('database.html')
