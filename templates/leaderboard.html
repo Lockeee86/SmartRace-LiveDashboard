@@ -154,25 +154,46 @@ const CONTROLLER_COLORS = {
     6: '#8844FF'  // Violett
 };
 
-// 🔄 Live-Daten laden (GLEICH WIE DASHBOARD)
-async function updateLeaderboard() {
-    try {
-        console.log('🚀 Lade Live-Daten...');
-        const response = await fetch('/api/live-data');
-        const rawText = await response.text();
-        leaderboardData = JSON.parse(rawText);
-        console.log('📊 Live-Daten erhalten:', leaderboardData);
+function updateLeaderboard() {
+    const leaderboard = [];
+    
+    Object.keys(dashboardData).forEach(controllerId => {
+        const controllerData = dashboardData[controllerId];
         
-        updateMainStats();         // ✅ Session Stats (gleich wie Dashboard)
-        updateTrackRecord();       // ✅ Streckenrekord (gleich wie Dashboard)
-        updateSessionFastestLap(); // ✅ Schnellste Runde (gleich wie Dashboard)
-        updateLeaderboardTable();  // ✅ Leaderboard Tabelle
-        updateControllerStatus();  // ✅ Controller Status
-        
-    } catch (error) {
-        console.error('❌ Live-Daten Fehler:', error);
-    }
+        if (controllerData && controllerData.laps) {
+            // ✅ Nur aktuelle Session-Runden
+            const currentSessionLaps = getCurrentSessionLaps(controllerData);
+            
+            if (currentSessionLaps.length > 0) {
+                const lapNumbers = currentSessionLaps.map(lap => lap.lap || 0);
+                const lapsCompleted = Math.max(...lapNumbers);
+                
+                // ✅ Beste Zeit der aktuellen Session
+                const sessionBestTime = Math.min(...currentSessionLaps.map(lap => lap.laptime_raw));
+                
+                leaderboard.push({
+                    controllerId: controllerId,
+                    name: controllerData.name || `Controller ${controllerId}`,
+                    lapsCompleted: lapsCompleted,
+                    bestTime: sessionBestTime,
+                    bestTimeFormatted: formatTime(sessionBestTime),
+                    color: controllerData.color || '#007bff'
+                });
+            }
+        }
+    });
+    
+    // ✅ Sortieren: Erst nach Runden, dann nach Zeit
+    leaderboard.sort((a, b) => {
+        if (b.lapsCompleted !== a.lapsCompleted) {
+            return b.lapsCompleted - a.lapsCompleted; // Mehr Runden = besser
+        }
+        return a.bestTime - b.bestTime; // Schnellere Zeit = besser
+    });
+    
+    renderLeaderboard(leaderboard);
 }
+
 
 // 📊 MAIN STATS - EXAKT WIE DASHBOARD
 function updateMainStats() {
