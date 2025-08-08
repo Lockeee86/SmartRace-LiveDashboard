@@ -259,27 +259,62 @@ function updateSessionFastestLap() {
     }
 }
     
+function getCurrentSessionLaps(controllerData) {
+    if (!controllerData.laps || controllerData.laps.length === 0) return [];
+    
+    // ✅ Sortiere Runden nach Timestamp (neueste zuerst)
+    const sortedLaps = [...controllerData.laps].sort((a, b) => 
+        new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    
+    // ✅ Neuester Timestamp = aktuelle Session
+    const latestTimestamp = new Date(sortedLaps[0].timestamp);
+    
+    // ✅ Definiere Session-Grenze (z.B. 30 Minuten Pause = neue Session)
+    const sessionGapMinutes = 30;
+    const sessionStartTime = new Date(latestTimestamp.getTime() - (sessionGapMinutes * 60 * 1000));
+    
+    // ✅ Filtere nur Runden der aktuellen Session
+    const currentSessionLaps = controllerData.laps.filter(lap => {
+        const lapTime = new Date(lap.timestamp);
+        return lapTime >= sessionStartTime;
+    });
+    
+    console.log(`🔍 Controller: ${currentSessionLaps.length} Runden in aktueller Session`);
+    return currentSessionLaps;
+}
+
 function updateMainStats() {
-    let totalLaps = 0;  // ✅ SUMME, nicht Maximum!
+    let totalLaps = 0;
     let activeDrivers = 0;
 
     Object.keys(dashboardData).forEach(controllerId => {
         const controllerData = dashboardData[controllerId];
         
-        if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
-            activeDrivers++;
+        if (controllerData && controllerData.laps) {
+            // ✅ Nur aktuelle Session-Runden
+            const currentSessionLaps = getCurrentSessionLaps(controllerData);
             
-            // ✅ RICHTIG: Höchste Rundennummer pro Controller
-            const lapNumbers = controllerData.laps.map(lap => lap.lap || 0);
-            const controllerCurrentLap = Math.max(...lapNumbers);
-            
-            // ✅ RICHTIG: Zur SUMME addieren (nicht Maximum suchen!)
-            totalLaps += controllerCurrentLap;
+            if (currentSessionLaps.length > 0) {
+                activeDrivers++;
+                
+                // ✅ Höchste Rundennummer der aktuellen Session
+                const lapNumbers = currentSessionLaps.map(lap => lap.lap || 0);
+                const sessionMaxLap = Math.max(...lapNumbers);
+                
+                totalLaps += sessionMaxLap;
+                
+                console.log(`🏁 Controller ${controllerId}: Runde ${sessionMaxLap} in aktueller Session`);
+            }
         }
     });
 
-    document.getElementById('total-laps').textContent = totalLaps;  // ✅ Gesamtsumme!
+    document.getElementById('total-laps').textContent = totalLaps;
+    document.getElementById('active-drivers').textContent = activeDrivers;
+    
+    console.log(`📊 Aktuelle Session: ${totalLaps} Runden, ${activeDrivers} Fahrer`);
 }
+
 
 
 
