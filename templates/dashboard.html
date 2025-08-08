@@ -335,29 +335,47 @@ function updateControllerTables() {
         }
         
         if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
-            // ✅ Update Fahrer/Auto Info mit Debug
+            // ✅ Update Fahrer/Auto Info
             driverName.textContent = controllerData.name || `Driver ${controllerId}`;
             carName.textContent = controllerData.car || `Car ${controllerId}`;
             
-            // ✅ DEBUG: Beste Zeit berechnen und anzeigen
+            // ✅ SESSION-weite beste Zeit berechnen
             if (controllerData.laps && controllerData.laps.length > 0) {
-                const allTimes = controllerData.laps
-                    .map(lap => lap.laptime_raw || 0)
-                    .filter(time => time > 0);
+                // Alle Zeiten von ALLEN Controllern sammeln
+                let allSessionTimes = [];
                 
-                console.log(`🔍 Controller ${controllerId} - alle Zeiten:`, allTimes);
+                // Durch alle Controller gehen
+                for (let i = 1; i <= 6; i++) {
+                    const otherControllerData = window.currentLogData ? window.currentLogData[`controller_${i}`] : null;
+                    if (otherControllerData && otherControllerData.laps) {
+                        const times = otherControllerData.laps
+                            .map(lap => lap.laptime_raw || 0)
+                            .filter(time => time > 0);
+                        allSessionTimes = allSessionTimes.concat(times);
+                    }
+                }
                 
-                if (allTimes.length > 0) {
-                    const bestTime = Math.min(...allTimes);
-                    const bestTimeText = ` (🏁 ${formatTime(bestTime)})`;
+                console.log(`🔍 Alle Session-Zeiten:`, allSessionTimes);
+                
+                if (allSessionTimes.length > 0) {
+                    const sessionBestTime = Math.min(...allSessionTimes);
                     
-                    console.log(`🔍 Controller ${controllerId} - beste Zeit:`, bestTime);
-                    console.log(`✅ Controller ${controllerId} - finaler Text:`, (controllerData.name || `Driver ${controllerId}`) + bestTimeText);
+                    // Prüfen ob DIESER Controller die beste Zeit hat
+                    const myTimes = controllerData.laps
+                        .map(lap => lap.laptime_raw || 0)
+                        .filter(time => time > 0);
+                        
+                    const myBestTime = myTimes.length > 0 ? Math.min(...myTimes) : null;
                     
-                    // ✅ Text mit bester Zeit setzen
-                    driverName.textContent = (controllerData.name || `Driver ${controllerId}`) + bestTimeText;
+                    // Nur anzeigen wenn dieser Controller die Session-Bestzeit hat
+                    if (myBestTime === sessionBestTime) {
+                        const bestTimeText = ` (🏆 ${formatTime(sessionBestTime)})`;
+                        driverName.textContent = (controllerData.name || `Driver ${controllerId}`) + bestTimeText;
+                        console.log(`🏆 Controller ${controllerId} hat die Session-Bestzeit!`);
+                    }
                 }
             }
+
 
             
             // Letzte 6 Zeiten holen
