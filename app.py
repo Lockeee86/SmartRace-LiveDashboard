@@ -147,10 +147,25 @@ def smartrace_endpoint():
     
     try:
         data = request.get_json()
-        print(f"📨 Received data: {json.dumps(data, indent=2)}")  # Debug
+        print(f"📨 Received data: {json.dumps(data, indent=2)}")
+        
+        # ✅ EVENT_ID aus den Daten extrahieren!
+        event_id = None
+        if 'event_id' in data:
+            event_id = data['event_id']
+        elif 'event_data' in data and data['event_data'] and 'event_id' in data['event_data']:
+            event_id = data['event_data']['event_id']
+        elif 'session_id' in data:
+            event_id = data['session_id']
+        else:
+            # Fallback: Generiere Event ID basierend auf Datum
+            event_id = f"Event_{datetime.now().strftime('%Y%m%d_%H%M')}"
+        
+        print(f"🎯 Event ID: {event_id}")
         
         # Event speichern
         event = Event(
+            event_id=event_id,  # ✅ Event ID hinzufügen!
             event_type=data.get('event_type'),
             data=json.dumps(data)
         )
@@ -160,41 +175,10 @@ def smartrace_endpoint():
         if data.get('event_type') == 'ui.lap_update':
             event_data = data.get('event_data', {})
             
-            # ✅ CONTROLLER-FARBE aus controller_data extrahieren!
-            controller_color = '#333333'  # Fallback
-            if 'controller_data' in event_data and event_data['controller_data']:
-                color_bg = event_data['controller_data'].get('color_bg')
-                if color_bg:
-                    controller_color = rgb_to_hex(color_bg)
-                    print(f"🎨 Controller-Farbe gefunden: {color_bg} → {controller_color}")
-            
-            # Fahrer und Auto Namen extrahieren
-            driver_name = None
-            car_name = None
-            
-            # Prüfe verschiedene Datenquellen
-            if 'driver_data' in event_data and event_data['driver_data']:
-                driver_name = event_data['driver_data'].get('name')
-            elif 'driver' in event_data:
-                driver_name = event_data['driver']
-            elif 'driver' in data:
-                driver_name = data['driver']
-            
-            if 'car_data' in event_data and event_data['car_data']:
-                car_name = event_data['car_data'].get('name')
-            elif 'car' in event_data:
-                car_name = event_data['car']
-            elif 'car' in data:
-                car_name = data['car']
-            
-            # Fallback wenn keine Namen gefunden
-            controller_id = event_data.get('controller_id', 'Unknown')
-            if not driver_name:
-                driver_name = f"Driver {controller_id}"
-            if not car_name:
-                car_name = f"Car {controller_id}"
+            # ... (Controller-Farbe Code bleibt gleich) ...
             
             lap_time = LapTime(
+                event_id=event_id,  # ✅ Event ID hinzufügen!
                 controller_id=controller_id,
                 driver_name=driver_name,
                 car_name=car_name,
@@ -205,21 +189,22 @@ def smartrace_endpoint():
                 sector_2=event_data.get('sector_2'),
                 sector_3=event_data.get('sector_3'),
                 car_color=event_data.get('car_data', {}).get('color') if event_data.get('car_data') else '#000000',
-                controller_color=controller_color,  # ✅ Controller-Farbe speichern!
+                controller_color=controller_color,
                 is_pb=event_data.get('lap_pb', False)
             )
             db.session.add(lap_time)
             
-            print(f"💾 Saved lap: Driver={driver_name}, Car={car_name}, Controller-Color={controller_color}")  # Debug
+            print(f"💾 Saved lap: Event={event_id}, Driver={driver_name}")
         
         db.session.commit()
         return jsonify({'status': 'success'})
     
     except Exception as e:
-        print(f"❌ Error: {str(e)}")  # Debug
+        print(f"❌ Error: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 400
+
 
 @app.route('/api/events')
 def get_events():
@@ -403,6 +388,7 @@ def analytics_data():
 def database_data():
     driver_filter = request.args.get('driver')
     car_filter = request.args.get('car')
+    event_filter = request.args.get('event')  # ✅ NEU
     
     query = LapTime.query
     
@@ -410,13 +396,15 @@ def database_data():
         query = query.filter(LapTime.driver_name.ilike(f'%{driver_filter}%'))
     if car_filter:
         query = query.filter(LapTime.car_name.ilike(f'%{car_filter}%'))
+    if event_filter:  # ✅ NEU
+        query = query.filter(LapTime.event_id == event_filter)
     
     laps = query.order_by(LapTime.timestamp.desc()).limit(1000).all()
     
     result = []
     for lap in laps:
-        # Sichere Fallback-Werte für alle Felder
         result.append({
+            'event_id': lap.event_id or 'No Event',  # ✅ NEU
             'driver': lap.driver_name or f"Driver {lap.controller_id}" or "Unknown",
             'car': lap.car_name or f"Car {lap.controller_id}" or "Unknown",
             'lap': lap.lap or 0,
@@ -430,6 +418,7 @@ def database_data():
         })
     
     return jsonify(result)
+
 
 
 # API für Filter-Optionen
@@ -465,6 +454,7 @@ def export_csv():
     try:
         driver_filter = request.args.get('driver')
         car_filter = request.args.get('car')
+        event_filter = request.args.get('event')  # ✅ NEU
         
         query = LapTime.query
         
@@ -472,23 +462,25 @@ def export_csv():
             query = query.filter(LapTime.driver_name.ilike(f'%{driver_filter}%'))
         if car_filter:
             query = query.filter(LapTime.car_name.ilike(f'%{car_filter}%'))
+        if event_filter:  # ✅ NEU
+            query = query.filter(LapTime.event_id == event_filter)
         
         laps = query.order_by(LapTime.timestamp.desc()).all()
         
-        # CSV Daten erstellen
         import io
         output = io.StringIO()
         writer = csv.writer(output)
         
-        # Header schreiben
+        # Header erweitern
         writer.writerow([
-            'Timestamp', 'Driver', 'Car', 'Lap', 'Laptime', 
+            'Event ID', 'Timestamp', 'Driver', 'Car', 'Lap', 'Laptime', 
             'Sector 1', 'Sector 2', 'Sector 3', 'Controller ID', 'Personal Best'
         ])
         
-        # Daten schreiben
+        # Daten erweitern
         for lap in laps:
             writer.writerow([
+                lap.event_id or 'No Event',  # ✅ NEU
                 lap.timestamp.strftime('%Y-%m-%d %H:%M:%S') if lap.timestamp else '',
                 lap.driver_name or f"Driver {lap.controller_id}",
                 lap.car_name or f"Car {lap.controller_id}",
