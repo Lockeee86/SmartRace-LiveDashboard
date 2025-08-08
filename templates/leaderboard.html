@@ -139,95 +139,70 @@
 {% block scripts %}
 <script>
 // 🔧 KORRIGIERTES LEADERBOARD SYSTEM
-let leaderboardData = {};
+let dashboardData = {};  // ✅ Richtige Variable
 let sessionFastestLap = null;
 let trackRecord = null;
 let previousPositions = {};
 
-// Controller-Farben (gleich wie Dashboard)
+// Controller-Farben
 const CONTROLLER_COLORS = {
-    1: '#FF4444', // Rot
-    2: '#4444FF', // Blau  
-    3: '#44FF44', // Grün
-    4: '#FFFF44', // Gelb
-    5: '#FF8844', // Orange
-    6: '#8844FF'  // Violett
+    1: '#FF4444', 2: '#4444FF', 3: '#44FF44', 
+    4: '#FFFF44', 5: '#FF8844', 6: '#8844FF'
 };
 
-function updateLeaderboard() {
-    const leaderboard = [];
+// ✅ AKTUELLE SESSION FUNKTION HINZUFÜGEN:
+function getCurrentSessionLaps(controllerData) {
+    if (!controllerData.laps || controllerData.laps.length === 0) return [];
     
-    Object.keys(dashboardData).forEach(controllerId => {
+    const sortedLaps = [...controllerData.laps].sort((a, b) => 
+        new Date(b.timestamp) - new Date(a.timestamp)
+    );
+    
+    const latestTimestamp = new Date(sortedLaps[0].timestamp);
+    const sessionGapMinutes = 30;
+    const sessionStartTime = new Date(latestTimestamp.getTime() - (sessionGapMinutes * 60 * 1000));
+    
+    return controllerData.laps.filter(lap => {
+        const lapTime = new Date(lap.timestamp);
+        return lapTime >= sessionStartTime;
+    });
+}
+
+// ✅ KORRIGIERTE HAUPT-STATS:
+function updateMainStats() {
+    let totalLaps = 0;
+    let activeDrivers = 0;
+
+    Object.keys(dashboardData).forEach(controllerId => {  // ✅ dashboardData statt leaderboardData
         const controllerData = dashboardData[controllerId];
         
         if (controllerData && controllerData.laps) {
-            // ✅ Nur aktuelle Session-Runden
             const currentSessionLaps = getCurrentSessionLaps(controllerData);
             
             if (currentSessionLaps.length > 0) {
+                activeDrivers++;
                 const lapNumbers = currentSessionLaps.map(lap => lap.lap || 0);
-                const lapsCompleted = Math.max(...lapNumbers);
-                
-                // ✅ Beste Zeit der aktuellen Session
-                const sessionBestTime = Math.min(...currentSessionLaps.map(lap => lap.laptime_raw));
-                
-                leaderboard.push({
-                    controllerId: controllerId,
-                    name: controllerData.name || `Controller ${controllerId}`,
-                    lapsCompleted: lapsCompleted,
-                    bestTime: sessionBestTime,
-                    bestTimeFormatted: formatTime(sessionBestTime),
-                    color: controllerData.color || '#007bff'
-                });
-            }
-        }
-    });
-    
-    // ✅ Sortieren: Erst nach Runden, dann nach Zeit
-    leaderboard.sort((a, b) => {
-        if (b.lapsCompleted !== a.lapsCompleted) {
-            return b.lapsCompleted - a.lapsCompleted; // Mehr Runden = besser
-        }
-        return a.bestTime - b.bestTime; // Schnellere Zeit = besser
-    });
-    
-    renderLeaderboard(leaderboard);
-}
-
-
-// 📊 MAIN STATS - EXAKT WIE DASHBOARD
-function updateMainStats() {
-    let maxLapNumber = 0;
-    let activeDrivers = 0;
-
-    Object.keys(leaderboardData).forEach(controllerId => {
-        const controllerData = leaderboardData[controllerId];
-        
-        if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
-            activeDrivers++;
-            const lapNumbers = controllerData.laps.map(lap => lap.lap || 0);
-            const controllerMaxLap = Math.max(...lapNumbers);
-            if (controllerMaxLap > maxLapNumber) {
-                maxLapNumber = controllerMaxLap;
+                const sessionMaxLap = Math.max(...lapNumbers);
+                totalLaps += sessionMaxLap;  // ✅ Summe statt Maximum
             }
         }
     });
 
-    document.getElementById('total-laps').textContent = maxLapNumber;
+    document.getElementById('total-laps').textContent = totalLaps;
     document.getElementById('active-drivers').textContent = activeDrivers;
 }
 
-// 🏁 SESSION FASTEST LAP - EXAKT WIE DASHBOARD  
+// ✅ KORRIGIERTE SESSION FASTEST LAP:
 function updateSessionFastestLap() {
     let fastestLap = null;
     
-    Object.keys(leaderboardData).forEach(controllerId => {
-        const controllerData = leaderboardData[controllerId];
+    Object.keys(dashboardData).forEach(controllerId => {  // ✅ dashboardData
+        const controllerData = dashboardData[controllerId];
         
-        if (controllerData && controllerData.best_time) {
-            if (!fastestLap || controllerData.best_time < fastestLap.time) {
+        if (controllerData && controllerData.best_time_raw) {  // ✅ _raw verwenden
+            if (!fastestLap || controllerData.best_time_raw < fastestLap.time) {
                 fastestLap = {
-                    time: controllerData.best_time,
+                    time: controllerData.best_time_raw,
                     driver: controllerData.name || `Driver ${controllerId}`
                 };
             }
@@ -241,74 +216,49 @@ function updateSessionFastestLap() {
     }
 }
 
-// 🏆 TRACK RECORD - EXAKT WIE DASHBOARD
-function updateTrackRecord() {
-    if (sessionFastestLap && (!trackRecord || sessionFastestLap.time < trackRecord.time)) {
-        trackRecord = {
-            time: sessionFastestLap.time,
-            driver: sessionFastestLap.driver,
-            date: new Date().toLocaleDateString('de-DE')
-        };
-    }
-    
-    if (trackRecord) {
-        document.getElementById('track-record-time').textContent = formatTime(trackRecord.time);
-        document.getElementById('track-record-driver').textContent = trackRecord.driver;
-        document.getElementById('track-record-date').textContent = trackRecord.date;
-    } else {
-        document.getElementById('track-record-time').textContent = '1:23.456';
-        document.getElementById('track-record-driver').textContent = 'Max Verstappen';
-        document.getElementById('track-record-date').textContent = '2024-01-15';
-    }
-}
-
-// 🏁 LEADERBOARD TABELLE AKTUALISIEREN
+// ✅ KORRIGIERTE LEADERBOARD TABELLE:
 function updateLeaderboardTable() {
     const tbody = document.getElementById('leaderboard-tbody');
     const drivers = [];
     
-    // Alle Controller sammeln
-    Object.keys(leaderboardData).forEach(controllerId => {
-        const controllerData = leaderboardData[controllerId];
+    Object.keys(dashboardData).forEach(controllerId => {  // ✅ dashboardData
+        const controllerData = dashboardData[controllerId];
         
-        if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
-            const lapNumbers = controllerData.laps.map(lap => lap.lap || 0);
-            const totalLaps = Math.max(...lapNumbers);
-            const lastLap = controllerData.laps[0]; // Neueste Runde
+        if (controllerData && controllerData.laps) {
+            const currentSessionLaps = getCurrentSessionLaps(controllerData);
             
-            drivers.push({
-                controllerId: parseInt(controllerId),
-                name: controllerData.name || `Driver ${controllerId}`,
-                car: controllerData.car || `Car ${controllerId}`,
-                color: controllerData.color || CONTROLLER_COLORS[controllerId],
-                totalLaps: totalLaps,
-                bestTime: controllerData.best_time,
-                lastTime: lastLap ? lastLap.laptime_raw : null,
-                isActive: true
-            });
+            if (currentSessionLaps.length > 0) {
+                const lapNumbers = currentSessionLaps.map(lap => lap.lap || 0);
+                const totalLaps = Math.max(...lapNumbers);
+                const lastLap = currentSessionLaps[0];
+                
+                drivers.push({
+                    controllerId: parseInt(controllerId),
+                    name: controllerData.name || `Driver ${controllerId}`,
+                    car: controllerData.car || `Car ${controllerId}`,
+                    color: controllerData.color || CONTROLLER_COLORS[controllerId],
+                    totalLaps: totalLaps,
+                    bestTime: controllerData.best_time_raw,  // ✅ _raw verwenden
+                    lastTime: lastLap ? lastLap.laptime_raw : null,
+                    isActive: true
+                });
+            }
         }
     });
     
-    // KORREKTE SORTIERUNG: Erst Runden, dann Zeit
+    // Rest der Funktion bleibt gleich...
     drivers.sort((a, b) => {
-        // 1. Nach Rundenanzahl (mehr ist besser)
         if (a.totalLaps !== b.totalLaps) {
             return b.totalLaps - a.totalLaps;
         }
-        
-        // 2. Bei gleicher Rundenanzahl: nach bester Zeit (weniger ist besser)  
         if (a.bestTime && b.bestTime) {
             return a.bestTime - b.bestTime;
         }
-        
-        // 3. Fahrer mit Zeiten vor Fahrern ohne Zeiten
         if (a.bestTime && !b.bestTime) return -1;
         if (!a.bestTime && b.bestTime) return 1;
-        
         return 0;
     });
     
-    // Tabelle füllen
     if (drivers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">🏁 Warten auf Rennstart...</td></tr>';
         return;
@@ -320,15 +270,10 @@ function updateLeaderboardTable() {
         const position = index + 1;
         const wasPosition = previousPositions[driver.controllerId] || position;
         
-        // Position Change
         let positionChange = '';
-        if (wasPosition > position) {
-            positionChange = '<span class="text-success">↗️</span>';
-        } else if (wasPosition < position) {
-            positionChange = '<span class="text-danger">↘️</span>';
-        }
+        if (wasPosition > position) positionChange = '<span class="text-success">↗️</span>';
+        else if (wasPosition < position) positionChange = '<span class="text-danger">↘️</span>';
         
-        // Rückstand berechnen
         let gap = '';
         if (position > 1) {
             if (driver.totalLaps < leader.totalLaps) {
@@ -342,17 +287,11 @@ function updateLeaderboardTable() {
             gap = '🏆 Leader';
         }
         
-        // Status
         let status = '🏁 Aktiv';
-        if (position === 1) {
-            status = '👑 Leader';
-        } else if (driver.bestTime === sessionFastestLap?.time) {
-            status = '🏆 Bestzeit';
-        } else if (position <= 3) {
-            status = '🥉 Podium';
-        }
+        if (position === 1) status = '👑 Leader';
+        else if (driver.bestTime === sessionFastestLap?.time) status = '🏆 Bestzeit';
+        else if (position <= 3) status = '🥉 Podium';
         
-        // Row Class
         let rowClass = '';
         if (position === 1) rowClass = 'table-warning';
         else if (position <= 3) rowClass = 'table-light';
@@ -364,16 +303,9 @@ function updateLeaderboardTable() {
                 <td class="fw-bold">${position} ${positionChange}</td>
                 <td class="fw-bold" style="color: ${driver.color}">${driver.name}</td>
                 <td>${driver.car}</td>
-                <td>
-                    <span class="badge" style="background: ${driver.color}; color: white;">
-                        C${driver.controllerId}
-                    </span>
-                </td>
+                <td><span class="badge" style="background: ${driver.color}; color: white;">C${driver.controllerId}</span></td>
                 <td class="fw-bold">${driver.totalLaps}</td>
-                <td class="font-monospace ${driver.bestTime === sessionFastestLap?.time ? 'bg-warning' : ''}">
-                    ${formatTime(driver.bestTime)}
-                    ${driver.bestTime === sessionFastestLap?.time ? ' 🏆' : ''}
-                </td>
+                <td class="font-monospace ${driver.bestTime === sessionFastestLap?.time ? 'bg-warning' : ''}">${formatTime(driver.bestTime)}${driver.bestTime === sessionFastestLap?.time ? ' 🏆' : ''}</td>
                 <td class="font-monospace">${formatTime(driver.lastTime)}</td>
                 <td class="font-monospace text-muted">${gap}</td>
                 <td>${status}</td>
@@ -382,10 +314,10 @@ function updateLeaderboardTable() {
     }).join('');
 }
 
-// 🎮 CONTROLLER STATUS AKTUALISIEREN
+// ✅ KORRIGIERTE CONTROLLER STATUS:
 function updateControllerStatus() {
     for (let controllerId = 1; controllerId <= 6; controllerId++) {
-        const controllerData = leaderboardData[controllerId.toString()];
+        const controllerData = dashboardData[controllerId.toString()];  // ✅ dashboardData
         const statusElement = document.getElementById(`controller-status-${controllerId}`);
         const color = CONTROLLER_COLORS[controllerId];
         
@@ -393,7 +325,6 @@ function updateControllerStatus() {
         const nameElement = statusElement.querySelector('.controller-mini-name');
         const timeElement = statusElement.querySelector('.controller-mini-time');
         
-        // Farbe setzen
         miniCard.style.borderLeft = `5px solid ${color}`;
         
         if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
@@ -404,19 +335,17 @@ function updateControllerStatus() {
             nameElement.textContent = name;
             nameElement.style.color = color;
             timeElement.textContent = lastTime;
-            
             miniCard.classList.add('active');
         } else {
             nameElement.textContent = `Driver ${controllerId}`;
             nameElement.style.color = '#6c757d';
             timeElement.textContent = '--:--.---';
-            
             miniCard.classList.remove('active');
         }
     }
 }
 
-// 🛠️ HILFSFUNKTIONEN - EXAKT WIE DASHBOARD
+// ✅ HILFSFUNKTIONEN:
 function formatTime(timeMs) {
     if (!timeMs || timeMs === 0) return '--:--.---';
     
@@ -430,7 +359,41 @@ function formatTime(timeMs) {
     }
 }
 
-// CSS für Controller Mini Cards
+// ✅ DATEN LADEN UND UPDATES:
+async function fetchData() {
+    try {
+        const response = await fetch('/api/dashboard-data');
+        dashboardData = await response.json();
+        
+        updateMainStats();
+        updateSessionFastestLap();
+        updateTrackRecord();
+        updateLeaderboardTable();
+        updateControllerStatus();
+        
+    } catch (error) {
+        console.error('❌ Fehler beim Laden der Daten:', error);
+    }
+}
+
+// ✅ TRACK RECORD:
+function updateTrackRecord() {
+    if (sessionFastestLap && (!trackRecord || sessionFastestLap.time < trackRecord.time)) {
+        trackRecord = {
+            time: sessionFastestLap.time,
+            driver: sessionFastestLap.driver,
+            date: new Date().toLocaleDateString('de-DE')
+        };
+    }
+    
+    if (trackRecord) {
+        document.getElementById('track-record-time').textContent = formatTime(trackRecord.time);
+        document.getElementById('track-record-driver').textContent = trackRecord.driver;
+        document.getElementById('track-record-date').textContent = trackRecord.date;
+    }
+}
+
+// CSS für Mini Cards
 const style = document.createElement('style');
 style.textContent = `
     .controller-mini-card {
@@ -442,12 +405,10 @@ style.textContent = `
         border-left: 5px solid #dee2e6;
         margin-bottom: 10px;
     }
-    
     .controller-mini-card.active {
         background: #e8f5e8;
         transform: translateY(-2px);
     }
-    
     .controller-mini-header {
         font-size: 12px;
         font-weight: bold;
@@ -455,31 +416,24 @@ style.textContent = `
         margin-bottom: 8px;
         text-transform: uppercase;
     }
-    
     .controller-mini-name {
         font-weight: bold;
         margin-bottom: 5px;
         font-size: 14px;
     }
-    
     .controller-mini-time {
         font-family: 'Courier New', monospace;
         font-size: 13px;
         color: #495057;
     }
-    
-    @media (max-width: 768px) {
-        .controller-mini-card {
-            margin-bottom: 15px;
-        }
-    }
 `;
 document.head.appendChild(style);
 
-// 🚀 STARTEN  
-updateLeaderboard();
-setInterval(updateLeaderboard, 2000); // Update alle 2 Sekunden
+// ✅ STARTEN:
+fetchData();  // Initial load
+setInterval(fetchData, 2000);  // Update alle 2 Sekunden
 
-console.log('🏁 Live Leaderboard gestartet - Dashboard Style!');
+console.log('🏁 Live Leaderboard gestartet!');
 </script>
 {% endblock %}
+
