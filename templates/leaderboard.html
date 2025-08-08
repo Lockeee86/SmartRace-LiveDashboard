@@ -362,7 +362,7 @@ function formatTime(timeMs) {
 // ✅ DATEN LADEN UND UPDATES:
 async function fetchData() {
     try {
-        const response = await fetch('/api/dashboard-data');
+        const response = await fetch('/api/live-data');
         dashboardData = await response.json();
         
         updateMainStats();
