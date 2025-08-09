@@ -230,16 +230,16 @@ def smartrace_endpoint():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 400
 
-@app.route('/api/events')
-def get_events():
-    try:
-        # Alle einzigartigen event_ids aus LapTime holen
-        events = db.session.query(LapTime.event_id).distinct().all()
-        event_list = [{'event_id': event[0]} for event in events if event[0]]
-        
-        return jsonify(event_list)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+#@app.route('/api/events')
+#def get_events():
+#    try:
+#        # Alle einzigartigen event_ids aus LapTime holen
+#        events = db.session.query(LapTime.event_id).distinct().all()
+#        event_list = [{'event_id': event[0]} for event in events if event[0]]
+#        
+#        return jsonify(event_list)
+#    except Exception as e:
+#        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/drivers')
 def get_drivers():
@@ -251,10 +251,10 @@ def get_cars():
     cars = get_all_cars_from_db()  # Deine DB-Funktion
     return jsonify(cars)
 
-#@app.route('/api/events')  
-#def get_events():
-#    events = get_all_events_from_db()  # Deine DB-Funktion
-#    return jsonify(events)
+@app.route('/api/events')  
+def get_events():
+    events = get_all_events_from_db()  # Deine DB-Funktion
+    return jsonify(events)
 
 @app.route('/session-stats')
 def session_stats():
