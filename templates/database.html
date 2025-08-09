@@ -225,6 +225,38 @@ function loadFilters() {
         });
 }
 
+function filterLaps() {
+    const driverFilter = document.getElementById('driverFilter').value;
+    const carFilter = document.getElementById('carFilter').value;
+    const eventFilter = document.getElementById('eventFilter').value;
+    const dateFrom = document.getElementById('dateFilter').value;
+    const dateTo = document.getElementById('dateFilterEnd').value;
+    
+    console.log('Filter Values:', {
+        driver: driverFilter,
+        car: carFilter, 
+        event: eventFilter,
+        date_from: dateFrom,
+        date_to: dateTo
+    });
+    
+    // URL Parameter aufbauen
+    let params = new URLSearchParams();
+    if (driverFilter) params.append('driver', driverFilter);
+    if (carFilter) params.append('car', carFilter);
+    if (eventFilter) params.append('event', eventFilter);
+    if (dateFrom) params.append('date_from', dateFrom);
+    if (dateTo) params.append('date_to', dateTo);
+    
+    fetch(`/api/database?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            console.log('API Response:', data);
+            displayLapTimes(data);
+        })
+        .catch(error => console.error('Filter error:', error));
+}
+    
 function loadData() {
     const driverFilter = document.getElementById('driverFilter').value;
     const carFilter = document.getElementById('carFilter').value;
