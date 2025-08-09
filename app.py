@@ -6,7 +6,6 @@ import json
 import os
 import csv
 import re
-import sqlite3 
 
 app = Flask(__name__)
 CORS(app)
@@ -241,27 +240,18 @@ def get_cars():
     cars = get_all_cars_from_db()  # Deine DB-Funktion
     return jsonify(cars)
 
-def get_all_events_from_db():
-    """Holt alle Events aus der Datenbank"""
-    conn = sqlite3.connect('smartrace_data.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT DISTINCT event_name 
-        FROM smartrace_data 
-        WHERE event_name IS NOT NULL 
-        ORDER BY event_name
-    """)
-    
-    events = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return events
-
 @app.route('/api/events')  
 def get_events():
     try:
-        events = get_all_events_from_db()
-        return jsonify(events)
+        # Nutze SQLAlchemy statt direktes SQLite
+        events = db.session.query(LapTime.event_id).distinct().filter(
+            LapTime.event_id.isnot(None), 
+            LapTime.event_id != ''
+        ).all()
+        
+        event_list = [event[0] for event in events]
+        return jsonify(event_list)
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
