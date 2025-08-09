@@ -158,7 +158,8 @@ def smartrace_endpoint():
         elif 'session_id' in data:
             event_id = data['session_id']
         else:
-            event_id = f"Event_{datetime.now().strftime('%Y%m%d_%H%M')}"
+            # ✅ NUR Event-Typ, kein Datum
+            event_id = "Training"  # oder "Race", "Practice" etc.
         
         print(f"🎯 Event ID: {event_id}")
         
