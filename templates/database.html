@@ -308,7 +308,43 @@ function loadData() {
         });
 }
 
-// Restliche Funktionen bleiben gleich...
+function displayLapTimes(data) {
+    const tableBody = document.querySelector('#lapTimesTable tbody');
+    
+    if (!tableBody) {
+        console.error('Table tbody not found!');
+        return;
+    }
+    
+    // Tabelle leeren
+    tableBody.innerHTML = '';
+    
+    // Neue Daten einfügen
+    data.forEach(lap => {
+        const row = document.createElement('tr');
+        
+        // PB Highlight
+        if (lap.is_pb) {
+            row.classList.add('table-warning'); // Bootstrap Klasse für Highlight
+        }
+        
+        row.innerHTML = `
+            <td>${lap.driver_name || 'Unbekannt'}</td>
+            <td>${lap.car_name || 'Unbekannt'}</td>
+            <td>${lap.track_name || 'Unbekannt'}</td>
+            <td>${lap.lap_time || 'N/A'}</td>
+            <td>${lap.sector_1 || 'N/A'}</td>
+            <td>${lap.sector_2 || 'N/A'}</td>
+            <td>${lap.sector_3 || 'N/A'}</td>
+            <td>${lap.event_type || 'N/A'}</td>
+            <td>${lap.timestamp ? new Date(lap.timestamp).toLocaleString() : 'N/A'}</td>
+            <td>${lap.is_pb ? '🏆' : ''}</td>
+        `;
+        
+        tableBody.appendChild(row);
+    });
+}
+
 function exportCSV() {
     const driverFilter = document.getElementById('driverFilter').value;
     const carFilter = document.getElementById('carFilter').value;
