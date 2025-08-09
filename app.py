@@ -411,7 +411,9 @@ def analytics_data():
 def database_data():
     driver_filter = request.args.get('driver')
     car_filter = request.args.get('car')
-    event_filter = request.args.get('event')  # ✅ NEU
+    event_filter = request.args.get('event')
+    date_from = request.args.get('date_from')  # ✅ NEU
+    date_to = request.args.get('date_to')      # ✅ NEU
     
     query = LapTime.query
     
@@ -419,15 +421,23 @@ def database_data():
         query = query.filter(LapTime.driver_name.ilike(f'%{driver_filter}%'))
     if car_filter:
         query = query.filter(LapTime.car_name.ilike(f'%{car_filter}%'))
-    if event_filter:  # ✅ NEU
+    if event_filter:
         query = query.filter(LapTime.event_id == event_filter)
+    
+    # ✅ NEU: Datumsfilter
+    if date_from:
+        start_date = f"{date_from} 00:00:00"
+        query = query.filter(LapTime.timestamp >= start_date)
+    if date_to:
+        end_date = f"{date_to} 23:59:59"
+        query = query.filter(LapTime.timestamp <= end_date)
     
     laps = query.order_by(LapTime.timestamp.desc()).limit(1000).all()
     
     result = []
     for lap in laps:
         result.append({
-            'event_id': lap.event_id or 'No Event',  # ✅ NEU
+            'event_id': lap.event_id or 'No Event',
             'driver': lap.driver_name or f"Driver {lap.controller_id}" or "Unknown",
             'car': lap.car_name or f"Car {lap.controller_id}" or "Unknown",
             'lap': lap.lap or 0,
