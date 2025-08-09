@@ -191,9 +191,11 @@ function loadFilters() {
         .then(data => {
             const driverSelect = document.getElementById('driverFilter');
             const carSelect = document.getElementById('carFilter');
+            const eventSelect = document.getElementById('eventFilter'); // ✅ NEU
             
             driverSelect.innerHTML = '<option value="">Alle Fahrer</option>';
             carSelect.innerHTML = '<option value="">Alle Autos</option>';
+            eventSelect.innerHTML = '<option value="">Alle Events</option>'; // ✅ NEU
             
             data.drivers.forEach(driver => {
                 const option = document.createElement('option');
@@ -209,8 +211,17 @@ function loadFilters() {
                 carSelect.appendChild(option);
             });
             
+            // ✅ NEU: Events laden
+            data.events.forEach(event => {
+                const option = document.createElement('option');
+                option.value = event;
+                option.textContent = event;
+                eventSelect.appendChild(option);
+            });
+            
             document.getElementById('totalDrivers').textContent = data.drivers.length;
             document.getElementById('totalCars').textContent = data.cars.length;
+            document.getElementById('totalEvents').textContent = data.events.length; // ✅ Falls du das anzeigen willst
         });
 }
 
