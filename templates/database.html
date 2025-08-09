@@ -12,31 +12,38 @@
 <!-- Filter und Export Sektion -->
 <div class="row mb-4">
     <div class="col-md-2">
-        <select id="driverFilter" class="form-select">
+        <select id="driverFilter" class="form-select" onchange="filterLaps()">
             <option value="">Alle Fahrer</option>
         </select>
     </div>
     <div class="col-md-2">
-        <select id="carFilter" class="form-select">
+        <select id="carFilter" class="form-select" onchange="filterLaps()">
             <option value="">Alle Autos</option>
         </select>
     </div>
-    <!-- ✅ NEU: Event Filter -->
+    <!-- ✅ Event Filter -->
     <div class="col-md-2">
-        <select id="eventFilter" class="form-select">
+        <select id="eventFilter" class="form-select" onchange="filterLaps()">
             <option value="">Alle Events</option>
         </select>
     </div>
-    <div class="col-md-6">
+    <!-- ✅ NEU: Date Picker -->
+    <div class="col-md-2">
+        <input type="date" id="dateFilter" class="form-control" onchange="filterLaps()" placeholder="Von Datum">
+    </div>
+    <div class="col-md-2">
+        <input type="date" id="dateFilterEnd" class="form-control" onchange="filterLaps()" placeholder="Bis Datum">
+    </div>
+    <div class="col-md-2">
         <div class="btn-group w-100" role="group">
             <button type="button" class="btn btn-success" onclick="exportCSV()">
-                <i class="fas fa-download"></i> CSV Export
+                <i class="fas fa-download"></i> CSV
             </button>
             <button type="button" class="btn btn-primary" onclick="exportDropbox()" id="dropboxBtn">
-                <i class="fab fa-dropbox"></i> Zu Dropbox
+                <i class="fab fa-dropbox"></i>
             </button>
             <button type="button" class="btn btn-outline-secondary" onclick="showDropboxConfig()">
-                <i class="fas fa-cog"></i> Dropbox Setup
+                <i class="fas fa-cog"></i>
             </button>
         </div>
     </div>
