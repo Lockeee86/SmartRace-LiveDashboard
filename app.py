@@ -251,10 +251,10 @@ def get_cars():
     cars = get_all_cars_from_db()  # Deine DB-Funktion
     return jsonify(cars)
 
-@app.route('/api/events')  
-def get_events():
-    events = get_all_events_from_db()  # Deine DB-Funktion
-    return jsonify(events)
+#@app.route('/api/events')  
+#def get_events():
+#    events = get_all_events_from_db()  # Deine DB-Funktion
+#    return jsonify(events)
 
 @app.route('/session-stats')
 def session_stats():
