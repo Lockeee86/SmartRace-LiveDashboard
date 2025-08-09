@@ -149,7 +149,7 @@ def smartrace_endpoint():
         data = request.get_json()
         print(f"📨 Received data: {json.dumps(data, indent=2)}")
         
-        # ✅ EVENT_ID aus den Daten extrahieren!
+        # EVENT_ID extrahieren
         event_id = None
         if 'event_id' in data:
             event_id = data['event_id']
@@ -158,7 +158,6 @@ def smartrace_endpoint():
         elif 'session_id' in data:
             event_id = data['session_id']
         else:
-            # Fallback: Generiere Event ID basierend auf Datum
             event_id = f"Event_{datetime.now().strftime('%Y%m%d_%H%M')}"
         
         print(f"🎯 Event ID: {event_id}")
@@ -175,26 +174,46 @@ def smartrace_endpoint():
         if data.get('event_type') == 'ui.lap_update':
             event_data = data.get('event_data', {})
             
-            # ✅ FEHLENDE VARIABLEN DEFINIEREN:
-            controller_id = event_data.get('controller_id', '0')
-            driver_name = event_data.get('driver_name')
-            car_name = event_data.get('car_name')
+            # ✅ VERSCHIEDENE MÖGLICHKEITEN PROBIEREN:
+            controller_id = (
+                event_data.get('controller_id') or 
+                event_data.get('controller', {}).get('id') or 
+                event_data.get('id') or '0'
+            )
             
-            # Controller-Farbe aus den Daten extrahieren
-            controller_color = '#333333'  # Default
+            # Driver Name - verschiedene Pfade testen
+            driver_name = (
+                event_data.get('driver_name') or
+                event_data.get('driver', {}).get('name') if isinstance(event_data.get('driver'), dict) else event_data.get('driver') or
+                event_data.get('controller_data', {}).get('driver_name') or
+                f"Driver {controller_id}"
+            )
+            
+            # Car Name - verschiedene Pfade testen  
+            car_name = (
+                event_data.get('car_name') or
+                event_data.get('car', {}).get('name') if isinstance(event_data.get('car'), dict) else event_data.get('car') or
+                event_data.get('car_data', {}).get('name') or
+                f"Car {controller_id}"
+            )
+            
+            print(f"🔍 Extracted: Controller={controller_id}, Driver={driver_name}, Car={car_name}")
+            
+            # Controller-Farbe
+            controller_color = '#333333'
             if 'controller_data' in event_data and event_data['controller_data']:
                 color_raw = event_data['controller_data'].get('color', '#333333')
                 controller_color = rgb_to_hex(color_raw)
             
-            # Auto-Farbe extrahieren
-            car_color = '#000000'  # Default
+            # Auto-Farbe
+            car_color = '#000000'
             if 'car_data' in event_data and event_data['car_data']:
                 color_raw = event_data['car_data'].get('color', '#000000')
                 car_color = rgb_to_hex(color_raw)
             
             lap_time = LapTime(
                 event_id=event_id,
-                controller_id=controller_id,
+                controller_id=str(controller_id),
                 driver_name=driver_name,
                 car_name=car_name,
                 lap=event_data.get('lap'),
@@ -209,7 +228,7 @@ def smartrace_endpoint():
             )
             db.session.add(lap_time)
             
-            print(f"💾 Saved lap: Event={event_id}, Driver={driver_name}")
+            print(f"💾 Saved lap: Event={event_id}, Driver={driver_name}, Car={car_name}")
         
         db.session.commit()
         return jsonify({'status': 'success'})
@@ -219,8 +238,6 @@ def smartrace_endpoint():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 400
-
-
 
 @app.route('/api/events')
 def get_events():
