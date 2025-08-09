@@ -253,8 +253,14 @@ def get_cars():
 
 @app.route('/api/events')  
 def get_events():
-    events = get_all_events_from_db()  # Deine DB-Funktion
-    return jsonify(events)
+    try:
+        events = get_all_events_from_db()
+        print(f"Events from DB: {events}")  # ← Debug
+        print(f"Type: {type(events)}")      # ← Debug
+        return jsonify(events)
+    except Exception as e:
+        print(f"Error in get_events: {e}")  # ← Debug
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/session-stats')
 def session_stats():
