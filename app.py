@@ -458,15 +458,23 @@ def get_filters():
             LapTime.car_name != ''
         ).all()
         
+        # ✅ NEU: Nur nicht-leere Event IDs holen
+        events = db.session.query(LapTime.event_id.distinct()).filter(
+            LapTime.event_id.isnot(None),
+            LapTime.event_id != ''
+        ).all()
+        
         return jsonify({
             'drivers': sorted([d[0] for d in drivers if d[0]]),
-            'cars': sorted([c[0] for c in cars if c[0]])
+            'cars': sorted([c[0] for c in cars if c[0]]),
+            'events': sorted([e[0] for e in events if e[0]])  # ✅ NEU
         })
     except Exception as e:
         print(f"Error in get_filters: {str(e)}")
         return jsonify({
             'drivers': [],
-            'cars': []
+            'cars': [],
+            'events': []  # ✅ NEU
         })
 
 # CSV Export
