@@ -248,7 +248,7 @@ function filterLaps() {
     if (dateFrom) params.append('date_from', dateFrom);
     if (dateTo) params.append('date_to', dateTo);
     
-    fetch('/smartrace_endpoint')
+    fetch(`/api/database?${params}`)
         .then(response => response.json())
         .then(data => {
             console.log('API Response:', data);
@@ -267,7 +267,7 @@ function loadData() {
     if (carFilter) params.append('car', carFilter);
     if (eventFilter) params.append('event', eventFilter); // ✅ NEU
     
-    fetch('/smartrace_endpoint')
+    fetch(`/api/database?${params}`)
         .then(response => response.json())
         .then(data => {
             currentData = data;
