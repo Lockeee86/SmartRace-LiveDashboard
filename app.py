@@ -230,17 +230,6 @@ def smartrace_endpoint():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 400
 
-#@app.route('/api/events')
-#def get_events():
-#    try:
-#        # Alle einzigartigen event_ids aus LapTime holen
-#        events = db.session.query(LapTime.event_id).distinct().all()
-#        event_list = [{'event_id': event[0]} for event in events if event[0]]
-#        
-#        return jsonify(event_list)
-#    except Exception as e:
-#        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/drivers')
 def get_drivers():
     drivers = get_all_drivers_from_db()  # Deine DB-Funktion
@@ -251,16 +240,30 @@ def get_cars():
     cars = get_all_cars_from_db()  # Deine DB-Funktion
     return jsonify(cars)
 
+def get_all_events_from_db():
+    """Holt alle Events aus der Datenbank"""
+    conn = sqlite3.connect('smartrace_data.db')
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT DISTINCT event_name 
+        FROM smartrace_data 
+        WHERE event_name IS NOT NULL 
+        ORDER BY event_name
+    """)
+    
+    events = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return events
+
 @app.route('/api/events')  
 def get_events():
     try:
         events = get_all_events_from_db()
-        print(f"Events from DB: {events}")  # ← Debug
-        print(f"Type: {type(events)}")      # ← Debug
         return jsonify(events)
     except Exception as e:
-        print(f"Error in get_events: {e}")  # ← Debug
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/session-stats')
 def session_stats():
