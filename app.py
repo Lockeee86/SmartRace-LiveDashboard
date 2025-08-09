@@ -165,7 +165,7 @@ def smartrace_endpoint():
         
         # Event speichern
         event = Event(
-            event_id=event_id,  # ✅ Event ID hinzufügen!
+            event_id=event_id,
             event_type=data.get('event_type'),
             data=json.dumps(data)
         )
@@ -175,10 +175,25 @@ def smartrace_endpoint():
         if data.get('event_type') == 'ui.lap_update':
             event_data = data.get('event_data', {})
             
-            # ... (Controller-Farbe Code bleibt gleich) ...
+            # ✅ FEHLENDE VARIABLEN DEFINIEREN:
+            controller_id = event_data.get('controller_id', '0')
+            driver_name = event_data.get('driver_name')
+            car_name = event_data.get('car_name')
+            
+            # Controller-Farbe aus den Daten extrahieren
+            controller_color = '#333333'  # Default
+            if 'controller_data' in event_data and event_data['controller_data']:
+                color_raw = event_data['controller_data'].get('color', '#333333')
+                controller_color = rgb_to_hex(color_raw)
+            
+            # Auto-Farbe extrahieren
+            car_color = '#000000'  # Default
+            if 'car_data' in event_data and event_data['car_data']:
+                color_raw = event_data['car_data'].get('color', '#000000')
+                car_color = rgb_to_hex(color_raw)
             
             lap_time = LapTime(
-                event_id=event_id,  # ✅ Event ID hinzufügen!
+                event_id=event_id,
                 controller_id=controller_id,
                 driver_name=driver_name,
                 car_name=car_name,
@@ -188,7 +203,7 @@ def smartrace_endpoint():
                 sector_1=event_data.get('sector_1'),
                 sector_2=event_data.get('sector_2'),
                 sector_3=event_data.get('sector_3'),
-                car_color=event_data.get('car_data', {}).get('color') if event_data.get('car_data') else '#000000',
+                car_color=car_color,
                 controller_color=controller_color,
                 is_pb=event_data.get('lap_pb', False)
             )
@@ -204,6 +219,7 @@ def smartrace_endpoint():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 400
+
 
 
 @app.route('/api/events')
@@ -275,7 +291,6 @@ def session_stats():
                          session=current_session,
                          stats=stats, 
                          recent_laps=recent_laps)
-
 
 @app.route('/api/live-data')
 def live_data():
@@ -418,8 +433,6 @@ def database_data():
         })
     
     return jsonify(result)
-
-
 
 # API für Filter-Optionen
 @app.route('/api/filters')
