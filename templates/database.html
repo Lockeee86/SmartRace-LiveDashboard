@@ -11,44 +11,30 @@
 
 <!-- Filter und Export Sektion -->
 <div class="row mb-4">
-    <div class="col-md-2">
-        <select id="driverFilter" class="form-select" onchange="filterLaps()">
+    <div class="col-md-3">
+        <select id="driverFilter" class="form-select">
             <option value="">Alle Fahrer</option>
         </select>
     </div>
-    <div class="col-md-2">
-        <select id="carFilter" class="form-select" onchange="filterLaps()">
+    <div class="col-md-3">
+        <select id="carFilter" class="form-select">
             <option value="">Alle Autos</option>
         </select>
     </div>
-    <!-- ✅ Event Filter -->
-    <div class="col-md-2">
-        <select id="eventFilter" class="form-select" onchange="filterLaps()">
-            <option value="">Alle Events</option>
-        </select>
-    </div>
-    <!-- ✅ NEU: Date Picker -->
-    <div class="col-md-2">
-        <input type="date" id="dateFilter" class="form-control" onchange="filterLaps()" placeholder="Von Datum">
-    </div>
-    <div class="col-md-2">
-        <input type="date" id="dateFilterEnd" class="form-control" onchange="filterLaps()" placeholder="Bis Datum">
-    </div>
-    <div class="col-md-2">
+    <div class="col-md-6">
         <div class="btn-group w-100" role="group">
             <button type="button" class="btn btn-success" onclick="exportCSV()">
-                <i class="fas fa-download"></i> CSV
+                <i class="fas fa-download"></i> CSV Export
             </button>
             <button type="button" class="btn btn-primary" onclick="exportDropbox()" id="dropboxBtn">
-                <i class="fab fa-dropbox"></i>
+                <i class="fab fa-dropbox"></i> Zu Dropbox
             </button>
             <button type="button" class="btn btn-outline-secondary" onclick="showDropboxConfig()">
-                <i class="fas fa-cog"></i>
+                <i class="fas fa-cog"></i> Dropbox Setup
             </button>
         </div>
     </div>
 </div>
-
 
 <!-- Export Status -->
 <div id="exportStatus" class="alert d-none" role="alert"></div>
@@ -98,7 +84,6 @@
                     <table class="table table-striped">
                         <thead>
                             <tr>
-                                <th>Event ID</th>
                                 <th>Fahrer</th>
                                 <th>Auto</th>
                                 <th>Runde</th>
@@ -165,37 +150,16 @@
 let currentData = [];
 let dropboxConfigured = false;
 
-// ✅ NEU: Events laden
-function loadEvents() {
-    fetch('/api/events')
-        .then(response => response.json())
-        .then(data => {
-            const eventSelect = document.getElementById('eventFilter');
-            eventSelect.innerHTML = '<option value="">Alle Events</option>';
-            
-            data.forEach(event => {
-                const option = document.createElement('option');
-                option.value = event.event_id;
-                option.textContent = event.event_id;
-                eventSelect.appendChild(option);
-            });
-        })
-        .catch(error => {
-            console.error('Error loading events:', error);
-        });
-}
-
 function loadFilters() {
     fetch('/api/filters')
         .then(response => response.json())
         .then(data => {
             const driverSelect = document.getElementById('driverFilter');
             const carSelect = document.getElementById('carFilter');
-            const eventSelect = document.getElementById('eventFilter'); // ✅ NEU
             
+            // Clear existing options (except first)
             driverSelect.innerHTML = '<option value="">Alle Fahrer</option>';
             carSelect.innerHTML = '<option value="">Alle Autos</option>';
-            eventSelect.innerHTML = '<option value="">Alle Events</option>'; // ✅ NEU
             
             data.drivers.forEach(driver => {
                 const option = document.createElement('option');
@@ -211,61 +175,19 @@ function loadFilters() {
                 carSelect.appendChild(option);
             });
             
-            // ✅ NEU: Events laden
-            data.events.forEach(event => {
-                const option = document.createElement('option');
-                option.value = event;
-                option.textContent = event;
-                eventSelect.appendChild(option);
-            });
-            
+            // Update statistics
             document.getElementById('totalDrivers').textContent = data.drivers.length;
             document.getElementById('totalCars').textContent = data.cars.length;
-            document.getElementById('totalEvents').textContent = data.events.length; // ✅ Falls du das anzeigen willst
         });
 }
 
-function filterLaps() {
-    const driverFilter = document.getElementById('driverFilter').value;
-    const carFilter = document.getElementById('carFilter').value;
-    const eventFilter = document.getElementById('eventFilter').value;
-    const dateFrom = document.getElementById('dateFilter').value;
-    const dateTo = document.getElementById('dateFilterEnd').value;
-    
-    console.log('Filter Values:', {
-        driver: driverFilter,
-        car: carFilter, 
-        event: eventFilter,
-        date_from: dateFrom,
-        date_to: dateTo
-    });
-    
-    // URL Parameter aufbauen
-    let params = new URLSearchParams();
-    if (driverFilter) params.append('driver', driverFilter);
-    if (carFilter) params.append('car', carFilter);
-    if (eventFilter) params.append('event', eventFilter);
-    if (dateFrom) params.append('date_from', dateFrom);
-    if (dateTo) params.append('date_to', dateTo);
-    
-    fetch(`/api/database?${params}`)
-        .then(response => response.json())
-        .then(data => {
-            console.log('API Response:', data);
-            displayLapTimes(data);
-        })
-        .catch(error => console.error('Filter error:', error));
-}
-    
 function loadData() {
     const driverFilter = document.getElementById('driverFilter').value;
     const carFilter = document.getElementById('carFilter').value;
-    const eventFilter = document.getElementById('eventFilter').value; // ✅ NEU
     
     const params = new URLSearchParams();
     if (driverFilter) params.append('driver', driverFilter);
     if (carFilter) params.append('car', carFilter);
-    if (eventFilter) params.append('event', eventFilter); // ✅ NEU
     
     fetch(`/api/database?${params}`)
         .then(response => response.json())
@@ -279,7 +201,6 @@ function loadData() {
                 if (lap.is_pb) row.classList.add('table-success');
                 
                 row.innerHTML = `
-                    <td>${lap.event_id || '-'}</td>
                     <td>${lap.driver || '-'}</td>
                     <td>${lap.car || '-'}</td>
                     <td>${lap.lap || '-'}</td>
@@ -294,8 +215,10 @@ function loadData() {
                 tbody.appendChild(row);
             });
             
+            // Update statistics
             document.getElementById('filteredRows').textContent = data.length;
             
+            // Get total laps count
             fetch('/api/database')
                 .then(response => response.json())
                 .then(allData => {
@@ -308,55 +231,17 @@ function loadData() {
         });
 }
 
-function displayLapTimes(data) {
-     const tableBody = document.getElementById('dataTable');
-    
-    if (!tableBody) {
-        console.error('Table tbody not found!');
-        return;
-    }
-    
-    // Tabelle leeren
-    tableBody.innerHTML = '';
-    
-    // Neue Daten einfügen
-    data.forEach(lap => {
-        const row = document.createElement('tr');
-        
-        // PB Highlight
-        if (lap.is_pb) {
-            row.classList.add('table-warning'); // Bootstrap Klasse für Highlight
-        }
-        
-        row.innerHTML = `
-            <td>${lap.driver_name || 'Unbekannt'}</td>
-            <td>${lap.car_name || 'Unbekannt'}</td>
-            <td>${lap.track_name || 'Unbekannt'}</td>
-            <td>${lap.lap_time || 'N/A'}</td>
-            <td>${lap.sector_1 || 'N/A'}</td>
-            <td>${lap.sector_2 || 'N/A'}</td>
-            <td>${lap.sector_3 || 'N/A'}</td>
-            <td>${lap.event_type || 'N/A'}</td>
-            <td>${lap.timestamp ? new Date(lap.timestamp).toLocaleString() : 'N/A'}</td>
-            <td>${lap.is_pb ? '🏆' : ''}</td>
-        `;
-        
-        tableBody.appendChild(row);
-    });
-}
-
 function exportCSV() {
     const driverFilter = document.getElementById('driverFilter').value;
     const carFilter = document.getElementById('carFilter').value;
-    const eventFilter = document.getElementById('eventFilter').value; // ✅ NEU
     
     const params = new URLSearchParams();
     if (driverFilter) params.append('driver', driverFilter);
     if (carFilter) params.append('car', carFilter);
-    if (eventFilter) params.append('event', eventFilter); // ✅ NEU
     
     showStatus('CSV Export wird erstellt...', 'info');
     
+    // Download CSV
     const link = document.createElement('a');
     link.href = `/api/export/csv?${params}`;
     link.download = `smartrace_export_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`;
@@ -369,18 +254,174 @@ function exportCSV() {
     }, 1000);
 }
 
-// ... alle anderen Funktionen bleiben gleich ...
+function exportDropbox() {
+    if (!dropboxConfigured) {
+        showStatus('Bitte konfiguriere zuerst Dropbox über das Setup.', 'warning');
+        showDropboxConfig();
+        return;
+    }
+    
+    const driverFilter = document.getElementById('driverFilter').value;
+    const carFilter = document.getElementById('carFilter').value;
+    
+    showStatus('Upload zu Dropbox...', 'info');
+    
+    fetch('/api/dropbox/backup', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            let message = `✅ Export erfolgreich! ${data.records} Einträge zu Dropbox hochgeladen.<br>`;
+            message += `📁 Datei: backup_${new Date().toISOString().slice(0, 10)}.csv`;
+            showStatus(message, 'success');
+        } else {
+            showStatus(`❌ Export fehlgeschlagen: ${data.error}`, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showStatus('❌ Netzwerkfehler beim Dropbox Export', 'danger');
+    });
+}
 
-// Event Listeners - ✅ NEU erweitern:
+function showDropboxConfig() {
+    checkDropboxStatus();
+    const modal = new bootstrap.Modal(document.getElementById('dropboxModal'));
+    modal.show();
+}
+
+function checkDropboxStatus() {
+    fetch('/api/dropbox/test')
+        .then(response => response.json())
+        .then(data => {
+            dropboxConfigured = data.success;
+            const statusDiv = document.getElementById('dropboxStatus');
+            
+            if (data.success) {
+                statusDiv.innerHTML = `<div class="alert alert-success">
+                    <i class="fas fa-check"></i> Dropbox ist verbunden<br>
+                    <strong>Account:</strong> ${data.account}
+                </div>`;
+                document.getElementById('dropboxBtn').disabled = false;
+            } else {
+                statusDiv.innerHTML = '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> Dropbox nicht konfiguriert</div>';
+                document.getElementById('dropboxBtn').disabled = true;
+            }
+        })
+        .catch(error => {
+            console.error('Dropbox check error:', error);
+            dropboxConfigured = false;
+            document.getElementById('dropboxBtn').disabled = true;
+        });
+}
+
+// NEUE FUNKTIONEN - Verwenden die reparierte Backend API
+function saveDropboxConfig() {
+    const token = document.getElementById('dropboxToken').value.trim();
+    
+    if (!token) {
+        alert('Bitte gib einen Access Token ein.');
+        return;
+    }
+    
+    const statusDiv = document.getElementById('dropboxStatus');
+    statusDiv.innerHTML = '<div class="alert alert-info">Konfiguration wird gespeichert...</div>';
+    
+    fetch('/api/dropbox/setup', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            token: token
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            dropboxConfigured = true;
+            document.getElementById('dropboxBtn').disabled = false;
+            
+            statusDiv.innerHTML = `<div class="alert alert-success">
+                <i class="fas fa-check"></i> Erfolgreich verbunden!<br>
+                <strong>Nachricht:</strong> ${data.message}
+            </div>`;
+            
+            showStatus('Dropbox erfolgreich konfiguriert!', 'success');
+            
+            // Token löschen für Sicherheit
+            document.getElementById('dropboxToken').value = '';
+            
+            // Modal nach 2 Sekunden schließen
+            setTimeout(() => {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('dropboxModal'));
+                modal.hide();
+            }, 2000);
+        } else {
+            statusDiv.innerHTML = `<div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> Konfiguration fehlgeschlagen: ${data.error}
+            </div>`;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        statusDiv.innerHTML = '<div class="alert alert-danger">Netzwerkfehler bei der Konfiguration</div>';
+    });
+}
+
+function testDropboxConnection() {
+    const statusDiv = document.getElementById('dropboxStatus');
+    statusDiv.innerHTML = '<div class="alert alert-info">Verbindung wird getestet...</div>';
+    
+    fetch('/api/dropbox/test')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                dropboxConfigured = true;
+                statusDiv.innerHTML = `<div class="alert alert-success">
+                    <i class="fas fa-check"></i> ✅ Verbindung erfolgreich!<br>
+                    <strong>Account:</strong> ${data.account}
+                </div>`;
+                document.getElementById('dropboxBtn').disabled = false;
+            } else {
+                dropboxConfigured = false;
+                statusDiv.innerHTML = `<div class="alert alert-danger">
+                    <i class="fas fa-times"></i> ❌ Verbindung fehlgeschlagen: ${data.error}
+                </div>`;
+                document.getElementById('dropboxBtn').disabled = true;
+            }
+        })
+        .catch(error => {
+            console.error('Test error:', error);
+            statusDiv.innerHTML = '<div class="alert alert-danger">Netzwerkfehler beim Test</div>';
+        });
+}
+
+function showStatus(message, type) {
+    const statusDiv = document.getElementById('exportStatus');
+    statusDiv.className = `alert alert-${type}`;
+    statusDiv.innerHTML = message;
+    statusDiv.classList.remove('d-none');
+    
+    // Auto-hide nach 5 Sekunden (außer bei Fehlern)
+    if (type !== 'danger') {
+        setTimeout(() => {
+            statusDiv.classList.add('d-none');
+        }, 5000);
+    }
+}
+
+// Event Listeners
 document.getElementById('driverFilter').addEventListener('change', loadData);
 document.getElementById('carFilter').addEventListener('change', loadData);
-document.getElementById('eventFilter').addEventListener('change', loadData); // ✅ NEU
 
-// Initial load - ✅ erweitern:
+// Initial load
 loadFilters();
-loadEvents(); // ✅ NEU
 loadData();
 checkDropboxStatus();
 </script>
-
 {% endblock %}
