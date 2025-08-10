@@ -239,14 +239,14 @@ async function updateDashboard() {
 function updateSessionFastestLap() {
     let fastestLap = null;
     
-    Object.keys(dashboardData).forEach(controllerId => {
+    Object.keys(dashboardData).forEach(controllerId => {  // ✅ dashboardData
         const controllerData = dashboardData[controllerId];
         
-        if (controllerData && controllerData.best_time) {
-            if (!fastestLap || controllerData.best_time < fastestLap.time) {
+        if (controllerData && controllerData.best_time_raw) {  // ✅ _raw verwenden
+            if (!fastestLap || controllerData.best_time_raw < fastestLap.time) {
                 fastestLap = {
-                    time: controllerData.best_time,
-                    driver: controllerData.name
+                    time: controllerData.best_time_raw,
+                    driver: controllerData.name || `Driver ${controllerId}`
                 };
             }
         }
@@ -314,10 +314,6 @@ function updateMainStats() {
     
     console.log(`📊 Aktuelle Session: ${totalLaps} Runden, ${activeDrivers} Fahrer`);
 }
-
-
-
-
 
 function updateControllerTables() {
     console.log('🔍 DEBUG: dashboardData =', dashboardData);
