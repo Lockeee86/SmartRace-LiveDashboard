@@ -42,6 +42,7 @@ class Event(db.Model):
 class LapTime(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     event_id = db.Column(db.String(100))
+    event_type = db.Column(db.String(50))
     controller_id = db.Column(db.String(10))
     driver_name = db.Column(db.String(100))
     car_name = db.Column(db.String(100))
