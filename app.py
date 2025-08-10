@@ -137,7 +137,7 @@ def leaderboard():
 
 @app.route('/database')
 def database_view():
-    return render_template('database.html'
+    return render_template('database.html')
 
 # SmartRace Datenschnittstelle
 @app.route('/api/smartrace', methods=['POST', 'OPTIONS'])
