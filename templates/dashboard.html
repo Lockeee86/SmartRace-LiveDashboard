@@ -449,30 +449,20 @@ function updateControllerTables() {
     }
 }
 
+// ✅ TRACK RECORD:
 function updateTrackRecord() {
-    // Simuliere Streckenrekord basierend auf aktueller Session
     if (sessionFastestLap && (!trackRecord || sessionFastestLap.time < trackRecord.time)) {
         trackRecord = {
             time: sessionFastestLap.time,
             driver: sessionFastestLap.driver,
             date: new Date().toLocaleDateString('de-DE')
         };
-        
-        // Visual feedback für neuen Rekord
-        const recordCard = document.querySelector('.bg-success');
-        recordCard.classList.add('border', 'border-warning');
-        recordCard.style.animation = 'pulse 1s ease-in-out 3';
     }
     
     if (trackRecord) {
         document.getElementById('track-record-time').textContent = formatTime(trackRecord.time);
         document.getElementById('track-record-driver').textContent = trackRecord.driver;
         document.getElementById('track-record-date').textContent = trackRecord.date;
-    } else {
-        // Fallback-Rekord
-        document.getElementById('track-record-time').textContent = '1:23.456';
-        document.getElementById('track-record-driver').textContent = 'Max Verstappen';
-        document.getElementById('track-record-date').textContent = '2024-01-15';
     }
 }
 
