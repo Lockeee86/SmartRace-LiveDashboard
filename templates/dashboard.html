@@ -63,6 +63,7 @@
                         <div class="driver-info">
                             <div class="driver-name">-</div>
                             <div class="car-name">-</div>
+                            <div class="best-time">🏆 1:23.456</div> <!-- DAS FEHLT! -->
                         </div>
                         <div class="table-responsive">
                             <table class="table table-sm">
@@ -85,6 +86,7 @@
                         <div class="driver-info">
                             <div class="driver-name">-</div>
                             <div class="car-name">-</div>
+                            <div class="best-time">🏆 1:23.456</div> <!-- DAS FEHLT! -->
                         </div>
                         <div class="table-responsive">
                             <table class="table table-sm">
@@ -107,6 +109,7 @@
                         <div class="driver-info">
                             <div class="driver-name">-</div>
                             <div class="car-name">-</div>
+                            <div class="best-time">🏆 1:23.456</div> <!-- DAS FEHLT! -->
                         </div>
                         <div class="table-responsive">
                             <table class="table table-sm">
@@ -129,6 +132,7 @@
                         <div class="driver-info">
                             <div class="driver-name">-</div>
                             <div class="car-name">-</div>
+                            <div class="best-time">🏆 1:23.456</div> <!-- DAS FEHLT! -->
                         </div>
                         <div class="table-responsive">
                             <table class="table table-sm">
@@ -151,6 +155,7 @@
                         <div class="driver-info">
                             <div class="driver-name">-</div>
                             <div class="car-name">-</div>
+                            <div class="best-time">🏆 1:23.456</div> <!-- DAS FEHLT! -->
                         </div>
                         <div class="table-responsive">
                             <table class="table table-sm">
@@ -173,6 +178,7 @@
                         <div class="driver-info">
                             <div class="driver-name">-</div>
                             <div class="car-name">-</div>
+                            <div class="best-time">🏆 1:23.456</div> <!-- DAS FEHLT! -->
                         </div>
                         <div class="table-responsive">
                             <table class="table table-sm">
@@ -392,12 +398,36 @@ function updateControllerTables() {
                         
                     const myBestTime = myTimes.length > 0 ? Math.min(...myTimes) : null;
                     
-                    // Nur anzeigen wenn dieser Controller die Session-Bestzeit hat
-                    if (myBestTime === sessionBestTime) {
-                        const bestTimeText = ` (🏆 ${formatTime(sessionBestTime)})`;
-                        driverName.textContent = (controllerData.name || `Driver ${controllerId}`) + bestTimeText;
-                        console.log(`🏆 Controller ${controllerId} hat die Session-Bestzeit!`);
+                    // ✅ PERSÖNLICHE beste Zeit JEDES Controllers anzeigen
+                    if (controllerData.laps && controllerData.laps.length > 0) {
+                        const myTimes = controllerData.laps
+                            .map(lap => lap.laptime_raw || 0)
+                            .filter(time => time > 0);
+                            
+                        if (myTimes.length > 0) {
+                            const myBestTime = Math.min(...myTimes);
+                            
+                            // Prüfen ob es die Session-Bestzeit ist
+                            let allSessionTimes = [];
+                            for (let i = 1; i <= 6; i++) {
+                                const otherControllerData = window.currentLogData ? window.currentLogData[`controller_${i}`] : null;
+                                if (otherControllerData && otherControllerData.laps) {
+                                    const times = otherControllerData.laps
+                                        .map(lap => lap.laptime_raw || 0)
+                                        .filter(time => time > 0);
+                                    allSessionTimes = allSessionTimes.concat(times);
+                                }
+                            }
+                            
+                            const sessionBestTime = allSessionTimes.length > 0 ? Math.min(...allSessionTimes) : null;
+                            const isSessionBest = myBestTime === sessionBestTime;
+                            
+                            // IMMER persönliche Bestzeit anzeigen
+                            const bestTimeText = ` (${isSessionBest ? '🏆' : '⏱️'} ${formatTime(myBestTime)})`;
+                            driverName.textContent = (controllerData.name || `Driver ${controllerId}`) + bestTimeText;
+                        }
                     }
+
                 }
             }
 
