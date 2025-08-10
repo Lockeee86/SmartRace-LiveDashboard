@@ -501,7 +501,7 @@ def get_filters():
 @app.route('/test-pb')
 def test_pb():
     pb_laps = LapTime.query.filter_by(is_pb=True).all()
-    result = [f"Driver: {lap.driver_name}, Lap: {lap.lap_time}" for lap in pb_laps]
+    result = [f"Driver: {lap.driver_name}, Lap: {lap.laptime}" for lap in pb_laps]
     return f"Personal Bests found: {len(result)}<br>" + "<br>".join(result)
 
 # CSV Export
