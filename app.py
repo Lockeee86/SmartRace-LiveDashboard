@@ -139,6 +139,12 @@ def leaderboard():
 def database_view():
     return render_template('database.html')
 
+@app.route('/test-pb')
+def test_pb():
+    pb_laps = LapTime.query.filter_by(is_pb=True).all()
+    result = [f"Driver: {lap.driver_name}, Lap: {lap.lap_time}" for lap in pb_laps]
+    return f"Personal Bests found: {len(result)}<br>" + "<br>".join(result)
+
 # SmartRace Datenschnittstelle
 @app.route('/api/smartrace', methods=['POST', 'OPTIONS'])
 def smartrace_endpoint():
