@@ -339,13 +339,13 @@ function updateControllerTables() {
         document.getElementById('sessionToggle').checked : true;
     
     console.log('🔍 DEBUG: dashboardData =', dashboardData);
-    console.log('📊 SHOW_ONLY_CURRENT_SESSION =', SHOW_ONLY_CURRENT_SESSION);
-    console.log('🔍 DEBUG: dashboardData =', dashboardData);
-    console.log('🔍 DEBUG: Erste Lap-Struktur:', controllerData?.laps?.[0]);
     
     for (let controllerId = 1; controllerId <= 6; controllerId++) {
         const controllerData = dashboardData[controllerId.toString()];
         console.log(`🔍 DEBUG Controller ${controllerId}:`, controllerData);
+        console.log('📊 SHOW_ONLY_CURRENT_SESSION =', SHOW_ONLY_CURRENT_SESSION);
+        console.log('🔍 DEBUG: dashboardData =', dashboardData);
+        console.log('🔍 DEBUG: Erste Lap-Struktur:', controllerData?.laps?.[0]);
         
         // ✅ SESSION-FILTERUNG HIER EINFÜGEN
         let filteredControllerData = controllerData;
