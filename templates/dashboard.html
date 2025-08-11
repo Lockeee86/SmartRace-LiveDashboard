@@ -15,7 +15,7 @@
         <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" id="sessionToggle" checked>
             <label class="form-check-label fw-bold" for="sessionToggle">
-                📊 Nur aktuelle Session anzeigen
+                aktuelle Session
             </label>
         </div>
     </div>
@@ -335,7 +335,11 @@ function updateMainStats() {
 }
 
 function updateControllerTables() {
-    const SHOW_ONLY_CURRENT_SESSION = true;
+    const SHOW_ONLY_CURRENT_SESSION = document.getElementById('sessionToggle') ? 
+        document.getElementById('sessionToggle').checked : true;
+    
+    console.log('🔍 DEBUG: dashboardData =', dashboardData);
+    console.log('📊 SHOW_ONLY_CURRENT_SESSION =', SHOW_ONLY_CURRENT_SESSION);
     console.log('🔍 DEBUG: dashboardData =', dashboardData);
     
     for (let controllerId = 1; controllerId <= 6; controllerId++) {
@@ -625,6 +629,17 @@ style.textContent = `
         font-size: 13px;
         border-bottom: 1px solid rgba(0,0,0,0.1);
     }
+
+    .form-switch .form-check-input:checked {
+        background-color: #28a745;
+        border-color: #28a745;
+    }
+    
+    .form-check-label {
+        cursor: pointer;
+        user-select: none;
+    }
+
     
     /* Responsive */
     @media (max-width: 1200px) {
@@ -640,6 +655,16 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+document.addEventListener('DOMContentLoaded', function() {
+    const sessionToggle = document.getElementById('sessionToggle');
+    if (sessionToggle) {
+        sessionToggle.addEventListener('change', function() {
+            console.log('🎛️ Toggle geändert:', this.checked);
+            // Dashboard sofort neu laden
+            updateControllerTables();
+        });
+    }
+});
 
 // Initial load und regelmäßige Updates
 updateDashboard();
