@@ -322,11 +322,35 @@ function updateMainStats() {
 }
 
 function updateControllerTables() {
+    const SHOW_ONLY_CURRENT_SESSION = true;
     console.log('🔍 DEBUG: dashboardData =', dashboardData);
     
     for (let controllerId = 1; controllerId <= 6; controllerId++) {
         const controllerData = dashboardData[controllerId.toString()];
         console.log(`🔍 DEBUG Controller ${controllerId}:`, controllerData);
+        
+        // ✅ SESSION-FILTERUNG HIER EINFÜGEN
+        let filteredControllerData = controllerData;
+        
+        if (SHOW_ONLY_CURRENT_SESSION && controllerData && controllerData.laps && controllerData.laps.length > 0) {
+            // Aktuelle Session ID ermitteln (neueste Runde)
+            const currentSessionId = controllerData.laps[0].session_id;
+            
+            if (currentSessionId) {
+                // Nur Runden der aktuellen Session
+                const currentSessionLaps = controllerData.laps.filter(lap => 
+                    lap.session_id === currentSessionId
+                );
+                
+                console.log(`📊 Controller ${controllerId}: ${currentSessionLaps.length} Runden in Session ${currentSessionId}`);
+                
+                // Gefilterte Daten erstellen
+                filteredControllerData = {
+                    ...controllerData,
+                    laps: currentSessionLaps
+                };
+            }
+        }
         
         const tableBody = document.getElementById(`controller-${controllerId}-times`);
         const driverName = document.querySelector(`#controller-${controllerId} .driver-name`);
@@ -336,28 +360,20 @@ function updateControllerTables() {
         // ✅ IMMER eine Farbe setzen (auch ohne Daten)
         let controllerColor;
         
-        if (controllerData && controllerData.color) {
-            // Farbe aus Datenbank
-            controllerColor = controllerData.color;
-            console.log(`🎨 DB-Farbe Controller ${controllerId}:`, controllerColor);
+        if (filteredControllerData && filteredControllerData.color) {
+            controllerColor = filteredControllerData.color;
         } else {
-            // Fallback-Farbe
             controllerColor = getDefaultControllerColor(controllerId);
-            console.log(`🎨 Fallback-Farbe Controller ${controllerId}:`, controllerColor);
         }
         
         // ✅ IMMER Background setzen
         const lightColor = hexToRgba(controllerColor, 0.2);
         const mediumColor = hexToRgba(controllerColor, 0.3);
         
-        console.log(`🎨 Setze Farben für Controller ${controllerId}: light=${lightColor}, medium=${mediumColor}`);
-        
-        // Background setzen (auch ohne Daten!)
         controllerTable.style.setProperty('background', lightColor, 'important');
         controllerTable.style.setProperty('border-left', `6px solid ${controllerColor}`, 'important');
         controllerTable.style.setProperty('box-shadow', `0 2px 8px ${hexToRgba(controllerColor, 0.3)}`, 'important');
         
-        // Driver-Info Background
         const driverInfo = controllerTable.querySelector('.driver-info');
         if (driverInfo) {
             driverInfo.style.setProperty('background', mediumColor, 'important');
@@ -365,82 +381,53 @@ function updateControllerTables() {
             driverInfo.style.setProperty('color', '#000', 'important');
         }
         
-        if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
-            // ✅ Update Fahrer/Auto Info
-            driverName.textContent = controllerData.name || `Driver ${controllerId}`;
-            carName.textContent = controllerData.car || `Car ${controllerId}`;
+        if (filteredControllerData && filteredControllerData.laps && filteredControllerData.laps.length > 0) {
+            driverName.textContent = filteredControllerData.name || `Driver ${controllerId}`;
+            carName.textContent = filteredControllerData.car || `Car ${controllerId}`;
             
-            // ✅ SESSION-weite beste Zeit berechnen
-            if (controllerData.laps && controllerData.laps.length > 0) {
-                // Alle Zeiten von ALLEN Controllern sammeln
-                let allSessionTimes = [];
+            // ✅ BESTE ZEIT für aktuelle Session berechnen
+            const myTimes = filteredControllerData.laps
+                .map(lap => lap.laptime_raw || 0)
+                .filter(time => time > 0);
                 
-                // Durch alle Controller gehen
+            if (myTimes.length > 0) {
+                const myBestTime = Math.min(...myTimes);
+                
+                // Alle Session-Zeiten von ALLEN Controllern sammeln
+                let allSessionTimes = [];
                 for (let i = 1; i <= 6; i++) {
-                    const otherControllerData = window.currentLogData ? window.currentLogData[`controller_${i}`] : null;
-                    if (otherControllerData && otherControllerData.laps) {
-                        const times = otherControllerData.laps
+                    const otherData = dashboardData[i.toString()];
+                    if (otherData && otherData.laps) {
+                        let otherLaps = otherData.laps;
+                        
+                        // Auch für andere Controller Session-Filter anwenden
+                        if (SHOW_ONLY_CURRENT_SESSION && otherLaps.length > 0) {
+                            const sessionId = otherLaps[0].session_id;
+                            otherLaps = otherLaps.filter(lap => lap.session_id === sessionId);
+                        }
+                        
+                        const times = otherLaps
                             .map(lap => lap.laptime_raw || 0)
                             .filter(time => time > 0);
                         allSessionTimes = allSessionTimes.concat(times);
                     }
                 }
                 
-                console.log(`🔍 Alle Session-Zeiten:`, allSessionTimes);
+                const sessionBestTime = allSessionTimes.length > 0 ? Math.min(...allSessionTimes) : null;
+                const isSessionBest = myBestTime === sessionBestTime;
                 
-                if (allSessionTimes.length > 0) {
-                    const sessionBestTime = Math.min(...allSessionTimes);
-                    
-                    // Prüfen ob DIESER Controller die beste Zeit hat
-                    const myTimes = controllerData.laps
-                        .map(lap => lap.laptime_raw || 0)
-                        .filter(time => time > 0);
-                        
-                    const myBestTime = myTimes.length > 0 ? Math.min(...myTimes) : null;
-                    
-                    // ✅ PERSÖNLICHE beste Zeit JEDES Controllers anzeigen
-                    if (controllerData.laps && controllerData.laps.length > 0) {
-                        const myTimes = controllerData.laps
-                            .map(lap => lap.laptime_raw || 0)
-                            .filter(time => time > 0);
-                            
-                        if (myTimes.length > 0) {
-                            const myBestTime = Math.min(...myTimes);
-                            
-                            // Prüfen ob es die Session-Bestzeit ist
-                            let allSessionTimes = [];
-                            for (let i = 1; i <= 6; i++) {
-                                const otherControllerData = window.currentLogData ? window.currentLogData[`controller_${i}`] : null;
-                                if (otherControllerData && otherControllerData.laps) {
-                                    const times = otherControllerData.laps
-                                        .map(lap => lap.laptime_raw || 0)
-                                        .filter(time => time > 0);
-                                    allSessionTimes = allSessionTimes.concat(times);
-                                }
-                            }
-                            
-                            const sessionBestTime = allSessionTimes.length > 0 ? Math.min(...allSessionTimes) : null;
-                            const isSessionBest = myBestTime === sessionBestTime;
-                            
-                            // IMMER persönliche Bestzeit anzeigen
-                            const bestTimeText = ` (${isSessionBest ? '🏆' : '⏱️'} ${formatTime(myBestTime)})`;
-                            driverName.textContent = (controllerData.name || `Driver ${controllerId}`) + bestTimeText;
-                        }
-                    }
-
-                }
+                // Bestzeit im Namen anzeigen
+                const bestTimeText = ` (${isSessionBest ? '🏆' : '⏱️'} ${formatTime(myBestTime)})`;
+                driverName.textContent = (filteredControllerData.name || `Driver ${controllerId}`) + bestTimeText;
             }
-
-
             
-            // Letzte 6 Zeiten holen
-            const recentLaps = controllerData.laps.slice(0, 6);
-            
-            let personalBest = controllerData.best_time;
+            // Letzte 6 Zeiten holen (aus aktueller Session)
+            const recentLaps = filteredControllerData.laps.slice(0, 6);
+            const sessionBestTime = myTimes.length > 0 ? Math.min(...myTimes) : null;
             
             tableBody.innerHTML = recentLaps.map((lap, index) => {
                 const lapTime = lap.laptime_raw || 0;
-                const isPersonalBest = personalBest && lapTime === personalBest;
+                const isPersonalBest = sessionBestTime && lapTime === sessionBestTime;
                 const isLatest = index === 0;
                 
                 let rowClass = '';
@@ -464,7 +451,6 @@ function updateControllerTables() {
             }).join('');
             
         } else {
-            // Keine Daten - aber trotzdem Farbe setzen!
             driverName.textContent = `Controller ${controllerId}`;
             carName.textContent = 'Keine Daten';
             
@@ -478,6 +464,7 @@ function updateControllerTables() {
         }
     }
 }
+
 
 // ✅ TRACK RECORD:
 function updateTrackRecord() {
