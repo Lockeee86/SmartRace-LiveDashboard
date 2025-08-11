@@ -341,6 +341,7 @@ function updateControllerTables() {
     console.log('🔍 DEBUG: dashboardData =', dashboardData);
     console.log('📊 SHOW_ONLY_CURRENT_SESSION =', SHOW_ONLY_CURRENT_SESSION);
     console.log('🔍 DEBUG: dashboardData =', dashboardData);
+    console.log('🔍 DEBUG: Erste Lap-Struktur:', controllerData?.laps?.[0]);
     
     for (let controllerId = 1; controllerId <= 6; controllerId++) {
         const controllerData = dashboardData[controllerId.toString()];
