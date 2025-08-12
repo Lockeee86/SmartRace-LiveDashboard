@@ -422,8 +422,8 @@ function updateControllerTables() {
                 driverName.textContent = (filteredControllerData.name || `Driver ${controllerId}`) + bestTimeText;
             }
             
-            // Letzte 6 Zeiten holen (aus aktueller Session)
-            const recentLaps = filteredControllerData.laps.slice(0, 6);
+            // Letzte 10 Zeiten holen (aus aktueller Session)
+            const recentLaps = filteredControllerData.laps.slice(0, 10);
             const sessionBestTime = myTimes.length > 0 ? Math.min(...myTimes) : null;
             
             tableBody.innerHTML = recentLaps.map((lap, index) => {
