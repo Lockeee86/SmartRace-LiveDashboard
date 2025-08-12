@@ -327,14 +327,8 @@ function updateControllerTables() {
     const SHOW_ONLY_CURRENT_SESSION = document.getElementById('sessionToggle') ? 
         document.getElementById('sessionToggle').checked : true;
     
-    console.log('🔍 DEBUG: dashboardData =', dashboardData);
-    
     for (let controllerId = 1; controllerId <= 6; controllerId++) {
         const controllerData = dashboardData[controllerId.toString()];
-        console.log(`🔍 DEBUG Controller ${controllerId}:`, controllerData);
-        console.log('📊 SHOW_ONLY_CURRENT_SESSION =', SHOW_ONLY_CURRENT_SESSION);
-        console.log('🔍 DEBUG: dashboardData =', dashboardData);
-        console.log('🔍 DEBUG: Erste Lap-Struktur:', controllerData?.laps?.[0]);
         
         // ✅ SESSION-FILTERUNG HIER EINFÜGEN
         let filteredControllerData = controllerData;
@@ -402,7 +396,7 @@ function updateControllerTables() {
                 
                 // Alle Session-Zeiten von ALLEN Controllern sammeln
                 let allSessionTimes = [];
-                for (let i = 1; i <= 6; i++) {
+                for (let i = 1; i <= 10; i++) {
                     const otherData = dashboardData[i.toString()];
                     if (otherData && otherData.laps) {
                         let otherLaps = otherData.laps;
