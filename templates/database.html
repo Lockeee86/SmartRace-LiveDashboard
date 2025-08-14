@@ -9,6 +9,8 @@
     </div>
 </div>
 
+
+
 <!-- Filter und Export Sektion -->
 <div class="row mb-4">
     <div class="col-md-2">
@@ -29,6 +31,15 @@
         <button type="button" class="btn btn-outline-secondary" onclick="clearDateFilter()" title="Datum zurücksetzen">
             <i class="fas fa-times"></i>
         </button>
+    </div>
+    <div class="col-md-2">
+        <div class="btn-group" role="group">
+            <input type="radio" class="btn-check" name="sessionFilter" id="allSessions" checked>
+            <label class="btn btn-outline-primary" for="allSessions">Alle</label>
+            
+            <input type="radio" class="btn-check" name="sessionFilter" id="currentSession">
+            <label class="btn btn-outline-success" for="currentSession">Aktuelle Session</label>
+        </div>
     </div>
     <div class="col-md-5">
         <div class="btn-group w-100" role="group">
