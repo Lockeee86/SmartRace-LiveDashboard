@@ -366,7 +366,7 @@ function setupTableSorting() {
         });
     });
 }
-
+    
 function renderTable(data) {
     const tbody = document.getElementById('dataTable');
     tbody.innerHTML = '';
@@ -374,6 +374,12 @@ function renderTable(data) {
     data.forEach(lap => {
         const row = document.createElement('tr');
         if (lap.is_pb) row.classList.add('table-success');
+        
+        // 🎮 CONTROLLER-FARBE ALS ZEILEN-MARKIERUNG (Variante 1)
+        if (lap.controller_color) {
+            row.style.borderLeft = `4px solid ${lap.controller_color}`;
+            row.style.backgroundColor = `${lap.controller_color}15`; // 15 = ~8% Transparenz
+        }
         
         row.innerHTML = `
             <td><span class="badge bg-primary">${lap.session_id || lap.event_id || lap.race_id || '-'}</span></td>
