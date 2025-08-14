@@ -84,6 +84,7 @@
                     <table class="table table-striped">
                         <thead>
                             <tr>
+                                <th>Session</th><!-- ✅ NEU: Session-ID Spalte -->
                                 <th>Fahrer</th>
                                 <th>Auto</th>
                                 <th>Runde</th>
@@ -200,7 +201,9 @@ function loadData() {
                 const row = document.createElement('tr');
                 if (lap.is_pb) row.classList.add('table-success');
                 
+                // ✅ SESSION-ID wird als erste Spalte hinzugefügt
                 row.innerHTML = `
+                    <td><span class="badge bg-primary">${lap.session_id || lap.event_id || lap.race_id || '-'}</span></td>
                     <td>${lap.driver || '-'}</td>
                     <td>${lap.car || '-'}</td>
                     <td>${lap.lap || '-'}</td>
@@ -231,6 +234,7 @@ function loadData() {
         });
 }
 
+// ✅ REST DES JAVASCRIPT CODES BLEIBT UNVERÄNDERT
 function exportCSV() {
     const driverFilter = document.getElementById('driverFilter').value;
     const carFilter = document.getElementById('carFilter').value;
@@ -319,7 +323,6 @@ function checkDropboxStatus() {
         });
 }
 
-// NEUE FUNKTIONEN - Verwenden die reparierte Backend API
 function saveDropboxConfig() {
     const token = document.getElementById('dropboxToken').value.trim();
     
