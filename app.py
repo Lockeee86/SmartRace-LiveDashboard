@@ -309,48 +309,6 @@ def session_stats():
                          session=current_session,
                          stats=stats, 
                          recent_laps=recent_laps)
-@app.route('/api/laps')
-def get_laps():
-    try:
-        event_id = request.args.get('event_id', 'Training')
-        
-        # 🔍 AUS DER RICHTIGEN TABELLE LESEN (LapTime statt laptimes)
-        laps = LapTime.query.filter_by(event_id=event_id)\
-                           .order_by(LapTime.id.desc())\
-                           .all()
-        
-        # 🎯 EXPLIZITE FELDMAPPING
-        result = []
-        for lap in laps:
-            result.append({
-                'id': lap.id,
-                'event_id': lap.event_id,
-                'controller_id': lap.controller_id,
-                'driver': lap.driver_name,        # ← driver_name → driver
-                'car': lap.car_name,              # ← car_name → car  
-                'lap': lap.lap,
-                'laptime': lap.laptime,
-                'laptime_raw': lap.laptime_raw,
-                'sector_1': lap.sector_1,
-                'sector_2': lap.sector_2,
-                'sector_3': lap.sector_3,
-                'controller_color': lap.controller_color,  # ← DAS HIER!
-                'car_color': lap.car_color,
-                'is_pb': lap.is_pb,
-                'timestamp': lap.created_at.isoformat() if lap.created_at else None
-            })
-        
-        print(f"🔍 Found {len(result)} laps for event {event_id}")
-        if result:
-            print(f"🎨 First lap controller_color: {result[0]['controller_color']}")
-        
-        return jsonify(result)
-        
-    except Exception as e:
-        print(f"❌ Error in /api/laps: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
 
 @app.route('/api/live-data')
 def live_data():
