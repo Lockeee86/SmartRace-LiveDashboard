@@ -84,16 +84,36 @@
                     <table class="table table-striped">
                         <thead>
                             <tr>
-                                <th>Session</th><!-- ✅ NEU: Session-ID Spalte -->
-                                <th>Fahrer</th>
-                                <th>Auto</th>
-                                <th>Runde</th>
-                                <th>Rundenzeit</th>
-                                <th>Sektor 1</th>
-                                <th>Sektor 2</th>
-                                <th>Sektor 3</th>
-                                <th>Zeitstempel</th>
-                                <th>PB</th>
+                                <th class="sortable" data-column="session_id">
+                                    Session <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="sortable" data-column="driver">
+                                    Fahrer <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="sortable" data-column="car">
+                                    Auto <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="sortable" data-column="lap">
+                                    Runde <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="sortable" data-column="laptime">
+                                    Rundenzeit <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="sortable" data-column="sector_1">
+                                    Sektor 1 <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="sortable" data-column="sector_2">
+                                    Sektor 2 <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="sortable" data-column="sector_3">
+                                    Sektor 3 <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="sortable" data-column="timestamp">
+                                    Zeitstempel <i class="fas fa-sort sort-icon"></i>
+                                </th>
+                                <th class="sortable" data-column="is_pb">
+                                    PB <i class="fas fa-sort sort-icon"></i>
+                                </th>
                             </tr>
                         </thead>
                         <tbody id="dataTable">
@@ -146,10 +166,154 @@
 </div>
 {% endblock %}
 
+{% block styles %}
+<style>
+/* ✅ SORTIERBARE TABELLEN STYLES */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+.sortable:hover {
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.sort-icon {
+    margin-left: 5px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.sortable:hover .sort-icon {
+    opacity: 1;
+}
+
+.sortable.sort-asc .sort-icon:before {
+    content: "\f0de"; /* fa-sort-up */
+    color: #007bff;
+    opacity: 1;
+}
+
+.sortable.sort-desc .sort-icon:before {
+    content: "\f0dd"; /* fa-sort-down */
+    color: #007bff;
+    opacity: 1;
+}
+</style>
+{% endblock %}
+
 {% block scripts %}
 <script>
 let currentData = [];
 let dropboxConfigured = false;
+let currentSort = { column: null, direction: null }; // ✅ SORTIERUNG STATE
+
+// ✅ SORTIERUNGS-FUNKTIONEN
+function sortData(data, column, direction) {
+    return [...data].sort((a, b) => {
+        let valA = a[column];
+        let valB = b[column];
+        
+        // Spezielle Behandlung verschiedener Datentypen
+        if (column === 'timestamp') {
+            valA = new Date(valA);
+            valB = new Date(valB);
+        } else if (column === 'session_id' || column === 'lap') {
+            valA = parseInt(valA) || 0;
+            valB = parseInt(valB) || 0;
+        } else if (column === 'laptime' || column === 'sector_1' || column === 'sector_2' || column === 'sector_3') {
+            // Zeitformat in Millisekunden umwandeln für Sortierung
+            valA = timeToMs(valA) || 999999999;
+            valB = timeToMs(valB) || 999999999;
+        } else if (column === 'is_pb') {
+            valA = valA ? 1 : 0;
+            valB = valB ? 1 : 0;
+        } else {
+            // String-Vergleich
+            valA = (valA || '').toString().toLowerCase();
+            valB = (valB || '').toString().toLowerCase();
+        }
+        
+        if (valA < valB) return direction === 'asc' ? -1 : 1;
+        if (valA > valB) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+}
+
+function timeToMs(timeStr) {
+    if (!timeStr || timeStr === '-') return null;
+    
+    // Format: "1:23.456" oder "23.456"
+    const parts = timeStr.split(':');
+    let minutes = 0;
+    let seconds = 0;
+    
+    if (parts.length === 2) {
+        minutes = parseInt(parts[0]) || 0;
+        seconds = parseFloat(parts[1]) || 0;
+    } else {
+        seconds = parseFloat(parts[0]) || 0;
+    }
+    
+    return (minutes * 60 + seconds) * 1000;
+}
+
+function setupTableSorting() {
+    document.querySelectorAll('.sortable').forEach(header => {
+        header.addEventListener('click', (e) => {
+            const column = e.currentTarget.getAttribute('data-column');
+            
+            // Sortierrichtung bestimmen
+            let direction = 'asc';
+            if (currentSort.column === column && currentSort.direction === 'asc') {
+                direction = 'desc';
+            }
+            
+            // Alle Header zurücksetzen
+            document.querySelectorAll('.sortable').forEach(h => {
+                h.classList.remove('sort-asc', 'sort-desc');
+            });
+            
+            // Aktiven Header markieren
+            e.currentTarget.classList.add(`sort-${direction}`);
+            
+            // State aktualisieren
+            currentSort = { column, direction };
+            
+            // Daten sortieren und anzeigen
+            const sortedData = sortData(currentData, column, direction);
+            renderTable(sortedData);
+            
+            console.log(`🔄 Sortiert nach ${column} (${direction})`);
+        });
+    });
+}
+
+function renderTable(data) {
+    const tbody = document.getElementById('dataTable');
+    tbody.innerHTML = '';
+    
+    data.forEach(lap => {
+        const row = document.createElement('tr');
+        if (lap.is_pb) row.classList.add('table-success');
+        
+        row.innerHTML = `
+            <td><span class="badge bg-primary">${lap.session_id || lap.event_id || lap.race_id || '-'}</span></td>
+            <td>${lap.driver || '-'}</td>
+            <td>${lap.car || '-'}</td>
+            <td>${lap.lap || '-'}</td>
+            <td>${lap.laptime || '-'}</td>
+            <td>${lap.sector_1 || '-'}</td>
+            <td>${lap.sector_2 || '-'}</td>
+            <td>${lap.sector_3 || '-'}</td>
+            <td>${new Date(lap.timestamp).toLocaleString()}</td>
+            <td>${lap.is_pb ? '<i class="fas fa-trophy text-warning"></i>' : ''}</td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
 
 function loadFilters() {
     fetch('/api/filters')
@@ -194,29 +358,14 @@ function loadData() {
         .then(response => response.json())
         .then(data => {
             currentData = data;
-            const tbody = document.getElementById('dataTable');
-            tbody.innerHTML = '';
             
-            data.forEach(lap => {
-                const row = document.createElement('tr');
-                if (lap.is_pb) row.classList.add('table-success');
-                
-                // ✅ SESSION-ID wird als erste Spalte hinzugefügt
-                row.innerHTML = `
-                    <td><span class="badge bg-primary">${lap.session_id || lap.event_id || lap.race_id || '-'}</span></td>
-                    <td>${lap.driver || '-'}</td>
-                    <td>${lap.car || '-'}</td>
-                    <td>${lap.lap || '-'}</td>
-                    <td>${lap.laptime || '-'}</td>
-                    <td>${lap.sector_1 || '-'}</td>
-                    <td>${lap.sector_2 || '-'}</td>
-                    <td>${lap.sector_3 || '-'}</td>
-                    <td>${new Date(lap.timestamp).toLocaleString()}</td>
-                    <td>${lap.is_pb ? '<i class="fas fa-trophy text-warning"></i>' : ''}</td>
-                `;
-                
-                tbody.appendChild(row);
-            });
+            // Sortierung beibehalten wenn eine aktiv ist
+            let displayData = data;
+            if (currentSort.column) {
+                displayData = sortData(data, currentSort.column, currentSort.direction);
+            }
+            
+            renderTable(displayData);
             
             // Update statistics
             document.getElementById('filteredRows').textContent = data.length;
@@ -234,7 +383,7 @@ function loadData() {
         });
 }
 
-// ✅ REST DES JAVASCRIPT CODES BLEIBT UNVERÄNDERT
+// ✅ EXPORT FUNKTIONEN (unverändert)
 function exportCSV() {
     const driverFilter = document.getElementById('driverFilter').value;
     const carFilter = document.getElementById('carFilter').value;
@@ -426,5 +575,10 @@ document.getElementById('carFilter').addEventListener('change', loadData);
 loadFilters();
 loadData();
 checkDropboxStatus();
+
+// ✅ SORTIERUNG SETUP NACH DOM LOAD
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(setupTableSorting, 100); // Kurz warten bis Tabelle da ist
+});
 </script>
 {% endblock %}
