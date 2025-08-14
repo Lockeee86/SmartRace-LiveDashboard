@@ -331,7 +331,7 @@ function updateControllerTables() {
         const controllerData = dashboardData[controllerId.toString()];
         let filteredControllerData = controllerData;
         
-        // ✅ MAXIMUM SESSION-ID FILTER
+        // ✅ MAXIMUM SESSION-ID FILTER + LETZTE 10 ZEITEN
         if (SHOW_ONLY_CURRENT_SESSION && controllerData && controllerData.laps && controllerData.laps.length > 0) {
             // Höchste Session-ID finden (= aktuellste Session)
             const sessionIds = controllerData.laps.map(lap => lap.session_id || lap.event_id || lap.race_id).filter(id => id != null);
@@ -339,19 +339,30 @@ function updateControllerTables() {
             if (sessionIds.length > 0) {
                 const currentSessionId = Math.max(...sessionIds);
                 
-                console.log(`🔍 Controller ${controllerId}: Aktuelle Session-ID: ${currentSessionId} (aus: [${[...new Set(sessionIds)].sort()}])`);
+                console.log(`🔍 Controller ${controllerId}: Aktuelle Session-ID: ${currentSessionId}`);
                 
-                const currentSessionLaps = controllerData.laps.filter(lap => 
+                let currentSessionLaps = controllerData.laps.filter(lap => 
                     (lap.session_id || lap.event_id || lap.race_id) === currentSessionId
                 );
                 
-                console.log(`📊 Controller ${controllerId}: ${currentSessionLaps.length} von ${controllerData.laps.length} Runden in aktueller Session`);
+                // ✅ NUR DIE LETZTEN 10 ZEITEN NEHMEN
+                const last10Laps = currentSessionLaps.slice(-10);
+                
+                console.log(`📊 Controller ${controllerId}: Zeige ${last10Laps.length} von ${currentSessionLaps.length} Runden (letzte 10)`);
                 
                 filteredControllerData = {
                     ...controllerData,
-                    laps: currentSessionLaps
+                    laps: last10Laps
                 };
             }
+        } else if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
+            // ✅ AUCH BEI DEAKTIVERTEM TOGGLE: Nur letzte 10 Zeiten insgesamt
+            const last10Laps = controllerData.laps.slice(-10);
+            
+            filteredControllerData = {
+                ...controllerData,
+                laps: last10Laps
+            };
         }
         
         const tableBody = document.getElementById(`controller-${controllerId}-times`);
