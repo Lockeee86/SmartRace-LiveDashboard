@@ -374,9 +374,12 @@ function renderTable(data) {
     data.forEach(lap => {
         const row = document.createElement('tr');
         if (lap.is_pb) row.classList.add('table-success');
+        console.log('Lap data:', lap);
+        console.log('Controller color:', lap.controller_color);
         
         // 🎮 CONTROLLER-FARBE ALS ZEILEN-MARKIERUNG (Variante 1)
         if (lap.controller_color) {
+            console.log('Applying color:', lap.controller_color);
             row.style.borderLeft = `4px solid ${lap.controller_color}`;
             row.style.backgroundColor = `${lap.controller_color}15`; // 15 = ~8% Transparenz
         }
