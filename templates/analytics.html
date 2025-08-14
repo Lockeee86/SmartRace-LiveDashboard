@@ -33,7 +33,7 @@
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">Rundenzeiten Verlauf</h5>
-                <canvas id="progressChart"></canvas>
+                <canvas id="progressChart" style="max-height: 400px;"></canvas>
             </div>
         </div>
     </div>
@@ -48,9 +48,12 @@ function loadAnalytics() {
     fetch('/api/analytics')
         .then(response => response.json())
         .then(data => {
+            console.log('Analytics data:', data); // ✅ DEBUG
             createCharts(data);
         })
-        .catch(error => console.error('Error:', error));
+        .catch(error => {
+            console.error('Error loading analytics:', error);
+        });
 }
 
 function createCharts(data) {
@@ -68,16 +71,27 @@ function createCharts(data) {
             datasets: [{
                 label: 'Beste Rundenzeit (s)',
                 data: drivers.map(driver => (data[driver].best_time / 1000).toFixed(3)),
-                backgroundColor: colors
+                backgroundColor: colors,
+                borderColor: colors,
+                borderWidth: 1
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: true,
             plugins: {
-                legend: { display: false }
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.y}s`;
+                        }
+                    }
+                }
             },
             scales: {
                 y: {
+                    beginAtZero: true,
                     title: {
                         display: true,
                         text: 'Zeit (Sekunden)'
@@ -87,62 +101,91 @@ function createCharts(data) {
         }
     });
 
-    // 2. Radar Chart - Rundenzeiten Vergleich
+    // 2. Radar Chart - Rundenzeiten Vergleich  
     const ctx2 = document.getElementById('laptimesChart').getContext('2d');
     if (laptimesChart) laptimesChart.destroy();
+    
+    // ✅ NORMALISIERTE WERTE FÜR RADAR
+    const maxLaps = Math.max(...drivers.map(d => data[d].total_laps));
+    const maxTime = Math.max(...drivers.map(d => data[d].best_time / 1000));
     
     laptimesChart = new Chart(ctx2, {
         type: 'radar',
         data: {
-            labels: ['Beste Zeit', 'Durchschnittszeit', 'Anzahl Runden'],
+            labels: ['Beste Zeit (normalisiert)', 'Durchschnittszeit (normalisiert)', 'Anzahl Runden (%)'],
             datasets: drivers.map((driver, index) => ({
                 label: driver,
                 data: [
-                    data[driver].best_time / 1000,
-                    data[driver].avg_time / 1000,
-                    data[driver].laps.length
+                    ((maxTime - (data[driver].best_time / 1000)) / maxTime * 100).toFixed(1), // Invertiert: niedrigere Zeit = höherer Wert
+                    ((maxTime - (data[driver].avg_time / 1000)) / maxTime * 100).toFixed(1),
+                    ((data[driver].total_laps / maxLaps) * 100).toFixed(1)
                 ],
                 borderColor: colors[index % colors.length],
-                backgroundColor: colors[index % colors.length] + '20'
+                backgroundColor: colors[index % colors.length] + '30',
+                borderWidth: 2
             }))
         },
         options: {
             responsive: true,
+            maintainAspectRatio: true,
             scales: {
                 r: {
-                    beginAtZero: true
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        stepSize: 20
+                    }
                 }
             }
         }
     });
 
-    // 3. Rundenzeiten Verlauf Chart
+    // 3. ✅ KORRIGIERTER Rundenzeiten Verlauf Chart
     const ctx3 = document.getElementById('progressChart').getContext('2d');
     if (progressChart) progressChart.destroy();
     
+    // ✅ FILTERE UNREALISTISCHE ZEITEN (> 60 Sekunden)
+    const filteredData = drivers.map((driver, index) => {
+        const validLaps = data[driver].laps
+            .map((laptime, lapIndex) => ({
+                x: lapIndex + 1,
+                y: laptime / 1000,  // ✅ HIER WAR DER FEHLER: laptime statt lap.laptime
+                original: laptime
+            }))
+            .filter(lap => lap.y < 60 && lap.y > 0.5); // Nur realistische Zeiten 0.5-60s
+            
+        return {
+            label: `${driver} (${validLaps.length} gültige Runden)`,
+            data: validLaps,
+            borderColor: colors[index % colors.length],
+            backgroundColor: colors[index % colors.length] + '20',
+            fill: false,
+            tension: 0.1,
+            pointRadius: 4,
+            pointHoverRadius: 8,
+            borderWidth: 2
+        };
+    });
+
     progressChart = new Chart(ctx3, {
         type: 'line',
         data: {
-            datasets: drivers.map((driver, index) => ({
-                label: driver,
-                data: data[driver].laps.map((lap, lapIndex) => ({
-                    x: lapIndex + 1,
-                    y: lap.laptime / 1000
-                })),
-                borderColor: colors[index % colors.length],
-                backgroundColor: colors[index % colors.length] + '20',
-                fill: false,
-                tension: 0.1,
-                pointRadius: 4,
-                pointHoverRadius: 6
-            }))
+            datasets: filteredData
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
                 title: {
                     display: true,
-                    text: 'Rundenzeiten im Verlauf'
+                    text: 'Rundenzeiten im Verlauf (Unrealistische Zeiten gefiltert)'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.parsed.y.toFixed(3)}s`;
+                        }
+                    }
                 }
             },
             scales: {
@@ -150,12 +193,19 @@ function createCharts(data) {
                     title: {
                         display: true,
                         text: 'Runde'
+                    },
+                    grid: {
+                        display: true
                     }
                 },
                 y: {
                     title: {
                         display: true,
                         text: 'Zeit (Sekunden)'
+                    },
+                    beginAtZero: false,
+                    grid: {
+                        display: true
                     }
                 }
             },
@@ -165,10 +215,16 @@ function createCharts(data) {
             }
         }
     });
+    
+    // ✅ DEBUG INFO
+    console.log('Charts created successfully');
+    console.log('Filtered data:', filteredData);
 }
 
 // Initial load
-loadAnalytics();
+document.addEventListener('DOMContentLoaded', function() {
+    loadAnalytics();
+});
 
 // Auto-refresh alle 30 Sekunden
 setInterval(loadAnalytics, 30000);
