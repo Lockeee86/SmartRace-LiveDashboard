@@ -223,6 +223,15 @@
     color: #007bff;
     opacity: 1;
 }
+.controller-row {
+    border-left: 4px solid var(--controller-color);
+    background: linear-gradient(90deg, var(--controller-color)10 0%, transparent 50px);
+}
+
+.controller-badge {
+    color: white;
+    text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+}
 
 /* ✅ DATUMS-FILTER STYLES */
 #dateFilter {
@@ -651,6 +660,28 @@ function showStatus(message, type) {
             statusDiv.classList.add('d-none');
         }, 5000);
     }
+}
+
+function renderTable(data) {
+    return data.map(item => {
+        const controllerStyle = item.controller_color 
+            ? `style="--controller-color: ${item.controller_color};"` 
+            : '';
+        
+        return `
+            <tr class="controller-row ${item.is_pb ? 'table-success' : ''}" ${controllerStyle}>
+                <td>${new Date(item.timestamp).toLocaleString('de-DE')}</td>
+                <td><span class="badge bg-primary">${item.session_id}</span></td>
+                <td>
+                    <span class="controller-badge" style="background-color: ${item.controller_color || '#6c757d'};">
+                        ${item.driver}
+                    </span>
+                </td>
+                <td>${(item.laptime / 1000).toFixed(3)}s</td>
+                <td>${item.lap_number || '-'}</td>
+            </tr>
+        `;
+    }).join('');
 }
 
 // ✅ EVENT LISTENERS
