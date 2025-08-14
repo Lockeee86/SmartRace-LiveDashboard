@@ -329,23 +329,24 @@ function updateControllerTables() {
     
     for (let controllerId = 1; controllerId <= 6; controllerId++) {
         const controllerData = dashboardData[controllerId.toString()];
-        
-        // ✅ SESSION-FILTERUNG HIER EINFÜGEN
         let filteredControllerData = controllerData;
         
+        // ✅ MAXIMUM SESSION-ID FILTER
         if (SHOW_ONLY_CURRENT_SESSION && controllerData && controllerData.laps && controllerData.laps.length > 0) {
-            // Aktuelle Session ID ermitteln (neueste Runde)
-            const currentSessionId = controllerData.laps[0].session_id;
+            // Höchste Session-ID finden (= aktuellste Session)
+            const sessionIds = controllerData.laps.map(lap => lap.session_id || lap.event_id || lap.race_id).filter(id => id != null);
             
-            if (currentSessionId) {
-                // Nur Runden der aktuellen Session
+            if (sessionIds.length > 0) {
+                const currentSessionId = Math.max(...sessionIds);
+                
+                console.log(`🔍 Controller ${controllerId}: Aktuelle Session-ID: ${currentSessionId} (aus: [${[...new Set(sessionIds)].sort()}])`);
+                
                 const currentSessionLaps = controllerData.laps.filter(lap => 
-                    lap.session_id === currentSessionId
+                    (lap.session_id || lap.event_id || lap.race_id) === currentSessionId
                 );
                 
-                console.log(`📊 Controller ${controllerId}: ${currentSessionLaps.length} Runden in Session ${currentSessionId}`);
+                console.log(`📊 Controller ${controllerId}: ${currentSessionLaps.length} von ${controllerData.laps.length} Runden in aktueller Session`);
                 
-                // Gefilterte Daten erstellen
                 filteredControllerData = {
                     ...controllerData,
                     laps: currentSessionLaps
