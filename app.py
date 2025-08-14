@@ -42,6 +42,7 @@ class Event(db.Model):
 class LapTime(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     event_id = db.Column(db.String(100))
+    event_type = db.Column(db.String(50), nullable=True)
     controller_id = db.Column(db.String(10))
     driver_name = db.Column(db.String(100))
     car_name = db.Column(db.String(100))
@@ -139,7 +140,6 @@ def leaderboard():
 def database_view():
     return render_template('database.html')
 
-# SmartRace Datenschnittstelle
 @app.route('/api/smartrace', methods=['POST', 'OPTIONS'])
 def smartrace_endpoint():
     if request.method == 'OPTIONS':
@@ -149,24 +149,31 @@ def smartrace_endpoint():
         data = request.get_json()
         print(f"📨 Received data: {json.dumps(data, indent=2)}")
         
-        # EVENT_ID extrahieren
+        # 🎯 EVENT_ID extrahieren (Session-ID)
         event_id = None
-        if 'event_id' in data:
+        if 'event_id' in data and data['event_id']:
             event_id = data['event_id']
         elif 'event_data' in data and data['event_data'] and 'event_id' in data['event_data']:
             event_id = data['event_data']['event_id']
-        elif 'session_id' in data:
+        elif 'session_id' in data and data['session_id']:
             event_id = data['session_id']
         else:
-            # ✅ NUR Event-Typ, kein Datum
-            event_id = "Training"  # oder "Race", "Practice" etc.
+            # Eindeutige Session-ID generieren
+            from datetime import datetime
+            event_id = f"Session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        # 🏁 EVENT_TYPE extrahieren (Training, Race, etc.)
+        event_type = data.get('event_type')  # Kann None sein
+        if not event_type:
+            event_type = data.get('session_type', 'Training')  # Fallback
         
         print(f"🎯 Event ID: {event_id}")
+        print(f"🏁 Event Type: {event_type}")
         
-        # Event speichern
+        # Event speichern (wie bisher)
         event = Event(
             event_id=event_id,
-            event_type=data.get('event_type'),
+            event_type=event_type,
             data=json.dumps(data)
         )
         db.session.add(event)
@@ -175,35 +182,37 @@ def smartrace_endpoint():
         if data.get('event_type') == 'ui.lap_update':
             event_data = data.get('event_data', {})
             
-            # ✅ KORREKTE Datenextraktion basierend auf deiner Struktur:
+            # ... deine Controller/Driver/Car Extraktion bleibt gleich ...
             controller_id = event_data.get('controller_id', '0')
             
             # Driver aus driver_data
-            driver_name = f"Driver {controller_id}"  # Fallback
+            driver_name = f"Driver {controller_id}"
             if 'driver_data' in event_data and event_data['driver_data']:
                 driver_name = event_data['driver_data'].get('name', f"Driver {controller_id}")
             
             # Car aus car_data
-            car_name = f"Car {controller_id}"  # Fallback
+            car_name = f"Car {controller_id}"
             if 'car_data' in event_data and event_data['car_data']:
                 car_name = event_data['car_data'].get('name', f"Car {controller_id}")
             
-            # Controller-Farbe aus controller_data
-            controller_color = '#333333'  # Default
+            # Controller-Farbe
+            controller_color = '#333333'
             if 'controller_data' in event_data and event_data['controller_data']:
                 color_bg = event_data['controller_data'].get('color_bg', '#333333')
                 controller_color = rgb_to_hex(color_bg)
             
-            # Auto-Farbe aus car_data
-            car_color = '#000000'  # Default
+            # Auto-Farbe
+            car_color = '#000000'
             if 'car_data' in event_data and event_data['car_data']:
                 color_raw = event_data['car_data'].get('color', '#000000')
                 car_color = rgb_to_hex(color_raw)
             
             print(f"🔍 Extracted: Controller={controller_id}, Driver={driver_name}, Car={car_name}")
             
+            # ✅ BEIDE Felder speichern
             lap_time = LapTime(
-                event_id=event_id,
+                event_id=event_id,           # ← Session-ID
+                event_type=event_type,       # ← NEW: Event-Typ
                 controller_id=str(controller_id),
                 driver_name=driver_name,
                 car_name=car_name,
@@ -219,7 +228,7 @@ def smartrace_endpoint():
             )
             db.session.add(lap_time)
             
-            print(f"💾 Saved lap: Event={event_id}, Driver={driver_name}, Car={car_name}")
+            print(f"💾 Saved lap: Event={event_id} ({event_type}), Driver={driver_name}")
         
         db.session.commit()
         return jsonify({'status': 'success'})
@@ -229,6 +238,7 @@ def smartrace_endpoint():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 400
+
 
 @app.route('/api/events')
 def get_events():
