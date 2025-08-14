@@ -9,10 +9,18 @@
     </div>
 </div>
 
-
-
 <!-- Filter und Export Sektion -->
 <div class="row mb-4">
+    <!-- ✅ NEUER SESSION-FILTER -->
+    <div class="col-md-2">
+        <div class="btn-group w-100" role="group">
+            <input type="radio" class="btn-check" name="sessionFilter" id="allSessions" checked>
+            <label class="btn btn-outline-primary" for="allSessions">Alle</label>
+            
+            <input type="radio" class="btn-check" name="sessionFilter" id="currentSession">
+            <label class="btn btn-outline-success" for="currentSession">Aktuelle</label>
+        </div>
+    </div>
     <div class="col-md-2">
         <select id="driverFilter" class="form-select">
             <option value="">Alle Fahrer</option>
@@ -32,7 +40,7 @@
             <i class="fas fa-times"></i>
         </button>
     </div>
-    <div class="col-md-5">
+    <div class="col-md-3">
         <div class="btn-group w-100" role="group">
             <button type="button" class="btn btn-success" onclick="exportCSV()">
                 <i class="fas fa-download"></i> CSV Export
@@ -41,7 +49,7 @@
                 <i class="fab fa-dropbox"></i> Zu Dropbox
             </button>
             <button type="button" class="btn btn-outline-secondary" onclick="showDropboxConfig()">
-                <i class="fas fa-cog"></i> Dropbox Setup
+                <i class="fas fa-cog"></i> Setup
             </button>
         </div>
     </div>
@@ -191,7 +199,6 @@
 
 {% block styles %}
 <style>
-/* Sortierbare Tabellen Styles */
 .sortable {
     cursor: pointer;
     user-select: none;
@@ -213,18 +220,17 @@
 }
 
 .sortable.sort-asc .sort-icon:before {
-    content: "\f0de"; /* fa-sort-up */
+    content: "\f0de";
     color: #007bff;
     opacity: 1;
 }
 
 .sortable.sort-desc .sort-icon:before {
-    content: "\f0dd"; /* fa-sort-down */
+    content: "\f0dd";
     color: #007bff;
     opacity: 1;
 }
 
-/* ✅ DATUMS-FILTER STYLES */
 #dateFilter {
     cursor: pointer;
 }
@@ -241,23 +247,17 @@
 let currentData = [];
 let dropboxConfigured = false;
 let currentSort = { column: null, direction: null };
+let currentSessionId = null; // ✅ NEUE SESSION-VARIABLE
 
-// ✅ DATUMS-FILTER FUNKTIONEN
-function formatDateForFilter(date) {
-    // Konvertiert Date zu YYYY-MM-DD Format
-    return date.toISOString().split('T')[0];
-}
-
-function isSameDay(date1, date2) {
-    return formatDateForFilter(date1) === formatDateForFilter(date2);
-}
-
+// ✅ SESSION-FILTER FUNKTIONEN
 function updateFilterStatus() {
     const driverFilter = document.getElementById('driverFilter').value;
     const carFilter = document.getElementById('carFilter').value;
     const dateFilter = document.getElementById('dateFilter').value;
+    const showCurrent = document.getElementById('currentSession').checked;
     
     const filterParts = [];
+    if (showCurrent) filterParts.push('Nur aktuelle Session');
     if (driverFilter) filterParts.push(`Fahrer: ${driverFilter}`);
     if (carFilter) filterParts.push(`Auto: ${carFilter}`);
     if (dateFilter) filterParts.push(`Datum: ${new Date(dateFilter).toLocaleDateString('de-DE')}`);
@@ -273,6 +273,14 @@ function updateFilterStatus() {
     }
 }
 
+function formatDateForFilter(date) {
+    return date.toISOString().split('T')[0];
+}
+
+function isSameDay(date1, date2) {
+    return formatDateForFilter(date1) === formatDateForFilter(date2);
+}
+
 function clearDateFilter() {
     document.getElementById('dateFilter').value = '';
     loadData();
@@ -283,11 +291,12 @@ function clearAllFilters() {
     document.getElementById('driverFilter').value = '';
     document.getElementById('carFilter').value = '';
     document.getElementById('dateFilter').value = '';
+    document.getElementById('allSessions').checked = true; // ✅ SESSION-FILTER ZURÜCKSETZEN
     loadData();
     console.log('🔄 Alle Filter zurückgesetzt');
 }
 
-// ✅ SORTIERUNGS-FUNKTIONEN (unverändert)
+// SORTIERUNGS-FUNKTIONEN
 function sortData(data, column, direction) {
     return [...data].sort((a, b) => {
         let valA = a[column];
@@ -366,8 +375,11 @@ function renderTable(data) {
         const row = document.createElement('tr');
         if (lap.is_pb) row.classList.add('table-success');
         
+        // ✅ SESSION-BADGE MIT AKTUELLER SESSION MARKIERUNG
+        const sessionBadgeClass = (lap.session_id || lap.event_id || lap.race_id) === currentSessionId ? 'bg-success' : 'bg-primary';
+        
         row.innerHTML = `
-            <td><span class="badge bg-primary">${lap.session_id || lap.event_id || lap.race_id || '-'}</span></td>
+            <td><span class="badge ${sessionBadgeClass}">${lap.session_id || lap.event_id || lap.race_id || '-'}</span></td>
             <td>${lap.driver || '-'}</td>
             <td>${lap.car || '-'}</td>
             <td>${lap.lap || '-'}</td>
@@ -412,32 +424,49 @@ function loadFilters() {
         });
 }
 
-// ✅ ERWEITERTE LOADDATA FUNKTION MIT DATUMS-FILTER
+// ✅ ERWEITERTE LOADDATA FUNKTION MIT SESSION-FILTER
 function loadData() {
     const driverFilter = document.getElementById('driverFilter').value;
     const carFilter = document.getElementById('carFilter').value;
     const dateFilter = document.getElementById('dateFilter').value;
+    const showCurrent = document.getElementById('currentSession').checked; // ✅ SESSION-FILTER
     
     const params = new URLSearchParams();
     if (driverFilter) params.append('driver', driverFilter);
     if (carFilter) params.append('car', carFilter);
-    if (dateFilter) params.append('date', dateFilter); // ✅ DATUMS-PARAMETER
+    if (dateFilter) params.append('date', dateFilter);
     
     fetch(`/api/database?${params}`)
         .then(response => response.json())
         .then(data => {
+            // ✅ AKTUELLE SESSION ERMITTELN
+            if (data.length > 0) {
+                const sessionIds = data.map(lap => lap.session_id || lap.event_id || lap.race_id).filter(id => id);
+                currentSessionId = Math.max(...sessionIds);
+            }
+            
             currentData = data;
             
-            // ✅ CLIENT-SIDE DATUMS-FILTERUNG (Falls Backend es nicht macht)
+            // ✅ CLIENT-SIDE FILTERUNG
             let filteredData = data;
+            
+            // Session-Filter
+            if (showCurrent && currentSessionId) {
+                filteredData = filteredData.filter(lap => 
+                    (lap.session_id || lap.event_id || lap.race_id) === currentSessionId
+                );
+            }
+            
+            // Datums-Filter
             if (dateFilter) {
                 const filterDate = new Date(dateFilter);
-                filteredData = data.filter(lap => {
+                filteredData = filteredData.filter(lap => {
                     const lapDate = new Date(lap.timestamp);
                     return isSameDay(lapDate, filterDate);
                 });
-                currentData = filteredData;
             }
+            
+            currentData = filteredData;
             
             // Sortierung beibehalten
             let displayData = filteredData;
@@ -446,7 +475,7 @@ function loadData() {
             }
             
             renderTable(displayData);
-            updateFilterStatus(); // ✅ FILTER STATUS UPDATEN
+            updateFilterStatus(); 
             
             // Update statistics
             document.getElementById('filteredRows').textContent = displayData.length;
@@ -458,7 +487,8 @@ function loadData() {
                     document.getElementById('totalLaps').textContent = allData.length;
                 });
             
-            console.log(`📊 Daten geladen: ${displayData.length} Einträge${dateFilter ? ` für ${new Date(dateFilter).toLocaleDateString('de-DE')}` : ''}`);
+            const sessionText = showCurrent ? ` (Session ${currentSessionId})` : '';
+            console.log(`📊 Daten geladen: ${displayData.length} Einträge${sessionText}${dateFilter ? ` für ${new Date(dateFilter).toLocaleDateString('de-DE')}` : ''}`);
         })
         .catch(error => {
             console.error('Error:', error);
@@ -466,7 +496,7 @@ function loadData() {
         });
 }
 
-// ✅ EXPORT FUNKTIONEN ERWEITERT
+// EXPORT FUNKTIONEN
 function exportCSV() {
     const driverFilter = document.getElementById('driverFilter').value;
     const carFilter = document.getElementById('carFilter').value;
@@ -475,14 +505,13 @@ function exportCSV() {
     const params = new URLSearchParams();
     if (driverFilter) params.append('driver', driverFilter);
     if (carFilter) params.append('car', carFilter);
-    if (dateFilter) params.append('date', dateFilter); // ✅ DATUMS-FILTER AUCH IM EXPORT
+    if (dateFilter) params.append('date', dateFilter);
     
     showStatus('CSV Export wird erstellt...', 'info');
     
     const link = document.createElement('a');
     link.href = `/api/export/csv?${params}`;
     
-    // ✅ DATUMSSPEZIFISCHER DATEINAME
     let filename = 'smartrace_export';
     if (dateFilter) {
         filename += `_${dateFilter}`;
@@ -656,7 +685,9 @@ function showStatus(message, type) {
 // ✅ EVENT LISTENERS
 document.getElementById('driverFilter').addEventListener('change', loadData);
 document.getElementById('carFilter').addEventListener('change', loadData);
-document.getElementById('dateFilter').addEventListener('change', loadData); // ✅ DATUMS-FILTER LISTENER
+document.getElementById('dateFilter').addEventListener('change', loadData);
+document.getElementById('allSessions').addEventListener('change', loadData); // ✅ SESSION-FILTER LISTENER
+document.getElementById('currentSession').addEventListener('change', loadData); // ✅ SESSION-FILTER LISTENER
 
 // Initial load
 loadFilters();
