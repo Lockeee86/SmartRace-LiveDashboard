@@ -371,23 +371,23 @@ function renderTable(data) {
     const tbody = document.getElementById('dataTable');
     tbody.innerHTML = '';
     
+    console.log('🔍 Rendering data:', data); // Debug
+    
     data.forEach(lap => {
+        console.log(`🎨 Lap: ${lap.driver}, Color: ${lap.controller_color}`); // Debug
+        
         const row = document.createElement('tr');
         if (lap.is_pb) row.classList.add('table-success');
-        console.log('Lap data:', lap);
-        console.log('Controller color:', lap.controller_color);
         
-        // 🎮 CONTROLLER-FARBE ALS ZEILEN-MARKIERUNG (Variante 1)
+        // 🎨 CONTROLLER-FARBE ANWENDEN
         if (lap.controller_color) {
-            console.log('Applying color:', lap.controller_color);
             row.style.borderLeft = `4px solid ${lap.controller_color}`;
-            row.style.backgroundColor = `${lap.controller_color}15`; // 15 = ~8% Transparenz
+            row.style.backgroundColor = `${lap.controller_color}15`; // 15 = 8% Transparenz
         }
         
         row.innerHTML = `
-            <td><span class="badge bg-primary">${lap.session_id || lap.event_id || lap.race_id || '-'}</span></td>
-            <td>${lap.driver || '-'}</td>
-            <td>${lap.car || '-'}</td>
+            <td>${lap.driver}</td>
+            <td>${lap.car}</td>
             <td>${lap.lap || '-'}</td>
             <td>${lap.laptime || '-'}</td>
             <td>${lap.sector_1 || '-'}</td>
@@ -400,6 +400,7 @@ function renderTable(data) {
         tbody.appendChild(row);
     });
 }
+
 
 function loadFilters() {
     fetch('/api/filters')
