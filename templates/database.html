@@ -11,17 +11,26 @@
 
 <!-- Filter und Export Sektion -->
 <div class="row mb-4">
-    <div class="col-md-3">
+    <div class="col-md-2">
         <select id="driverFilter" class="form-select">
             <option value="">Alle Fahrer</option>
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <select id="carFilter" class="form-select">
             <option value="">Alle Autos</option>
         </select>
     </div>
-    <div class="col-md-6">
+    <!-- ✅ NEUER DATUMS-FILTER -->
+    <div class="col-md-2">
+        <input type="date" id="dateFilter" class="form-control" title="Filter nach Datum">
+    </div>
+    <div class="col-md-1">
+        <button type="button" class="btn btn-outline-secondary" onclick="clearDateFilter()" title="Datum zurücksetzen">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+    <div class="col-md-5">
         <div class="btn-group w-100" role="group">
             <button type="button" class="btn btn-success" onclick="exportCSV()">
                 <i class="fas fa-download"></i> CSV Export
@@ -31,6 +40,18 @@
             </button>
             <button type="button" class="btn btn-outline-secondary" onclick="showDropboxConfig()">
                 <i class="fas fa-cog"></i> Dropbox Setup
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ✅ FILTER STATUS ANZEIGE -->
+<div class="row mb-3" id="filterStatus" style="display: none;">
+    <div class="col-12">
+        <div class="alert alert-info py-2 mb-0">
+            <i class="fas fa-filter"></i> <span id="filterText"></span>
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="clearAllFilters()">
+                Alle Filter zurücksetzen
             </button>
         </div>
     </div>
@@ -168,7 +189,7 @@
 
 {% block styles %}
 <style>
-/* ✅ SORTIERBARE TABELLEN STYLES */
+/* Sortierbare Tabellen Styles */
 .sortable {
     cursor: pointer;
     user-select: none;
@@ -200,6 +221,16 @@
     color: #007bff;
     opacity: 1;
 }
+
+/* ✅ DATUMS-FILTER STYLES */
+#dateFilter {
+    cursor: pointer;
+}
+
+#filterStatus .alert {
+    border-radius: 8px;
+    border-left: 4px solid #17a2b8;
+}
 </style>
 {% endblock %}
 
@@ -207,15 +238,59 @@
 <script>
 let currentData = [];
 let dropboxConfigured = false;
-let currentSort = { column: null, direction: null }; // ✅ SORTIERUNG STATE
+let currentSort = { column: null, direction: null };
 
-// ✅ SORTIERUNGS-FUNKTIONEN
+// ✅ DATUMS-FILTER FUNKTIONEN
+function formatDateForFilter(date) {
+    // Konvertiert Date zu YYYY-MM-DD Format
+    return date.toISOString().split('T')[0];
+}
+
+function isSameDay(date1, date2) {
+    return formatDateForFilter(date1) === formatDateForFilter(date2);
+}
+
+function updateFilterStatus() {
+    const driverFilter = document.getElementById('driverFilter').value;
+    const carFilter = document.getElementById('carFilter').value;
+    const dateFilter = document.getElementById('dateFilter').value;
+    
+    const filterParts = [];
+    if (driverFilter) filterParts.push(`Fahrer: ${driverFilter}`);
+    if (carFilter) filterParts.push(`Auto: ${carFilter}`);
+    if (dateFilter) filterParts.push(`Datum: ${new Date(dateFilter).toLocaleDateString('de-DE')}`);
+    
+    const filterStatus = document.getElementById('filterStatus');
+    const filterText = document.getElementById('filterText');
+    
+    if (filterParts.length > 0) {
+        filterText.textContent = `Aktive Filter: ${filterParts.join(', ')}`;
+        filterStatus.style.display = 'block';
+    } else {
+        filterStatus.style.display = 'none';
+    }
+}
+
+function clearDateFilter() {
+    document.getElementById('dateFilter').value = '';
+    loadData();
+    console.log('📅 Datumsfilter zurückgesetzt');
+}
+
+function clearAllFilters() {
+    document.getElementById('driverFilter').value = '';
+    document.getElementById('carFilter').value = '';
+    document.getElementById('dateFilter').value = '';
+    loadData();
+    console.log('🔄 Alle Filter zurückgesetzt');
+}
+
+// ✅ SORTIERUNGS-FUNKTIONEN (unverändert)
 function sortData(data, column, direction) {
     return [...data].sort((a, b) => {
         let valA = a[column];
         let valB = b[column];
         
-        // Spezielle Behandlung verschiedener Datentypen
         if (column === 'timestamp') {
             valA = new Date(valA);
             valB = new Date(valB);
@@ -223,14 +298,12 @@ function sortData(data, column, direction) {
             valA = parseInt(valA) || 0;
             valB = parseInt(valB) || 0;
         } else if (column === 'laptime' || column === 'sector_1' || column === 'sector_2' || column === 'sector_3') {
-            // Zeitformat in Millisekunden umwandeln für Sortierung
             valA = timeToMs(valA) || 999999999;
             valB = timeToMs(valB) || 999999999;
         } else if (column === 'is_pb') {
             valA = valA ? 1 : 0;
             valB = valB ? 1 : 0;
         } else {
-            // String-Vergleich
             valA = (valA || '').toString().toLowerCase();
             valB = (valB || '').toString().toLowerCase();
         }
@@ -244,7 +317,6 @@ function sortData(data, column, direction) {
 function timeToMs(timeStr) {
     if (!timeStr || timeStr === '-') return null;
     
-    // Format: "1:23.456" oder "23.456"
     const parts = timeStr.split(':');
     let minutes = 0;
     let seconds = 0;
@@ -264,24 +336,18 @@ function setupTableSorting() {
         header.addEventListener('click', (e) => {
             const column = e.currentTarget.getAttribute('data-column');
             
-            // Sortierrichtung bestimmen
             let direction = 'asc';
             if (currentSort.column === column && currentSort.direction === 'asc') {
                 direction = 'desc';
             }
             
-            // Alle Header zurücksetzen
             document.querySelectorAll('.sortable').forEach(h => {
                 h.classList.remove('sort-asc', 'sort-desc');
             });
             
-            // Aktiven Header markieren
             e.currentTarget.classList.add(`sort-${direction}`);
-            
-            // State aktualisieren
             currentSort = { column, direction };
             
-            // Daten sortieren und anzeigen
             const sortedData = sortData(currentData, column, direction);
             renderTable(sortedData);
             
@@ -307,7 +373,7 @@ function renderTable(data) {
             <td>${lap.sector_1 || '-'}</td>
             <td>${lap.sector_2 || '-'}</td>
             <td>${lap.sector_3 || '-'}</td>
-            <td>${new Date(lap.timestamp).toLocaleString()}</td>
+            <td>${new Date(lap.timestamp).toLocaleString('de-DE')}</td>
             <td>${lap.is_pb ? '<i class="fas fa-trophy text-warning"></i>' : ''}</td>
         `;
         
@@ -322,7 +388,6 @@ function loadFilters() {
             const driverSelect = document.getElementById('driverFilter');
             const carSelect = document.getElementById('carFilter');
             
-            // Clear existing options (except first)
             driverSelect.innerHTML = '<option value="">Alle Fahrer</option>';
             carSelect.innerHTML = '<option value="">Alle Autos</option>';
             
@@ -340,35 +405,49 @@ function loadFilters() {
                 carSelect.appendChild(option);
             });
             
-            // Update statistics
             document.getElementById('totalDrivers').textContent = data.drivers.length;
             document.getElementById('totalCars').textContent = data.cars.length;
         });
 }
 
+// ✅ ERWEITERTE LOADDATA FUNKTION MIT DATUMS-FILTER
 function loadData() {
     const driverFilter = document.getElementById('driverFilter').value;
     const carFilter = document.getElementById('carFilter').value;
+    const dateFilter = document.getElementById('dateFilter').value;
     
     const params = new URLSearchParams();
     if (driverFilter) params.append('driver', driverFilter);
     if (carFilter) params.append('car', carFilter);
+    if (dateFilter) params.append('date', dateFilter); // ✅ DATUMS-PARAMETER
     
     fetch(`/api/database?${params}`)
         .then(response => response.json())
         .then(data => {
             currentData = data;
             
-            // Sortierung beibehalten wenn eine aktiv ist
-            let displayData = data;
+            // ✅ CLIENT-SIDE DATUMS-FILTERUNG (Falls Backend es nicht macht)
+            let filteredData = data;
+            if (dateFilter) {
+                const filterDate = new Date(dateFilter);
+                filteredData = data.filter(lap => {
+                    const lapDate = new Date(lap.timestamp);
+                    return isSameDay(lapDate, filterDate);
+                });
+                currentData = filteredData;
+            }
+            
+            // Sortierung beibehalten
+            let displayData = filteredData;
             if (currentSort.column) {
-                displayData = sortData(data, currentSort.column, currentSort.direction);
+                displayData = sortData(filteredData, currentSort.column, currentSort.direction);
             }
             
             renderTable(displayData);
+            updateFilterStatus(); // ✅ FILTER STATUS UPDATEN
             
             // Update statistics
-            document.getElementById('filteredRows').textContent = data.length;
+            document.getElementById('filteredRows').textContent = displayData.length;
             
             // Get total laps count
             fetch('/api/database')
@@ -376,6 +455,8 @@ function loadData() {
                 .then(allData => {
                     document.getElementById('totalLaps').textContent = allData.length;
                 });
+            
+            console.log(`📊 Daten geladen: ${displayData.length} Einträge${dateFilter ? ` für ${new Date(dateFilter).toLocaleDateString('de-DE')}` : ''}`);
         })
         .catch(error => {
             console.error('Error:', error);
@@ -383,21 +464,30 @@ function loadData() {
         });
 }
 
-// ✅ EXPORT FUNKTIONEN (unverändert)
+// ✅ EXPORT FUNKTIONEN ERWEITERT
 function exportCSV() {
     const driverFilter = document.getElementById('driverFilter').value;
     const carFilter = document.getElementById('carFilter').value;
+    const dateFilter = document.getElementById('dateFilter').value;
     
     const params = new URLSearchParams();
     if (driverFilter) params.append('driver', driverFilter);
     if (carFilter) params.append('car', carFilter);
+    if (dateFilter) params.append('date', dateFilter); // ✅ DATUMS-FILTER AUCH IM EXPORT
     
     showStatus('CSV Export wird erstellt...', 'info');
     
-    // Download CSV
     const link = document.createElement('a');
     link.href = `/api/export/csv?${params}`;
-    link.download = `smartrace_export_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`;
+    
+    // ✅ DATUMSSPEZIFISCHER DATEINAME
+    let filename = 'smartrace_export';
+    if (dateFilter) {
+        filename += `_${dateFilter}`;
+    }
+    filename += `_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`;
+    
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -413,9 +503,6 @@ function exportDropbox() {
         showDropboxConfig();
         return;
     }
-    
-    const driverFilter = document.getElementById('driverFilter').value;
-    const carFilter = document.getElementById('carFilter').value;
     
     showStatus('Upload zu Dropbox...', 'info');
     
@@ -505,10 +592,8 @@ function saveDropboxConfig() {
             
             showStatus('Dropbox erfolgreich konfiguriert!', 'success');
             
-            // Token löschen für Sicherheit
             document.getElementById('dropboxToken').value = '';
             
-            // Modal nach 2 Sekunden schließen
             setTimeout(() => {
                 const modal = bootstrap.Modal.getInstance(document.getElementById('dropboxModal'));
                 modal.hide();
@@ -559,7 +644,6 @@ function showStatus(message, type) {
     statusDiv.innerHTML = message;
     statusDiv.classList.remove('d-none');
     
-    // Auto-hide nach 5 Sekunden (außer bei Fehlern)
     if (type !== 'danger') {
         setTimeout(() => {
             statusDiv.classList.add('d-none');
@@ -567,18 +651,19 @@ function showStatus(message, type) {
     }
 }
 
-// Event Listeners
+// ✅ EVENT LISTENERS
 document.getElementById('driverFilter').addEventListener('change', loadData);
 document.getElementById('carFilter').addEventListener('change', loadData);
+document.getElementById('dateFilter').addEventListener('change', loadData); // ✅ DATUMS-FILTER LISTENER
 
 // Initial load
 loadFilters();
 loadData();
 checkDropboxStatus();
 
-// ✅ SORTIERUNG SETUP NACH DOM LOAD
+// Setup sorting after DOM load
 document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(setupTableSorting, 100); // Kurz warten bis Tabelle da ist
+    setTimeout(setupTableSorting, 100);
 });
 </script>
 {% endblock %}
