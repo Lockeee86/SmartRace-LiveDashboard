@@ -239,6 +239,88 @@ def smartrace_endpoint():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 400
 
+@app.route('/api/laps')
+def get_laps():
+    try:
+        # Session-Filter aus Query-Parameter
+        session_filter = request.args.get('session_id')  # Optional
+        
+        query = LapTime.query
+        
+        # Session-Filter anwenden
+        if session_filter and session_filter != 'all':
+            query = query.filter(LapTime.event_id == session_filter)
+            print(f"🔍 Filtering by session: {session_filter}")
+        
+        laps = query.order_by(LapTime.timestamp.desc()).all()
+        
+        print(f"📊 Found {len(laps)} laps" + (f" for session {session_filter}" if session_filter else ""))
+        
+        result = []
+        for lap in laps:
+            result.append({
+                'id': lap.id,
+                'event_id': lap.event_id,
+                'event_type': lap.event_type,
+                'controller_id': lap.controller_id,
+                'driver_name': lap.driver_name,
+                'car_name': lap.car_name,
+                'lap': lap.lap,
+                'laptime_raw': lap.laptime_raw,
+                'laptime_formatted': format_time(lap.laptime_raw) if lap.laptime_raw else None,
+                'sector_1': lap.sector_1,
+                'sector_2': lap.sector_2,
+                'sector_3': lap.sector_3,
+                'car_color': lap.car_color,
+                'controller_color': lap.controller_color,
+                'is_pb': lap.is_pb,
+                'timestamp': lap.timestamp.isoformat() if lap.timestamp else None
+            })
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f"❌ Laps Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sessions')
+def get_sessions():
+    try:
+        # Alle verfügbaren Sessions mit zusätzlichen Infos
+        sessions = db.session.query(
+            LapTime.event_id,
+            LapTime.event_type,
+            func.count(LapTime.id).label('total_laps'),
+            func.count(func.distinct(LapTime.controller_id)).label('drivers'),
+            func.min(LapTime.timestamp).label('start_time'),
+            func.max(LapTime.timestamp).label('end_time')
+        ).group_by(
+            LapTime.event_id, 
+            LapTime.event_type
+        ).order_by(
+            func.max(LapTime.timestamp).desc()  # Neueste zuerst
+        ).all()
+        
+        session_list = []
+        for session in sessions:
+            session_list.append({
+                'event_id': session.event_id,
+                'event_type': session.event_type,
+                'total_laps': session.total_laps,
+                'drivers': session.drivers,
+                'start_time': session.start_time.isoformat() if session.start_time else None,
+                'end_time': session.end_time.isoformat() if session.end_time else None,
+                'display_name': f"{session.event_id} ({session.event_type or 'Unknown'}) - {session.total_laps} Runden"
+            })
+        
+        return jsonify(session_list)
+        
+    except Exception as e:
+        print(f"❌ Sessions Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
 
 @app.route('/api/events')
 def get_events():
