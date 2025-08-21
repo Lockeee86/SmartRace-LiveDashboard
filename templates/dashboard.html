@@ -37,67 +37,93 @@
 </div>
 
 <!-- Session Info Row -->
-<div class="col-md-4">
-    <div class="card bg-info text-white">
-        <div class="card-body">
-            <h5 class="card-title">📊 Session Stats</h5>
-            <!-- ✅ SESSION ID & TYP (neu oben) -->
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <div class="text-start">
-                    <small class="opacity-75">ID:</small>
-                    <strong id="session-id" class="d-block">--</strong>
-                </div>
-                <div class="text-end">
-                    <small class="opacity-75">Typ:</small>
-                    <strong id="session-type" class="d-block">--</strong>
-                </div>
+<!-- Session Info Row - ERWEITERT -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title">🏁 Schnellste Runde (Session)</h5>
+                <h3 id="fastest-lap-time">--:--.---</h3>
+                <p id="fastest-lap-driver" class="mb-0">Kein Fahrer</p>
             </div>
-            <hr class="my-2 opacity-50">
-            
-            <!-- ✅ BESTEHENDE SESSION STATS -->
-            <div class="row g-2">
-                <div class="col-6">
-                    <div class="text-center">
-                        <strong id="total-laps" class="h4 d-block">0</strong>
-                        <small>Runden gesamt</small>
-                    </div>
-                </div>
-                <div class="col-6">
-                    <div class="text-center">
-                        <strong id="active-drivers" class="h4 d-block">0</strong>
-                        <small>Aktive Fahrer</small>
-                    </div>
-                </div>
-                <div class="col-6">
-                    <div class="text-center">
-                        <strong id="session-duration" class="h5 d-block">--</strong>
-                        <small>Dauer</small>
-                    </div>
-                </div>
-                <div class="col-6">
-                    <div class="text-center">
-                        <strong id="avg-laptime" class="h5 d-block">--:--</strong>
-                        <small>∅ Rundenzeit</small>
-                    </div>
-                </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title">🏆 Streckenrekord</h5>
+                <h3 id="track-record-time">--:--.---</h3>
+                <p id="track-record-driver" class="mb-0">Unbekannt</p>
+                <small id="track-record-date" class="text-light">--</small>
             </div>
-            
-            <!-- ✅ ZUSÄTZLICHE SESSION INFO -->
-            <hr class="my-2 opacity-50">
-            <div class="row g-1">
-                <div class="col-4 text-center">
-                    <small id="fastest-driver">🏃‍♂️ --</small>
+        </div>
+    </div>
+    
+    <!-- ✅ SESSION STATS - VOLLE BREITE mit Grauton -->
+    <div class="col-md-6">
+        <div class="card bg-secondary text-white">
+            <div class="card-body py-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <h5 class="card-title mb-0">📊 Session Stats</h5>
+                    <!-- SESSION ID & TYP - horizontal -->
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="text-center">
+                            <small class="opacity-75 d-block">Session ID</small>
+                            <strong id="session-id" style="font-size: 0.9rem;">--</strong>
+                        </div>
+                        <div class="text-center">
+                            <small class="opacity-75 d-block">Typ</small>
+                            <strong id="session-type" style="font-size: 0.9rem;">--</strong>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-4 text-center">
-                    <small id="most-laps-driver">🔄 --</small>
+                
+                <!-- ✅ HAUPTSTATISTIKEN - horizontal -->
+                <div class="row g-3">
+                    <div class="col-3">
+                        <div class="text-center">
+                            <strong id="total-laps" class="h4 d-block mb-1">0</strong>
+                            <small>Runden gesamt</small>
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="text-center">
+                            <strong id="active-drivers" class="h4 d-block mb-1">0</strong>
+                            <small>Aktive Fahrer</small>
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="text-center">
+                            <strong id="session-duration" class="h5 d-block mb-1">--</strong>
+                            <small>Session Dauer</small>
+                        </div>
+                    </div>
+                    <div class="col-3">
+                        <div class="text-center">
+                            <strong id="avg-laptime" class="h5 d-block mb-1">--:--</strong>
+                            <small>∅ Rundenzeit</small>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-4 text-center">
-                    <small id="session-date">📅 --</small>
+                
+                <!-- ✅ ZUSÄTZLICHE INFOS - kompakt unten -->
+                <hr class="my-2 opacity-50">
+                <div class="row g-2 text-center">
+                    <div class="col-4">
+                        <small class="opacity-90">🏃‍♂️ <span id="fastest-driver">--</span></small>
+                    </div>
+                    <div class="col-4">
+                        <small class="opacity-90">🔄 <span id="most-laps-driver">--</span></small>
+                    </div>
+                    <div class="col-4">
+                        <small class="opacity-90">📅 <span id="session-date">--</span></small>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
 
 
 <!-- Controller Overview - 6 Tables -->
