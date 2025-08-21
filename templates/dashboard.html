@@ -925,19 +925,63 @@ style.textContent = `
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
-
-    /* Responsive */
-    @media (max-width: 1400px) {
-        .controllers-grid {
-            grid-template-columns: repeat(2, 1fr);
+    /* ✅ Session Stats Card - Grauer Hintergrund */
+    .bg-secondary {
+        --bs-bg-opacity: 1;
+        background-color: #6c757d !important; /* Bootstrap Grau */
+    }
+    
+    /* ✅ Alternative: Dunklerer Grauton passend zum Theme */
+    .card.bg-secondary {
+        background: linear-gradient(135deg, #495057 0%, #6c757d 100%) !important;
+        border: 1px solid #545b62;
+    }
+    
+    /* ✅ Kompakte Session Stats */
+    .card.bg-secondary .card-body {
+        padding: 1rem !important;
+    }
+    
+    .card.bg-secondary small {
+        font-size: 0.75rem;
+        opacity: 0.9;
+    }
+    
+    .card.bg-secondary hr {
+        margin: 0.5rem 0 !important;
+        opacity: 0.3 !important;
+    }
+    
+    /* ✅ Session ID & Type Styling */
+    .card.bg-secondary #session-id, 
+    .card.bg-secondary #session-type {
+        font-size: 0.9rem !important;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        color: rgba(255, 255, 255, 0.95);
+    }
+    
+    /* ✅ Responsive Anpassungen */
+    @media (max-width: 1200px) {
+        .row .col-md-6 .row .col-3 {
+            flex: 0 0 50% !important;
+            max-width: 50% !important;
         }
     }
-
+    
     @media (max-width: 768px) {
-        .controllers-grid {
-            grid-template-columns: 1fr;
+        .row .col-md-6 .row .col-3 {
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+            margin-bottom: 0.5rem;
+        }
+        
+        .card.bg-secondary .d-flex.gap-3 {
+            flex-direction: column !important;
+            gap: 1rem !important;
         }
     }
+
 `;
 document.head.appendChild(style);
 
