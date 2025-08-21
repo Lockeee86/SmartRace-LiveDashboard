@@ -37,44 +37,68 @@
 </div>
 
 <!-- Session Info Row -->
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <h5 class="card-title">🏁 Schnellste Runde (Session)</h5>
-                <h3 id="fastest-lap-time">--:--.---</h3>
-                <p id="fastest-lap-driver" class="mb-0">Kein Fahrer</p>
+<div class="col-md-4">
+    <div class="card bg-info text-white">
+        <div class="card-body">
+            <h5 class="card-title">📊 Session Stats</h5>
+            <!-- ✅ SESSION ID & TYP (neu oben) -->
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="text-start">
+                    <small class="opacity-75">ID:</small>
+                    <strong id="session-id" class="d-block">--</strong>
+                </div>
+                <div class="text-end">
+                    <small class="opacity-75">Typ:</small>
+                    <strong id="session-type" class="d-block">--</strong>
+                </div>
             </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <h5 class="card-title">🏆 Streckenrekord</h5>
-                <h3 id="track-record-time">--:--.---</h3>
-                <p id="track-record-driver" class="mb-0">Unbekannt</p>
-                <small id="track-record-date" class="text-light">--</small>
+            <hr class="my-2 opacity-50">
+            
+            <!-- ✅ BESTEHENDE SESSION STATS -->
+            <div class="row g-2">
+                <div class="col-6">
+                    <div class="text-center">
+                        <strong id="total-laps" class="h4 d-block">0</strong>
+                        <small>Runden gesamt</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="text-center">
+                        <strong id="active-drivers" class="h4 d-block">0</strong>
+                        <small>Aktive Fahrer</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="text-center">
+                        <strong id="session-duration" class="h5 d-block">--</strong>
+                        <small>Dauer</small>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="text-center">
+                        <strong id="avg-laptime" class="h5 d-block">--:--</strong>
+                        <small>∅ Rundenzeit</small>
+                    </div>
+                </div>
             </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <h5 class="card-title">📊 Session Stats</h5>
-                <div class="row">
-                    <div class="col-6">
-                        <strong id="total-laps">0</strong><br>
-                        <small>Runden</small>
-                    </div>
-                    <div class="col-6">
-                        <strong id="active-drivers">0</strong><br>
-                        <small>Fahrer</small>
-                    </div>
+            
+            <!-- ✅ ZUSÄTZLICHE SESSION INFO -->
+            <hr class="my-2 opacity-50">
+            <div class="row g-1">
+                <div class="col-4 text-center">
+                    <small id="fastest-driver">🏃‍♂️ --</small>
+                </div>
+                <div class="col-4 text-center">
+                    <small id="most-laps-driver">🔄 --</small>
+                </div>
+                <div class="col-4 text-center">
+                    <small id="session-date">📅 --</small>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
 
 <!-- Controller Overview - 6 Tables -->
 <div class="row mt-4">
@@ -372,6 +396,14 @@ function getCurrentSessionLaps(controllerData) {
 function updateMainStats() {
     let totalLaps = 0;
     let activeDrivers = 0;
+    let allSessionTimes = [];
+    let allSessionLaps = [];
+    let sessionStartTime = null;
+    let sessionEndTime = null;
+    let driverStats = {};
+
+    // ✅ SESSION INFO UPDATEN
+    updateSessionInfo();
 
     Object.keys(dashboardData).forEach(controllerId => {
         const controllerData = dashboardData[controllerId];
@@ -381,27 +413,183 @@ function updateMainStats() {
 
             if (relevantLaps.length > 0) {
                 activeDrivers++;
+                
+                // ✅ FAHRER STATISTIKEN SAMMELN
+                const driverName = controllerData.name || `Driver ${controllerId}`;
+                driverStats[driverName] = {
+                    laps: relevantLaps.length,
+                    times: relevantLaps.map(lap => lap.laptime_raw).filter(t => t > 0),
+                    controller: controllerId
+                };
 
+                // ✅ GESAMTSTATISTIKEN
                 const lapNumbers = relevantLaps.map(lap => lap.lap || 0);
                 const maxLap = Math.max(...lapNumbers);
-
                 totalLaps += maxLap;
 
-                console.log(`🏁 Controller ${controllerId}: Runde ${maxLap}`);
+                // ✅ ZEITEN SAMMELN
+                const validTimes = relevantLaps.map(lap => lap.laptime_raw).filter(t => t > 0);
+                allSessionTimes = allSessionTimes.concat(validTimes);
+                allSessionLaps = allSessionLaps.concat(relevantLaps);
+
+                // ✅ SESSION ZEITBEREICH
+                relevantLaps.forEach(lap => {
+                    const lapTime = new Date(lap.timestamp);
+                    if (!sessionStartTime || lapTime < sessionStartTime) {
+                        sessionStartTime = lapTime;
+                    }
+                    if (!sessionEndTime || lapTime > sessionEndTime) {
+                        sessionEndTime = lapTime;
+                    }
+                });
+
+                console.log(`🏁 Controller ${controllerId} (${driverName}): ${maxLap} Runden, ${validTimes.length} gültige Zeiten`);
             }
         }
     });
 
+    // ✅ BASIS STATS UPDATEN
     document.getElementById('total-laps').textContent = totalLaps;
     document.getElementById('active-drivers').textContent = activeDrivers;
 
-    // ✅ Session-Info im Title anzeigen
+    // ✅ SESSION DAUER BERECHNEN
+    if (sessionStartTime && sessionEndTime) {
+        const durationMs = sessionEndTime - sessionStartTime;
+        const durationMinutes = Math.floor(durationMs / 60000);
+        const durationSeconds = Math.floor((durationMs % 60000) / 1000);
+        
+        let durationText = '';
+        if (durationMinutes >= 60) {
+            const hours = Math.floor(durationMinutes / 60);
+            const mins = durationMinutes % 60;
+            durationText = `${hours}h ${mins}m`;
+        } else if (durationMinutes > 0) {
+            durationText = `${durationMinutes}m ${durationSeconds}s`;
+        } else {
+            durationText = `${durationSeconds}s`;
+        }
+        
+        document.getElementById('session-duration').textContent = durationText;
+    } else {
+        document.getElementById('session-duration').textContent = '--';
+    }
+
+    // ✅ DURCHSCHNITTLICHE RUNDENZEIT
+    if (allSessionTimes.length > 0) {
+        const avgTime = allSessionTimes.reduce((sum, time) => sum + time, 0) / allSessionTimes.length;
+        document.getElementById('avg-laptime').textContent = formatTime(avgTime);
+    } else {
+        document.getElementById('avg-laptime').textContent = '--:--';
+    }
+
+    // ✅ SCHNELLSTER FAHRER
+    let fastestDriver = null;
+    Object.keys(driverStats).forEach(driverName => {
+        const stats = driverStats[driverName];
+        if (stats.times.length > 0) {
+            const bestTime = Math.min(...stats.times);
+            if (!fastestDriver || bestTime < fastestDriver.time) {
+                fastestDriver = {
+                    name: driverName,
+                    time: bestTime
+                };
+            }
+        }
+    });
+
+    // ✅ FAHRER MIT MEISTEN RUNDEN
+    let mostLapsDriver = null;
+    Object.keys(driverStats).forEach(driverName => {
+        const stats = driverStats[driverName];
+        if (!mostLapsDriver || stats.laps > mostLapsDriver.laps) {
+            mostLapsDriver = {
+                name: driverName,
+                laps: stats.laps
+            };
+        }
+    });
+
+    // ✅ SESSION DATUM
+    const sessionDateText = sessionStartTime ? 
+        sessionStartTime.toLocaleDateString('de-DE', { 
+            day: '2-digit', 
+            month: '2-digit' 
+        }) + ' ' + sessionStartTime.toLocaleTimeString('de-DE', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        }) : '--';
+
+    // ✅ ZUSÄTZLICHE INFOS UPDATEN
+    document.getElementById('fastest-driver').textContent = fastestDriver ? 
+        `${fastestDriver.name}` : '🏃‍♂️ --';
+    
+    document.getElementById('most-laps-driver').textContent = mostLapsDriver ? 
+        `${mostLapsDriver.name} (${mostLapsDriver.laps})` : '🔄 --';
+    
+    document.getElementById('session-date').textContent = sessionDateText;
+
+    // ✅ SESSION-INFO IM TITLE ANZEIGEN
     const sessionInfo = currentSessionFilter === 'current' ? 'Live Session' : 
                        currentSessionFilter === 'all' ? 'Alle Sessions' : 
                        `Session ${currentSessionFilter}`;
     
-    console.log(`📊 ${sessionInfo}: ${totalLaps} Runden, ${activeDrivers} Fahrer`);
+    console.log(`📊 ${sessionInfo}: ${totalLaps} Runden, ${activeDrivers} Fahrer, ${allSessionTimes.length} Zeiten`);
+    console.log(`🏆 Schnellster: ${fastestDriver?.name} (${formatTime(fastestDriver?.time)})`);
+    console.log(`🔄 Meiste Runden: ${mostLapsDriver?.name} (${mostLapsDriver?.laps})`);
 }
+
+// ✅ NEUE FUNKTION: SESSION INFO UPDATEN
+function updateSessionInfo() {
+    const sessionIdElement = document.getElementById('session-id');
+    const sessionTypeElement = document.getElementById('session-type');
+    
+    if (currentSessionFilter === 'current') {
+        // ✅ LIVE SESSION
+        sessionIdElement.textContent = 'LIVE';
+        sessionTypeElement.textContent = 'Aktiv';
+    } else if (currentSessionFilter === 'all') {
+        // ✅ ALLE SESSIONS
+        sessionIdElement.textContent = 'ALL';
+        sessionTypeElement.textContent = 'Gesamt';
+    } else {
+        // ✅ SPEZIFISCHE SESSION
+        const selectedSession = availableSessions.find(s => s.id == currentSessionFilter);
+        
+        if (selectedSession) {
+            sessionIdElement.textContent = selectedSession.id;
+            
+            // Session Typ basierend auf verfügbaren Daten ableiten
+            let sessionType = 'Training';
+            
+            // Einfache Logik für Session-Typ
+            if (selectedSession.name && selectedSession.name.toLowerCase().includes('race')) {
+                sessionType = 'Rennen';
+            } else if (selectedSession.name && selectedSession.name.toLowerCase().includes('quali')) {
+                sessionType = 'Qualifying';
+            } else if (selectedSession.name && selectedSession.name.toLowerCase().includes('practice')) {
+                sessionType = 'Training';
+            } else {
+                // Fallback: Typ basierend auf Anzahl Runden schätzen
+                const totalLaps = parseInt(document.getElementById('total-laps').textContent) || 0;
+                if (totalLaps > 100) {
+                    sessionType = 'Rennen';
+                } else if (totalLaps > 50) {
+                    sessionType = 'Qualifying';
+                } else {
+                    sessionType = 'Training';
+                }
+            }
+            
+            sessionTypeElement.textContent = sessionType;
+        } else {
+            sessionIdElement.textContent = currentSessionFilter;
+            sessionTypeElement.textContent = 'Unbekannt';
+        }
+    }
+    
+    console.log(`🔍 Session Info: ID=${sessionIdElement.textContent}, Type=${sessionTypeElement.textContent}`);
+}
+
 
 function updateControllerTables() {
     const SHOW_ONLY_CURRENT_SESSION = document.getElementById('sessionToggle') ? 
@@ -691,6 +879,25 @@ style.textContent = `
     .form-check-label {
         cursor: pointer;
         user-select: none;
+    }
+    #session-id, #session-type {
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    }
+    
+    #session-id {
+        color: rgba(255, 255, 255, 0.95);
+    }
+    
+    #session-type {
+        color: rgba(255, 255, 255, 0.9);
+    }
+    
+    .card .d-flex small {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
     /* Responsive */
