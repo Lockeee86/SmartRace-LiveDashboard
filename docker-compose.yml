@@ -1,22 +1,31 @@
-version: '3.8'
+version: "3.8"
 
 services:
   web:
     build: .
+    container_name: smartrace-dashboard
     ports:
       - "5000:5000"
     environment:
       - DATABASE_URL=postgresql://smartrace:smartrace123@db:5432/smartrace
-      - DROPBOX_ACCESS_TOKEN=${DROPBOX_ACCESS_TOKEN:-}
-    volumes:
-      - ./data:/app/data
-      - ./exports:/app/exports
+      - FLASK_DEBUG=false
+      - SECRET_KEY=smartrace-live-dashboard-secret
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
   db:
-    image: postgres:15
+    image: postgres:16-alpine
+    container_name: smartrace-db
     environment:
       POSTGRES_DB: smartrace
       POSTGRES_USER: smartrace
@@ -24,6 +33,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartrace"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   postgres_data:
+    driver: local
