@@ -1,859 +1,389 @@
 {% extends "base.html" %}
 
-{% block title %}Database - SmartRace{% endblock %}
+{% block title %}Datenbank - SmartRace Live{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="mb-0">Race Database</h2>
-            
-            <!-- ✅ SESSION-AUSWAHL -->
-            <div class="d-flex align-items-center gap-3">
-                <label for="sessionSelect" class="form-label mb-0">
-                    <i class="fas fa-database"></i> Session:
-                </label>
-                <select id="sessionSelect" class="form-select" style="min-width: 350px;">
-                    <option value="all">🌍 Alle Sessions</option>
-                    <!-- Wird dynamisch gefüllt -->
-                </select>
-                <button id="refreshSessions" class="btn btn-outline-primary btn-sm" title="Sessions aktualisieren">
-                    <i class="fas fa-sync-alt"></i>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Filter und Export Sektion -->
-<div class="row mb-4">
-    <div class="col-md-2">
-        <select id="driverFilter" class="form-select">
-            <option value="">Alle Fahrer</option>
+<!-- Header -->
+<div class="session-selector d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-database me-2"></i>Datenbank</h5>
+    <div class="d-flex align-items-center gap-2">
+        <select id="sessionSelect" class="form-select form-select-sm" style="min-width: 280px;">
+            <option value="all">Alle Sessions</option>
         </select>
-    </div>
-    <div class="col-md-2">
-        <select id="carFilter" class="form-select">
-            <option value="">Alle Autos</option>
-        </select>
-    </div>
-    <!-- ✅ NEUER DATUMS-FILTER -->
-    <div class="col-md-2">
-        <input type="date" id="dateFilter" class="form-control" title="Filter nach Datum">
-    </div>
-    <div class="col-md-1">
-        <button type="button" class="btn btn-outline-secondary" onclick="clearDateFilter()" title="Datum zurücksetzen">
-            <i class="fas fa-times"></i>
+        <button id="refreshBtn" class="btn btn-sm btn-outline-primary" title="Aktualisieren">
+            <i class="fas fa-sync-alt"></i>
         </button>
     </div>
-    <div class="col-md-5">
-        <div class="btn-group w-100" role="group">
-            <button type="button" class="btn btn-success" onclick="exportCSV()">
-                <i class="fas fa-download"></i> CSV Export
+</div>
+
+<!-- Filter Leiste -->
+<div class="filter-section mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label small text-muted mb-1">Fahrer</label>
+            <select id="driverFilter" class="form-select form-select-sm">
+                <option value="">Alle Fahrer</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small text-muted mb-1">Auto</label>
+            <select id="carFilter" class="form-select form-select-sm">
+                <option value="">Alle Autos</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small text-muted mb-1">Datum von</label>
+            <input type="date" id="dateFrom" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small text-muted mb-1">Datum bis</label>
+            <input type="date" id="dateTo" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-sm btn-outline-secondary w-100" onclick="clearFilters()">
+                <i class="fas fa-times me-1"></i>Filter Reset
             </button>
-            <button type="button" class="btn btn-primary" onclick="exportDropbox()" id="dropboxBtn">
-                <i class="fab fa-dropbox"></i> Zu Dropbox
-            </button>
-            <button type="button" class="btn btn-outline-secondary" onclick="showDropboxConfig()">
-                <i class="fas fa-cog"></i> Dropbox Setup
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-sm btn-success w-100" onclick="exportCSV()">
+                <i class="fas fa-download me-1"></i>CSV Export
             </button>
         </div>
     </div>
 </div>
 
-<!-- ✅ FILTER STATUS ANZEIGE -->
-<div class="row mb-3" id="filterStatus" style="display: none;">
-    <div class="col-12">
-        <div class="alert alert-info py-2 mb-0">
-            <i class="fas fa-filter"></i> <span id="filterText"></span>
-            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="clearAllFilters()">
-                Alle Filter zurücksetzen
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Export Status -->
-<div id="exportStatus" class="alert d-none" role="alert"></div>
-
-<!-- Statistiken -->
-<div class="row mb-4">
+<!-- Statistik Cards -->
+<div class="row g-3 mb-3">
     <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title" id="totalLaps">-</h5>
-                <p class="card-text">Gesamte Runden</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title" id="totalDrivers">-</h5>
-                <p class="card-text">Fahrer</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title" id="totalCars">-</h5>
-                <p class="card-text">Autos</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h5 class="card-title" id="filteredRows">-</h5>
-                <p class="card-text">Gefilterte Einträge</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Daten Tabelle -->
-<div class="row">
-    <div class="col-12">
         <div class="card">
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th class="sortable" data-column="event_id">
-                                    Session <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                                <th class="sortable" data-column="event_type">
-                                    Typ <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                                <th class="sortable" data-column="driver_name">
-                                    Fahrer <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                                <th class="sortable" data-column="car_name">
-                                    Auto <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                                <th class="sortable" data-column="lap">
-                                    Runde <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                                <th class="sortable" data-column="laptime_formatted">
-                                    Rundenzeit <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                                <th class="sortable" data-column="sector_1">
-                                    Sektor 1 <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                                <th class="sortable" data-column="sector_2">
-                                    Sektor 2 <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                                <th class="sortable" data-column="sector_3">
-                                    Sektor 3 <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                                <th class="sortable" data-column="timestamp">
-                                    Zeitstempel <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                                <th class="sortable" data-column="is_pb">
-                                    PB <i class="fas fa-sort sort-icon"></i>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody id="dataTable">
-                        </tbody>
-                    </table>
-                </div>
+            <div class="card-body py-2 text-center">
+                <div class="fw-bold fs-5" id="statTotal">--</div>
+                <div class="small text-muted">Eintraege gesamt</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body py-2 text-center">
+                <div class="fw-bold fs-5" id="statFiltered">--</div>
+                <div class="small text-muted">Gefiltert</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body py-2 text-center">
+                <div class="fw-bold fs-5" id="statDrivers">--</div>
+                <div class="small text-muted">Fahrer</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body py-2 text-center">
+                <div class="fw-bold fs-5" id="statCars">--</div>
+                <div class="small text-muted">Autos</div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Dropbox Konfiguration Modal -->
-<div class="modal fade" id="dropboxModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Dropbox Konfiguration</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div id="dropboxStatus" class="mb-3"></div>
-                
-                <div class="mb-3">
-                    <label for="dropboxToken" class="form-label">Dropbox Access Token</label>
-                    <input type="password" class="form-control" id="dropboxToken" 
-                           placeholder="Dropbox Access Token eingeben">
-                    <div class="form-text">
-                        <strong>So erhältst du einen Access Token:</strong><br>
-                        1. Gehe zu <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox App Console</a><br>
-                        2. Erstelle eine neue App (Scoped access, Full Dropbox)<br>
-                        3. Gehe zu "Settings" → "Generated access token"<br>
-                        4. Klicke "Generate" und kopiere den Token hier ein
-                    </div>
-                </div>
-                
-                <div class="mb-3">
-                    <small class="text-muted">
-                        <i class="fas fa-info-circle"></i> 
-                        Exports werden im Ordner "/SmartRace_Exports" in deiner Dropbox gespeichert.
-                    </small>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
-                <button type="button" class="btn btn-success" onclick="testDropboxConnection()">Test Verbindung</button>
-                <button type="button" class="btn btn-primary" onclick="saveDropboxConfig()">Speichern</button>
-            </div>
+<!-- Status Alert -->
+<div id="statusAlert" class="alert d-none mb-3" role="alert"></div>
+
+<!-- Datentabelle -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th class="sortable" data-col="event_id">Session <i class="fas fa-sort sort-icon"></i></th>
+                        <th class="sortable" data-col="event_type">Typ <i class="fas fa-sort sort-icon"></i></th>
+                        <th class="sortable" data-col="driver_name">Fahrer <i class="fas fa-sort sort-icon"></i></th>
+                        <th class="sortable" data-col="car_name">Auto <i class="fas fa-sort sort-icon"></i></th>
+                        <th class="sortable text-center" data-col="lap">Runde <i class="fas fa-sort sort-icon"></i></th>
+                        <th class="sortable text-center" data-col="laptime_formatted">Rundenzeit <i class="fas fa-sort sort-icon"></i></th>
+                        <th class="text-center">S1</th>
+                        <th class="text-center">S2</th>
+                        <th class="text-center">S3</th>
+                        <th class="sortable text-center" data-col="timestamp">Zeitstempel <i class="fas fa-sort sort-icon"></i></th>
+                        <th class="text-center" style="width: 40px;">PB</th>
+                    </tr>
+                </thead>
+                <tbody id="dataBody">
+                    <tr><td colspan="11" class="text-center text-muted py-4">Lade Daten...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block styles %}
-<style>
-/* Sortierbare Tabellen Styles */
-.sortable {
-    cursor: pointer;
-    user-select: none;
-    transition: background-color 0.2s;
-}
-
-.sortable:hover {
-    background-color: rgba(0, 123, 255, 0.1);
-}
-
-.sort-icon {
-    margin-left: 5px;
-    opacity: 0.5;
-    transition: opacity 0.2s;
-}
-
-.sortable:hover .sort-icon {
-    opacity: 1;
-}
-
-.sortable.sort-asc .sort-icon:before {
-    content: "\f0de"; /* fa-sort-up */
-    color: #007bff;
-    opacity: 1;
-}
-
-.sortable.sort-desc .sort-icon:before {
-    content: "\f0dd"; /* fa-sort-down */
-    color: #007bff;
-    opacity: 1;
-}
-
-.controller-row {
-    border-left: 4px solid var(--controller-color);
-    background: linear-gradient(90deg, var(--controller-color)10 0%, transparent 50px);
-}
-
-.controller-badge {
-    color: white;
-    text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
-}
-    
-/* ✅ DATUMS-FILTER STYLES */
-#dateFilter {
-    cursor: pointer;
-}
-
-#filterStatus .alert {
-    border-radius: 8px;
-    border-left: 4px solid #17a2b8;
-}
-
-/* ✅ SESSION-AUSWAHL STYLES */
-#sessionSelect {
-    font-family: 'Courier New', monospace;
-    font-size: 0.9em;
-}
-
-#sessionSelect option {
-    padding: 5px;
-}
-</style>
 {% endblock %}
 
 {% block scripts %}
 <script>
-let currentData = [];
-let availableSessions = [];
+let allData = [];
+let currentSort = { col: null, dir: null };
 let currentSessionFilter = 'all';
-let dropboxConfigured = false;
-let currentSort = { column: null, direction: null };
 
-// ✅ SESSION-MANAGEMENT
+// Sessions laden
 async function loadSessions() {
     try {
-        const response = await fetch('/api/sessions');
-        if (!response.ok) throw new Error('Sessions laden fehlgeschlagen');
-        
-        availableSessions = await response.json();
-        
-        const sessionSelect = document.getElementById('sessionSelect');
-        sessionSelect.innerHTML = '<option value="all">🌍 Alle Sessions</option>';
-        
-        availableSessions.forEach((session, index) => {
-            const option = document.createElement('option');
-            option.value = session.event_id;
-            
-            // Schöne Anzeige mit Datum und Details
-            const startDate = session.start_time ? new Date(session.start_time).toLocaleDateString('de-DE') : 'Unbekannt';
-            const duration = session.start_time && session.end_time ? 
-                Math.round((new Date(session.end_time) - new Date(session.start_time)) / 60000) + 'min' : '';
-            
-            option.textContent = `${session.event_id} (${session.event_type || 'Training'}) - ${startDate} - ${session.total_laps} Runden, ${session.drivers} Fahrer ${duration}`;
-            
-            // Neueste Session als Standard (falls nicht "all" gewählt)
-            if (index === 0 && currentSessionFilter === 'all') {
-                // Kommentar: Du kannst das aktivieren wenn du willst dass automatisch die neueste Session gewählt wird
-                // option.selected = true;
-                // currentSessionFilter = session.event_id;
-            }
-            
-            sessionSelect.appendChild(option);
+        const res = await fetch('/api/sessions');
+        const sessions = await res.json();
+        const sel = document.getElementById('sessionSelect');
+        sel.innerHTML = '<option value="all">Alle Sessions</option>';
+        sessions.forEach(s => {
+            const date = s.start_time ? new Date(s.start_time).toLocaleDateString('de-DE') : '';
+            const opt = document.createElement('option');
+            opt.value = s.event_id;
+            opt.textContent = `${s.event_id} (${s.event_type || 'Training'}) - ${date} - ${s.total_laps} Runden`;
+            sel.appendChild(opt);
         });
-        
-        // Aktuell gewählte Session beibehalten
-        sessionSelect.value = currentSessionFilter;
-        
-        console.log('🔍 Sessions geladen:', availableSessions.length);
-        
-    } catch (error) {
-        console.error('❌ Session loading error:', error);
-        showStatus('Fehler beim Laden der Sessions', 'danger');
+        sel.value = currentSessionFilter;
+    } catch (e) {
+        console.error('Sessions-Fehler:', e);
     }
 }
 
-// ✅ DATUMS-FILTER FUNKTIONEN
-function formatDateForFilter(date) {
-    return date.toISOString().split('T')[0];
-}
+// Filter laden
+async function loadFilters() {
+    try {
+        const res = await fetch('/api/filters');
+        const data = await res.json();
 
-function isSameDay(date1, date2) {
-    return formatDateForFilter(date1) === formatDateForFilter(date2);
-}
+        const driverSel = document.getElementById('driverFilter');
+        const carSel = document.getElementById('carFilter');
+        const currentDriver = driverSel.value;
+        const currentCar = carSel.value;
 
-function updateFilterStatus() {
-    const sessionFilter = document.getElementById('sessionSelect').value;
-    const driverFilter = document.getElementById('driverFilter').value;
-    const carFilter = document.getElementById('carFilter').value;
-    const dateFilter = document.getElementById('dateFilter').value;
-    
-    const filterParts = [];
-    if (sessionFilter && sessionFilter !== 'all') {
-        const session = availableSessions.find(s => s.event_id === sessionFilter);
-        filterParts.push(`Session: ${session ? session.display_name : sessionFilter}`);
-    }
-    if (driverFilter) filterParts.push(`Fahrer: ${driverFilter}`);
-    if (carFilter) filterParts.push(`Auto: ${carFilter}`);
-    if (dateFilter) filterParts.push(`Datum: ${new Date(dateFilter).toLocaleDateString('de-DE')}`);
-    
-    const filterStatus = document.getElementById('filterStatus');
-    const filterText = document.getElementById('filterText');
-    
-    if (filterParts.length > 0) {
-        filterText.textContent = `Aktive Filter: ${filterParts.join(', ')}`;
-        filterStatus.style.display = 'block';
-    } else {
-        filterStatus.style.display = 'none';
-    }
-}
-
-function clearDateFilter() {
-    document.getElementById('dateFilter').value = '';
-    loadData();
-    console.log('📅 Datumsfilter zurückgesetzt');
-}
-
-function clearAllFilters() {
-    document.getElementById('sessionSelect').value = 'all';
-    document.getElementById('driverFilter').value = '';
-    document.getElementById('carFilter').value = '';
-    document.getElementById('dateFilter').value = '';
-    currentSessionFilter = 'all';
-    loadData();
-    console.log('🔄 Alle Filter zurückgesetzt');
-}
-
-// ✅ SORTIERUNGS-FUNKTIONEN
-function sortData(data, column, direction) {
-    return [...data].sort((a, b) => {
-        let valA = a[column];
-        let valB = b[column];
-        
-        if (column === 'timestamp') {
-            valA = new Date(valA);
-            valB = new Date(valB);
-        } else if (column === 'lap') {
-            valA = parseInt(valA) || 0;
-            valB = parseInt(valB) || 0;
-        } else if (column === 'laptime_formatted' || column === 'sector_1' || column === 'sector_2' || column === 'sector_3') {
-            valA = timeToMs(valA) || 999999999;
-            valB = timeToMs(valB) || 999999999;
-        } else if (column === 'is_pb') {
-            valA = valA ? 1 : 0;
-            valB = valB ? 1 : 0;
-        } else {
-            valA = (valA || '').toString().toLowerCase();
-            valB = (valB || '').toString().toLowerCase();
-        }
-        
-        if (valA < valB) return direction === 'asc' ? -1 : 1;
-        if (valA > valB) return direction === 'asc' ? 1 : -1;
-        return 0;
-    });
-}
-
-function timeToMs(timeStr) {
-    if (!timeStr || timeStr === '-') return null;
-    
-    const parts = timeStr.split(':');
-    let minutes = 0;
-    let seconds = 0;
-    
-    if (parts.length === 2) {
-        minutes = parseInt(parts[0]) || 0;
-        seconds = parseFloat(parts[1]) || 0;
-    } else {
-        seconds = parseFloat(parts[0]) || 0;
-    }
-    
-    return (minutes * 60 + seconds) * 1000;
-}
-
-function setupTableSorting() {
-    document.querySelectorAll('.sortable').forEach(header => {
-        header.addEventListener('click', (e) => {
-            const column = e.currentTarget.getAttribute('data-column');
-            
-            let direction = 'asc';
-            if (currentSort.column === column && currentSort.direction === 'asc') {
-                direction = 'desc';
-            }
-            
-            document.querySelectorAll('.sortable').forEach(h => {
-                h.classList.remove('sort-asc', 'sort-desc');
-            });
-            
-            e.currentTarget.classList.add(`sort-${direction}`);
-            currentSort = { column, direction };
-            
-            const sortedData = sortData(currentData, column, direction);
-            renderTable(sortedData);
-            
-            console.log(`🔄 Sortiert nach ${column} (${direction})`);
+        driverSel.innerHTML = '<option value="">Alle Fahrer</option>';
+        data.drivers.forEach(d => {
+            driverSel.innerHTML += `<option value="${d}">${d}</option>`;
         });
-    });
-}
 
-function renderTable(data) {
-    const tbody = document.getElementById('dataTable');
-    tbody.innerHTML = '';
-    
-    if (data.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="11" class="text-center py-4 text-muted">
-                    <i class="fas fa-search"></i><br>
-                    Keine Daten gefunden
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    data.forEach(lap => {
-        const row = document.createElement('tr');
-        if (lap.is_pb) row.classList.add('table-success');
-        
-        // Session Badge mit Typ-Farbe
-        let sessionBadgeClass = 'bg-primary';
-        if (lap.event_type === 'Race') sessionBadgeClass = 'bg-danger';
-        else if (lap.event_type === 'Qualifying') sessionBadgeClass = 'bg-warning text-dark';
-        else if (lap.event_type === 'Practice') sessionBadgeClass = 'bg-info';
-        
-        row.innerHTML = `
-            <td>
-                <span class="badge ${sessionBadgeClass}">${lap.event_id || '-'}</span>
-            </td>
-            <td>${lap.event_type || '-'}</td>
-            <td>${lap.driver_name || '-'}</td>
-            <td>${lap.car_name || '-'}</td>
-            <td>${lap.lap || '-'}</td>
-            <td><strong>${lap.laptime_formatted || '-'}</strong></td>
-            <td>${lap.sector_1 || '-'}</td>
-            <td>${lap.sector_2 || '-'}</td>
-            <td>${lap.sector_3 || '-'}</td>
-            <td>${lap.timestamp ? new Date(lap.timestamp).toLocaleString('de-DE') : '-'}</td>
-            <td>${lap.is_pb ? '<i class="fas fa-trophy text-warning" title="Personal Best"></i>' : ''}</td>
-        `;
-        
-        tbody.appendChild(row);
-    });
-}
-
-function loadFilters() {
-    // Session-spezifische Filter laden wenn eine Session gewählt ist
-    const sessionParam = currentSessionFilter !== 'all' ? `?session_id=${encodeURIComponent(currentSessionFilter)}` : '';
-    
-    fetch(`/api/filters${sessionParam}`)
-        .then(response => response.json())
-        .then(data => {
-            const driverSelect = document.getElementById('driverFilter');
-            const carSelect = document.getElementById('carFilter');
-            
-            driverSelect.innerHTML = '<option value="">Alle Fahrer</option>';
-            carSelect.innerHTML = '<option value="">Alle Autos</option>';
-            
-            data.drivers.forEach(driver => {
-                const option = document.createElement('option');
-                option.value = driver;
-                option.textContent = driver;
-                driverSelect.appendChild(option);
-            });
-            
-            data.cars.forEach(car => {
-                const option = document.createElement('option');
-                option.value = car;
-                option.textContent = car;
-                carSelect.appendChild(option);
-            });
-            
-            document.getElementById('totalDrivers').textContent = data.drivers.length;
-            document.getElementById('totalCars').textContent = data.cars.length;
-        })
-        .catch(error => {
-            console.error('Filter loading error:', error);
+        carSel.innerHTML = '<option value="">Alle Autos</option>';
+        data.cars.forEach(c => {
+            carSel.innerHTML += `<option value="${c}">${c}</option>`;
         });
+
+        driverSel.value = currentDriver;
+        carSel.value = currentCar;
+
+        document.getElementById('statDrivers').textContent = data.drivers.length;
+        document.getElementById('statCars').textContent = data.cars.length;
+    } catch (e) {
+        console.error('Filter-Fehler:', e);
+    }
 }
 
-// ✅ ERWEITERTE LOADDATA FUNKTION
+// Daten laden
 async function loadData() {
     try {
-        currentSessionFilter = document.getElementById('sessionSelect').value;
-        const driverFilter = document.getElementById('driverFilter').value;
-        const carFilter = document.getElementById('carFilter').value;
-        const dateFilter = document.getElementById('dateFilter').value;
-        
         const params = new URLSearchParams();
-        if (currentSessionFilter && currentSessionFilter !== 'all') {
-            params.append('session_id', currentSessionFilter);
-        }
-        if (driverFilter) params.append('driver', driverFilter);
-        if (carFilter) params.append('car', carFilter);
-        if (dateFilter) params.append('date', dateFilter);
-        
-        const response = await fetch(`/api/laps?${params}`);
-        if (!response.ok) throw new Error('Daten laden fehlgeschlagen');
-        
-        const data = await response.json();
-        currentData = data;
-        
+        currentSessionFilter = document.getElementById('sessionSelect').value;
+        if (currentSessionFilter !== 'all') params.append('session_id', currentSessionFilter);
+
+        const driver = document.getElementById('driverFilter').value;
+        if (driver) params.append('driver', driver);
+
+        const car = document.getElementById('carFilter').value;
+        if (car) params.append('car', car);
+
+        const dateFrom = document.getElementById('dateFrom').value;
+        if (dateFrom) params.append('date_from', dateFrom);
+
+        const dateTo = document.getElementById('dateTo').value;
+        if (dateTo) params.append('date_to', dateTo);
+
+        const res = await fetch('/api/laps?' + params);
+        allData = await res.json();
+
         // Sortierung beibehalten
-        let displayData = data;
-        if (currentSort.column) {
-            displayData = sortData(data, currentSort.column, currentSort.direction);
+        let displayData = allData;
+        if (currentSort.col) {
+            displayData = sortData(allData, currentSort.col, currentSort.dir);
         }
-        
+
         renderTable(displayData);
-        updateFilterStatus();
-        
-        // Update statistics
-        document.getElementById('filteredRows').textContent = displayData.length;
-        
-        // Gesamtzahl laden (ohne Filter)
-        const totalResponse = await fetch('/api/laps');
-        const totalData = await totalResponse.json();
-        document.getElementById('totalLaps').textContent = totalData.length;
-        
-        console.log(`📊 Daten geladen: ${displayData.length} von ${totalData.length} Einträgen`);
-        
-    } catch (error) {
-        console.error('❌ Load error:', error);
+        document.getElementById('statFiltered').textContent = displayData.length;
+
+        // Total separat laden
+        const totalRes = await fetch('/api/laps');
+        const totalData = await totalRes.json();
+        document.getElementById('statTotal').textContent = totalData.length;
+
+    } catch (e) {
+        console.error('Daten-Fehler:', e);
         showStatus('Fehler beim Laden der Daten', 'danger');
     }
 }
 
-// ✅ EXPORT FUNKTIONEN
+// Tabelle rendern
+function renderTable(data) {
+    const tbody = document.getElementById('dataBody');
+
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4"><i class="fas fa-search me-2"></i>Keine Daten gefunden</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = data.map(lap => {
+        const rowClass = lap.is_pb ? 'row-pb' : '';
+
+        let typeBadge = 'bg-secondary';
+        const et = (lap.event_type || '').toLowerCase();
+        if (et.includes('race')) typeBadge = 'bg-danger';
+        else if (et.includes('quali')) typeBadge = 'bg-warning text-dark';
+        else if (et.includes('practice') || et.includes('training')) typeBadge = 'bg-info';
+
+        const ts = lap.timestamp ? new Date(lap.timestamp).toLocaleString('de-DE', {
+            day: '2-digit', month: '2-digit', year: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }) : '--';
+
+        return `<tr class="${rowClass}">
+            <td><span class="badge ${typeBadge} small">${lap.event_id || '--'}</span></td>
+            <td class="small">${lap.event_type || '--'}</td>
+            <td>${lap.driver_name || '--'}</td>
+            <td class="small text-muted">${lap.car_name || '--'}</td>
+            <td class="text-center">${lap.lap || '--'}</td>
+            <td class="text-center font-mono fw-bold">${lap.laptime_formatted || '--'}</td>
+            <td class="text-center font-mono small">${lap.sector_1 || '--'}</td>
+            <td class="text-center font-mono small">${lap.sector_2 || '--'}</td>
+            <td class="text-center font-mono small">${lap.sector_3 || '--'}</td>
+            <td class="text-center small">${ts}</td>
+            <td class="text-center">${lap.is_pb ? '<i class="fas fa-trophy text-warning"></i>' : ''}</td>
+        </tr>`;
+    }).join('');
+}
+
+// Sortierung
+function sortData(data, col, dir) {
+    return [...data].sort((a, b) => {
+        let va = a[col], vb = b[col];
+
+        if (col === 'timestamp') {
+            va = va ? new Date(va) : new Date(0);
+            vb = vb ? new Date(vb) : new Date(0);
+        } else if (col === 'lap') {
+            va = parseInt(va) || 0;
+            vb = parseInt(vb) || 0;
+        } else if (col === 'laptime_formatted') {
+            va = a.laptime_raw || 999999;
+            vb = b.laptime_raw || 999999;
+        } else {
+            va = (va || '').toString().toLowerCase();
+            vb = (vb || '').toString().toLowerCase();
+        }
+
+        if (va < vb) return dir === 'asc' ? -1 : 1;
+        if (va > vb) return dir === 'asc' ? 1 : -1;
+        return 0;
+    });
+}
+
+function setupSorting() {
+    document.querySelectorAll('.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const col = th.dataset.col;
+            let dir = 'asc';
+            if (currentSort.col === col && currentSort.dir === 'asc') dir = 'desc';
+
+            document.querySelectorAll('.sortable').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+            th.classList.add('sort-' + dir);
+            currentSort = { col, dir };
+
+            renderTable(sortData(allData, col, dir));
+        });
+    });
+}
+
+// CSV Export
 function exportCSV() {
     const params = new URLSearchParams();
-    if (currentSessionFilter && currentSessionFilter !== 'all') {
-        params.append('session_id', currentSessionFilter);
-    }
-    
-    const driverFilter = document.getElementById('driverFilter').value;
-    const carFilter = document.getElementById('carFilter').value;
-    const dateFilter = document.getElementById('dateFilter').value;
-    
-    if (driverFilter) params.append('driver', driverFilter);
-    if (carFilter) params.append('car', carFilter);
-    if (dateFilter) params.append('date', dateFilter);
-    
-    showStatus('CSV Export wird erstellt...', 'info');
-    
+    const session = document.getElementById('sessionSelect').value;
+    if (session !== 'all') params.append('event', session);
+
+    const driver = document.getElementById('driverFilter').value;
+    if (driver) params.append('driver', driver);
+
+    const car = document.getElementById('carFilter').value;
+    if (car) params.append('car', car);
+
+    const dateFrom = document.getElementById('dateFrom').value;
+    if (dateFrom) params.append('date_from', dateFrom);
+
+    const dateTo = document.getElementById('dateTo').value;
+    if (dateTo) params.append('date_to', dateTo);
+
     const link = document.createElement('a');
-    link.href = `/api/export/csv?${params}`;
-    
-    let filename = 'smartrace_export';
-    if (currentSessionFilter && currentSessionFilter !== 'all') {
-        filename += `_${currentSessionFilter}`;
-    }
-    if (dateFilter) {
-        filename += `_${dateFilter}`;
-    }
-    filename += `_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`;
-    
-    link.download = filename;
+    link.href = '/api/export/csv?' + params;
+    link.download = 'smartrace_export.csv';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
-    setTimeout(() => {
-        showStatus(`CSV Export erfolgreich! ${currentData.length} Einträge exportiert.`, 'success');
-    }, 1000);
+
+    showStatus('CSV wird heruntergeladen...', 'success');
 }
 
-function exportDropbox() {
-    if (!dropboxConfigured) {
-        showStatus('Bitte konfiguriere zuerst Dropbox über das Setup.', 'warning');
-        showDropboxConfig();
-        return;
-    }
-    
-    showStatus('Upload zu Dropbox...', 'info');
-    
-    fetch('/api/dropbox/backup', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            let message = `✅ Export erfolgreich! ${data.records} Einträge zu Dropbox hochgeladen.<br>`;
-            message += `📁 Datei: backup_${new Date().toISOString().slice(0, 10)}.csv`;
-            showStatus(message, 'success');
-        } else {
-            showStatus(`❌ Export fehlgeschlagen: ${data.error}`, 'danger');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showStatus('❌ Netzwerkfehler beim Dropbox Export', 'danger');
-    });
+// Filter zuruecksetzen
+function clearFilters() {
+    document.getElementById('sessionSelect').value = 'all';
+    document.getElementById('driverFilter').value = '';
+    document.getElementById('carFilter').value = '';
+    document.getElementById('dateFrom').value = '';
+    document.getElementById('dateTo').value = '';
+    currentSessionFilter = 'all';
+    currentSort = { col: null, dir: null };
+    document.querySelectorAll('.sortable').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+    loadData();
 }
 
-function showDropboxConfig() {
-    checkDropboxStatus();
-    const modal = new bootstrap.Modal(document.getElementById('dropboxModal'));
-    modal.show();
-}
-
-function checkDropboxStatus() {
-    fetch('/api/dropbox/test')
-        .then(response => response.json())
-        .then(data => {
-            dropboxConfigured = data.success;
-            const statusDiv = document.getElementById('dropboxStatus');
-            
-            if (data.success) {
-                statusDiv.innerHTML = `<div class="alert alert-success">
-                    <i class="fas fa-check"></i> Dropbox ist verbunden<br>
-                    <strong>Account:</strong> ${data.account}
-                </div>`;
-                document.getElementById('dropboxBtn').disabled = false;
-            } else {
-                statusDiv.innerHTML = '<div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> Dropbox nicht konfiguriert</div>';
-                document.getElementById('dropboxBtn').disabled = true;
-            }
-        })
-        .catch(error => {
-            console.error('Dropbox check error:', error);
-            dropboxConfigured = false;
-            document.getElementById('dropboxBtn').disabled = true;
-        });
-}
-
-function saveDropboxConfig() {
-    const token = document.getElementById('dropboxToken').value.trim();
-    
-    if (!token) {
-        alert('Bitte gib einen Access Token ein.');
-        return;
-    }
-    
-    const statusDiv = document.getElementById('dropboxStatus');
-    statusDiv.innerHTML = '<div class="alert alert-info">Konfiguration wird gespeichert...</div>';
-    
-    fetch('/api/dropbox/setup', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            token: token
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            dropboxConfigured = true;
-            document.getElementById('dropboxBtn').disabled = false;
-            
-            statusDiv.innerHTML = `<div class="alert alert-success">
-                <i class="fas fa-check"></i> Erfolgreich verbunden!<br>
-                <strong>Nachricht:</strong> ${data.message}
-            </div>`;
-            
-            showStatus('Dropbox erfolgreich konfiguriert!', 'success');
-            
-            document.getElementById('dropboxToken').value = '';
-            
-            setTimeout(() => {
-                const modal = bootstrap.Modal.getInstance(document.getElementById('dropboxModal'));
-                modal.hide();
-            }, 2000);
-        } else {
-            statusDiv.innerHTML = `<div class="alert alert-danger">
-                <i class="fas fa-exclamation-triangle"></i> Konfiguration fehlgeschlagen: ${data.error}
-            </div>`;
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        statusDiv.innerHTML = '<div class="alert alert-danger">Netzwerkfehler bei der Konfiguration</div>';
-    });
-}
-
-function testDropboxConnection() {
-    const statusDiv = document.getElementById('dropboxStatus');
-    statusDiv.innerHTML = '<div class="alert alert-info">Verbindung wird getestet...</div>';
-    
-    fetch('/api/dropbox/test')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                dropboxConfigured = true;
-                statusDiv.innerHTML = `<div class="alert alert-success">
-                    <i class="fas fa-check"></i> ✅ Verbindung erfolgreich!<br>
-                    <strong>Account:</strong> ${data.account}
-                </div>`;
-                document.getElementById('dropboxBtn').disabled = false;
-            } else {
-                dropboxConfigured = false;
-                statusDiv.innerHTML = `<div class="alert alert-danger">
-                    <i class="fas fa-times"></i> ❌ Verbindung fehlgeschlagen: ${data.error}
-                </div>`;
-                document.getElementById('dropboxBtn').disabled = true;
-            }
-        })
-        .catch(error => {
-            console.error('Test error:', error);
-            statusDiv.innerHTML = '<div class="alert alert-danger">Netzwerkfehler beim Test</div>';
-        });
-}
-
-function showStatus(message, type) {
-    const statusDiv = document.getElementById('exportStatus');
-    statusDiv.className = `alert alert-${type}`;
-    statusDiv.innerHTML = message;
-    statusDiv.classList.remove('d-none');
-    
+// Status-Nachricht
+function showStatus(msg, type) {
+    const el = document.getElementById('statusAlert');
+    el.className = 'alert alert-' + type + ' mb-3';
+    el.textContent = msg;
+    el.classList.remove('d-none');
     if (type !== 'danger') {
-        setTimeout(() => {
-            statusDiv.classList.add('d-none');
-        }, 5000);
+        setTimeout(() => el.classList.add('d-none'), 4000);
     }
 }
 
-// ✅ EVENT LISTENERS
-document.addEventListener('DOMContentLoaded', async function() {
-    // Alles in der richtigen Reihenfolge laden
-    await loadSessions();    // 1. Sessions laden
-    loadFilters();           // 2. Filter laden
-    await loadData();        // 3. Daten laden
-    checkDropboxStatus();    // 4. Dropbox Status prüfen
-    
-    // Nach dem DOM-Load Sortierung einrichten
-    setTimeout(setupTableSorting, 100);
-    
-    console.log('✅ Database page loaded successfully');
+// Event Listener
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadSessions();
+    await loadFilters();
+    await loadData();
+    setupSorting();
 });
 
-// Session-Wechsel Event Listener
-document.getElementById('sessionSelect').addEventListener('change', function() {
-    currentSessionFilter = this.value;
-    console.log(`🔄 Session changed to: ${currentSessionFilter}`);
-    loadFilters();  // Filter für neue Session laden
-    loadData();     // Daten neu laden
+document.getElementById('sessionSelect').addEventListener('change', () => { loadFilters(); loadData(); });
+document.getElementById('driverFilter').addEventListener('change', loadData);
+document.getElementById('carFilter').addEventListener('change', loadData);
+document.getElementById('dateFrom').addEventListener('change', loadData);
+document.getElementById('dateTo').addEventListener('change', loadData);
+
+document.getElementById('refreshBtn').addEventListener('click', async function() {
+    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    this.disabled = true;
+    await loadSessions();
+    await loadFilters();
+    await loadData();
+    this.innerHTML = '<i class="fas fa-sync-alt"></i>';
+    this.disabled = false;
 });
 
-// Refresh Sessions Button
-document.getElementById('refreshSessions').addEventListener('click', async function() {
-    const button = this;
-    const originalHTML = button.innerHTML;
-    
-    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    button.disabled = true;
-    
-    try {
-        await loadSessions();
-        await loadData();
-        showStatus('Sessions erfolgreich aktualisiert!', 'success');
-    } catch (error) {
-        console.error('❌ Refresh error:', error);
-        showStatus('Fehler beim Aktualisieren der Sessions', 'danger');
-    } finally {
-        button.innerHTML = originalHTML;
-        button.disabled = false;
-    }
-});
-
-// Filter Event Listeners
-document.getElementById('driverFilter').addEventListener('change', function() {
-    console.log(`🔍 Driver filter: ${this.value}`);
-    loadData();
-});
-
-document.getElementById('carFilter').addEventListener('change', function() {
-    console.log(`🚗 Car filter: ${this.value}`);
-    loadData();
-});
-
-document.getElementById('dateFilter').addEventListener('change', function() {
-    console.log(`📅 Date filter: ${this.value}`);
-    loadData();
-});
-
-// Auto-refresh alle 30 Sekunden (nur wenn "all" Sessions gewählt ist)
+// Auto-Refresh alle 30s
 setInterval(() => {
-    if (currentSessionFilter === 'all') {
-        loadData();
-        console.log('🔄 Auto-refresh triggered');
-    }
+    if (currentSessionFilter === 'all') loadData();
 }, 30000);
 
 // Keyboard Shortcuts
-document.addEventListener('keydown', function(e) {
-    // Ctrl/Cmd + R = Refresh Sessions
-    if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
-        e.preventDefault();
-        document.getElementById('refreshSessions').click();
-    }
-    
-    // Ctrl/Cmd + E = Export CSV
-    if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
-        e.preventDefault();
-        exportCSV();
-    }
-    
-    // Escape = Clear all filters
-    if (e.key === 'Escape') {
-        clearAllFilters();
-    }
+document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'e') { e.preventDefault(); exportCSV(); }
+    if (e.key === 'Escape') clearFilters();
 });
-
-console.log('🎯 Database.html loaded with session management!');
 </script>
 {% endblock %}

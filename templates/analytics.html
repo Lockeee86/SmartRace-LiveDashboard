@@ -1,40 +1,80 @@
 {% extends "base.html" %}
 
-{% block title %}Analytics - SmartRace{% endblock %}
+{% block title %}Analytics - SmartRace Live{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <h2 class="mb-4">Race Analytics</h2>
+<!-- Header -->
+<div class="session-selector d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Race Analytics</h5>
+    <div class="d-flex align-items-center gap-2">
+        <select id="analyticsSession" class="form-select form-select-sm" style="min-width: 280px;">
+            <option value="all">Alle Sessions</option>
+        </select>
+        <button id="analyticsRefresh" class="btn btn-sm btn-outline-primary">
+            <i class="fas fa-sync-alt"></i>
+        </button>
     </div>
 </div>
 
-<div class="row">
+<!-- Charts Row 1 -->
+<div class="row g-3 mb-3">
     <div class="col-md-6">
         <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Rundenzeiten Vergleich</h5>
-                <canvas id="laptimesChart"></canvas>
+            <div class="card-header border-0 bg-transparent">
+                <h6 class="mb-0"><i class="fas fa-tachometer-alt me-2 text-primary"></i>Beste Rundenzeiten</h6>
+            </div>
+            <div class="card-body pt-0">
+                <canvas id="bestTimesChart" height="250"></canvas>
             </div>
         </div>
     </div>
     <div class="col-md-6">
         <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Beste Rundenzeiten</h5>
-                <canvas id="bestTimesChart"></canvas>
+            <div class="card-header border-0 bg-transparent">
+                <h6 class="mb-0"><i class="fas fa-chart-radar me-2 text-success"></i>Fahrer-Vergleich</h6>
+            </div>
+            <div class="card-body pt-0">
+                <canvas id="radarChart" height="250"></canvas>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mt-4">
+<!-- Charts Row 2 -->
+<div class="row g-3 mb-3">
     <div class="col-12">
         <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Rundenzeiten Verlauf</h5>
-                <canvas id="progressChart" style="max-height: 400px;"></canvas>
+            <div class="card-header border-0 bg-transparent">
+                <h6 class="mb-0"><i class="fas fa-chart-line me-2 text-info"></i>Rundenzeiten-Verlauf</h6>
             </div>
+            <div class="card-body pt-0">
+                <canvas id="progressChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Tabelle -->
+<div class="card">
+    <div class="card-header border-0 bg-transparent">
+        <h6 class="mb-0"><i class="fas fa-table me-2 text-warning"></i>Fahrer-Statistiken</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Fahrer</th>
+                        <th class="text-center">Runden</th>
+                        <th class="text-center">Beste Zeit</th>
+                        <th class="text-center">Durchschnitt</th>
+                        <th class="text-center">Konsistenz</th>
+                    </tr>
+                </thead>
+                <tbody id="statsTable">
+                    <tr><td colspan="5" class="text-center text-muted py-3">Lade Daten...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -42,133 +82,153 @@
 
 {% block scripts %}
 <script>
-let laptimesChart, bestTimesChart, progressChart;
+const CHART_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#e67e22', '#9b59b6', '#1abc9c', '#e84393'];
+let bestTimesChart, radarChart, progressChart;
+let currentAnalyticsSession = 'all';
 
-function loadAnalytics() {
-    fetch('/api/analytics')
-        .then(response => response.json())
-        .then(data => {
-            console.log('📊 Analytics data received:', data);
-            createCharts(data);
-        })
-        .catch(error => {
-            console.error('❌ Error loading analytics:', error);
+async function loadSessions() {
+    try {
+        const res = await fetch('/api/sessions');
+        const sessions = await res.json();
+        const sel = document.getElementById('analyticsSession');
+        sel.innerHTML = '<option value="all">Alle Sessions</option>';
+        sessions.forEach(s => {
+            const date = s.start_time ? new Date(s.start_time).toLocaleDateString('de-DE') : '';
+            const opt = document.createElement('option');
+            opt.value = s.event_id;
+            opt.textContent = `${s.event_id} (${s.event_type || 'Training'}) - ${date}`;
+            sel.appendChild(opt);
         });
+    } catch (e) {
+        console.error('Sessions-Fehler:', e);
+    }
 }
 
-function createCharts(data) {
-    const drivers = Object.keys(data);
-    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
+async function loadAnalytics() {
+    try {
+        let url = '/api/analytics';
+        if (currentAnalyticsSession !== 'all') {
+            url += '?session_id=' + encodeURIComponent(currentAnalyticsSession);
+        }
+        const res = await fetch(url);
+        const data = await res.json();
+        renderCharts(data);
+        renderStatsTable(data);
+    } catch (e) {
+        console.error('Analytics-Fehler:', e);
+    }
+}
 
-    // 1. Beste Zeiten Chart
+function renderCharts(data) {
+    const drivers = Object.keys(data);
+    if (drivers.length === 0) return;
+
+    const colors = drivers.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]);
+
+    // 1. Beste Zeiten (Bar Chart)
     const ctx1 = document.getElementById('bestTimesChart').getContext('2d');
     if (bestTimesChart) bestTimesChart.destroy();
-    
     bestTimesChart = new Chart(ctx1, {
         type: 'bar',
         data: {
             labels: drivers,
             datasets: [{
-                label: 'Beste Rundenzeit (s)',
-                data: drivers.map(driver => (data[driver].best_time / 1000).toFixed(3)),
-                backgroundColor: colors,
+                label: 'Beste Zeit (s)',
+                data: drivers.map(d => (data[d].best_time / 1000).toFixed(3)),
+                backgroundColor: colors.map(c => c + '80'),
                 borderColor: colors,
-                borderWidth: 1
+                borderWidth: 2,
+                borderRadius: 6,
             }]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: function(context) {
-                            return `${context.parsed.y}s`;
-                        }
+                        label: ctx => ctx.parsed.y + 's'
                     }
                 }
             },
             scales: {
                 y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Zeit (Sekunden)'
-                    }
+                    beginAtZero: false,
+                    title: { display: true, text: 'Zeit (Sekunden)', color: '#8b8fa3' },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#8b8fa3' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#8b8fa3' }
                 }
             }
         }
     });
 
     // 2. Radar Chart
-    const ctx2 = document.getElementById('laptimesChart').getContext('2d');
-    if (laptimesChart) laptimesChart.destroy();
-    
+    const ctx2 = document.getElementById('radarChart').getContext('2d');
+    if (radarChart) radarChart.destroy();
     const maxLaps = Math.max(...drivers.map(d => data[d].total_laps));
-    const maxTime = Math.max(...drivers.map(d => data[d].best_time / 1000));
-    
-    laptimesChart = new Chart(ctx2, {
+    const maxBest = Math.max(...drivers.map(d => data[d].best_time / 1000));
+    const maxAvg = Math.max(...drivers.map(d => data[d].avg_time / 1000));
+
+    radarChart = new Chart(ctx2, {
         type: 'radar',
         data: {
-            labels: ['Geschwindigkeit (inv. beste Zeit)', 'Konsistenz (inv. Ø-Zeit)', 'Erfahrung (Anzahl Runden)'],
-            datasets: drivers.map((driver, index) => ({
-                label: driver,
+            labels: ['Geschwindigkeit', 'Konsistenz', 'Erfahrung'],
+            datasets: drivers.map((d, i) => ({
+                label: d,
                 data: [
-                    ((maxTime - (data[driver].best_time / 1000)) / maxTime * 100).toFixed(1),
-                    ((maxTime - (data[driver].avg_time / 1000)) / maxTime * 100).toFixed(1),
-                    ((data[driver].total_laps / maxLaps) * 100).toFixed(1)
+                    ((maxBest - data[d].best_time / 1000) / maxBest * 100).toFixed(1),
+                    ((maxAvg - data[d].avg_time / 1000) / maxAvg * 100).toFixed(1),
+                    (data[d].total_laps / maxLaps * 100).toFixed(1),
                 ],
-                borderColor: colors[index % colors.length],
-                backgroundColor: colors[index % colors.length] + '30',
-                borderWidth: 2
+                borderColor: colors[i],
+                backgroundColor: colors[i] + '20',
+                borderWidth: 2,
+                pointBackgroundColor: colors[i],
             }))
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             scales: {
                 r: {
                     beginAtZero: true,
                     max: 100,
-                    ticks: { stepSize: 20 }
+                    ticks: { stepSize: 25, color: '#8b8fa3', backdropColor: 'transparent' },
+                    grid: { color: 'rgba(255,255,255,0.08)' },
+                    pointLabels: { color: '#8b8fa3' }
                 }
+            },
+            plugins: {
+                legend: { labels: { color: '#8b8fa3' } }
             }
         }
     });
 
-    // 3. ✅ KORRIGIERTER Rundenzeiten Verlauf Chart
+    // 3. Rundenzeiten Verlauf (Line Chart)
     const ctx3 = document.getElementById('progressChart').getContext('2d');
     if (progressChart) progressChart.destroy();
-    
-    const datasets = drivers.map((driver, index) => {
-        // ✅ KORREKTE ZUORDNUNG: X = Rundennummer, Y = Zeit
-        const lapData = data[driver].laps
-            .map((laptimeMs, rundennummer) => {
-                const zeitInSekunden = laptimeMs / 1000;
-                return {
-                    x: rundennummer + 1,        // ✅ X-Achse = Rundennummer (1, 2, 3, ...)
-                    y: zeitInSekunden,          // ✅ Y-Achse = Zeit in Sekunden
-                    original: laptimeMs
-                };
-            })
-            .filter(lap => lap.y < 60 && lap.y > 0.5); // Nur realistische Zeiten
 
-        console.log(`🏁 ${driver}: ${lapData.length} gültige Runden von ${data[driver].laps.length}`);
-        
+    const datasets = drivers.map((d, i) => {
+        const lapData = data[d].laps
+            .map((ms, idx) => ({ x: idx + 1, y: ms / 1000 }))
+            .filter(p => p.y > 0.5 && p.y < 120);
+
         return {
-            label: `${driver} (${lapData.length}/${data[driver].total_laps} Runden)`,
+            label: d + ' (' + lapData.length + ' Runden)',
             data: lapData,
-            borderColor: colors[index % colors.length],
-            backgroundColor: colors[index % colors.length] + '20',
+            borderColor: colors[i],
+            backgroundColor: colors[i] + '10',
             fill: false,
             tension: 0.3,
-            pointRadius: 5,
-            pointHoverRadius: 8,
-            borderWidth: 3,
-            pointBackgroundColor: colors[index % colors.length],
-            pointBorderColor: '#fff',
-            pointBorderWidth: 2
+            pointRadius: 3,
+            pointHoverRadius: 6,
+            borderWidth: 2,
+            pointBackgroundColor: colors[i],
         };
     });
 
@@ -179,77 +239,83 @@ function createCharts(data) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                title: {
-                    display: true,
-                    text: 'Rundenzeiten im Verlauf (Extreme Zeiten > 60s gefiltert)',
-                    font: { size: 16 }
-                },
-                legend: {
-                    display: true,
-                    position: 'top'
-                },
+                legend: { labels: { color: '#8b8fa3' } },
                 tooltip: {
                     callbacks: {
-                        title: function(context) {
-                            return `Runde ${context[0].parsed.x}`;
-                        },
-                        label: function(context) {
-                            return `${context.dataset.label.split(' (')[0]}: ${context.parsed.y.toFixed(3)}s`;
-                        }
+                        title: ctx => 'Runde ' + ctx[0].parsed.x,
+                        label: ctx => ctx.dataset.label.split(' (')[0] + ': ' + ctx.parsed.y.toFixed(3) + 's'
                     }
                 }
             },
             scales: {
                 x: {
                     type: 'linear',
-                    title: {
-                        display: true,
-                        text: '🏁 Rundennummer',
-                        font: { size: 14 }
-                    },
-                    grid: { display: true },
+                    title: { display: true, text: 'Rundennummer', color: '#8b8fa3' },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#8b8fa3', stepSize: 1 },
                     min: 1,
-                    ticks: {
-                        stepSize: 1,
-                        callback: function(value) {
-                            return Number.isInteger(value) ? value : '';
-                        }
-                    }
                 },
                 y: {
-                    title: {
-                        display: true,
-                        text: '⏱️ Zeit (Sekunden)',
-                        font: { size: 14 }
-                    },
-                    grid: { display: true },
-                    beginAtZero: false
+                    title: { display: true, text: 'Zeit (Sekunden)', color: '#8b8fa3' },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#8b8fa3' },
+                    beginAtZero: false,
                 }
             },
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            }
+            interaction: { intersect: false, mode: 'index' }
         }
-    });
-    
-    // ✅ SUMMARY OUTPUT
-    console.log('✅ Charts created successfully!');
-    datasets.forEach(dataset => {
-        const times = dataset.data.map(d => d.y);
-        const best = Math.min(...times);
-        const avg = times.reduce((a, b) => a + b, 0) / times.length;
-        console.log(`📊 ${dataset.label}: Beste: ${best.toFixed(3)}s, Ø: ${avg.toFixed(3)}s`);
     });
 }
 
-// Initial load
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Loading analytics...');
+function renderStatsTable(data) {
+    const tbody = document.getElementById('statsTable');
+    const drivers = Object.entries(data).sort((a,b) => a[1].best_time - b[1].best_time);
+
+    if (drivers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Keine Daten vorhanden</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = drivers.map(([name, stats], i) => {
+        const avg = stats.avg_time / 1000;
+        const best = stats.best_time / 1000;
+        // Konsistenz: wie nah ist Durchschnitt an Bestzeit (in %)
+        const consistency = best > 0 ? ((best / avg) * 100).toFixed(1) : '--';
+        const color = CHART_COLORS[i % CHART_COLORS.length];
+
+        return `<tr>
+            <td><span style="color: ${color}"><i class="fas fa-circle me-2" style="font-size: 0.5rem; vertical-align: middle;"></i></span>${name}</td>
+            <td class="text-center">${stats.total_laps}</td>
+            <td class="text-center font-mono fw-bold">${best.toFixed(3)}s</td>
+            <td class="text-center font-mono">${avg.toFixed(3)}s</td>
+            <td class="text-center">
+                <div class="d-flex align-items-center justify-content-center gap-2">
+                    <div class="progress" style="width: 80px; height: 6px;">
+                        <div class="progress-bar ${parseFloat(consistency) > 90 ? 'bg-success' : parseFloat(consistency) > 80 ? 'bg-warning' : 'bg-danger'}" style="width: ${consistency}%"></div>
+                    </div>
+                    <small>${consistency}%</small>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// Event Listener
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadSessions();
+    await loadAnalytics();
+});
+
+document.getElementById('analyticsSession').addEventListener('change', function() {
+    currentAnalyticsSession = this.value;
     loadAnalytics();
 });
 
-// Auto-refresh
+document.getElementById('analyticsRefresh').addEventListener('click', () => {
+    loadAnalytics();
+});
+
+// Auto-Refresh alle 30s
 setInterval(loadAnalytics, 30000);
 </script>
 {% endblock %}

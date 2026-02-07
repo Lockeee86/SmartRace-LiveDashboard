@@ -1,47 +1,52 @@
 {% extends "base.html" %}
 
-{% block title %}🏁 Live Leaderboard - SmartRace{% endblock %}
+{% block title %}Leaderboard - SmartRace Live{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <h2 class="mb-4">🏁 Live Race Leaderboard</h2>
+<!-- Header -->
+<div class="session-selector d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-trophy me-2"></i>Live Leaderboard</h5>
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-danger pulse">LIVE</span>
     </div>
 </div>
 
-<!-- Session Info Row - GLEICH WIE DASHBOARD -->
-<div class="row mb-4">
+<!-- Stat Cards -->
+<div class="row g-3 mb-3">
     <div class="col-md-4">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <h5 class="card-title">🏁 Schnellste Runde (Session)</h5>
-                <h3 id="fastest-lap-time">--:--.---</h3>
-                <p id="fastest-lap-driver" class="mb-0">Kein Fahrer</p>
+        <div class="card stat-card fastest">
+            <div class="card-body py-3">
+                <div class="stat-label mb-1"><i class="fas fa-bolt me-1"></i> Schnellste Runde</div>
+                <div class="stat-value" id="lb-fastestTime">--:--.---</div>
+                <div class="small mt-1" id="lb-fastestDriver">--</div>
             </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <h5 class="card-title">🏆 Streckenrekord</h5>
-                <h3 id="track-record-time">--:--.---</h3>
-                <p id="track-record-driver" class="mb-0">Unbekannt</p>
-                <small id="track-record-date" class="text-light">--</small>
+        <div class="card stat-card record">
+            <div class="card-body py-3">
+                <div class="stat-label mb-1"><i class="fas fa-trophy me-1"></i> Streckenrekord</div>
+                <div class="stat-value" id="lb-recordTime">--:--.---</div>
+                <div class="small mt-1" id="lb-recordDriver">--</div>
             </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <h5 class="card-title">📊 Session Stats</h5>
-                <div class="row">
-                    <div class="col-6">
-                        <strong id="total-laps">0</strong><br>
-                        <small>Runden</small>
+        <div class="card stat-card stats">
+            <div class="card-body py-3">
+                <div class="stat-label mb-1"><i class="fas fa-chart-bar me-1"></i> Session</div>
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="fw-bold fs-5" id="lb-totalLaps">0</div>
+                        <div class="small text-muted">Runden</div>
                     </div>
-                    <div class="col-6">
-                        <strong id="active-drivers">0</strong><br>
-                        <small>Fahrer</small>
+                    <div class="col-4">
+                        <div class="fw-bold fs-5" id="lb-drivers">0</div>
+                        <div class="small text-muted">Fahrer</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="fw-bold fs-5" id="lb-status">--</div>
+                        <div class="small text-muted">Status</div>
                     </div>
                 </div>
             </div>
@@ -49,391 +54,205 @@
     </div>
 </div>
 
-<!-- Live Leaderboard Table -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">🏁 Live Leaderboard - Positionen</h5>
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Pos</th>
-                                <th>Fahrer</th>
-                                <th>Auto</th>
-                                <th>Controller</th>
-                                <th>Runden</th>
-                                <th>Beste Zeit</th>
-                                <th>Letzte Zeit</th>
-                                <th>Rückstand</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="leaderboard-tbody">
-                            <!-- Wird per JavaScript gefüllt -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+<!-- Leaderboard Tabelle -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 60px;" class="text-center">Pos</th>
+                        <th>Fahrer</th>
+                        <th>Auto</th>
+                        <th class="text-center">Controller</th>
+                        <th class="text-center">Runden</th>
+                        <th class="text-center">Beste Zeit</th>
+                        <th class="text-center">Letzte Zeit</th>
+                        <th class="text-center">Abstand</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboardBody">
+                    <tr><td colspan="9" class="text-center text-muted py-5">
+                        <i class="fas fa-flag-checkered fa-2x mb-2 d-block"></i>
+                        Warte auf Rennstart...
+                    </td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
 
-<!-- Controller Status - GLEICH WIE DASHBOARD ABER KOMPAKT -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">🎮 Controller Status - Aktuelle Runde</h5>
-                <div class="row">
-                    <div class="col-md-2" id="controller-status-1">
-                        <div class="controller-mini-card">
-                            <div class="controller-mini-header">Controller 1</div>
-                            <div class="controller-mini-name">-</div>
-                            <div class="controller-mini-time">--:--.---</div>
-                        </div>
-                    </div>
-                    <div class="col-md-2" id="controller-status-2">
-                        <div class="controller-mini-card">
-                            <div class="controller-mini-header">Controller 2</div>
-                            <div class="controller-mini-name">-</div>
-                            <div class="controller-mini-time">--:--.---</div>
-                        </div>
-                    </div>
-                    <div class="col-md-2" id="controller-status-3">
-                        <div class="controller-mini-card">
-                            <div class="controller-mini-header">Controller 3</div>
-                            <div class="controller-mini-name">-</div>
-                            <div class="controller-mini-time">--:--.---</div>
-                        </div>
-                    </div>
-                    <div class="col-md-2" id="controller-status-4">
-                        <div class="controller-mini-card">
-                            <div class="controller-mini-header">Controller 4</div>
-                            <div class="controller-mini-name">-</div>
-                            <div class="controller-mini-time">--:--.---</div>
-                        </div>
-                    </div>
-                    <div class="col-md-2" id="controller-status-5">
-                        <div class="controller-mini-card">
-                            <div class="controller-mini-header">Controller 5</div>
-                            <div class="controller-mini-name">-</div>
-                            <div class="controller-mini-time">--:--.---</div>
-                        </div>
-                    </div>
-                    <div class="col-md-2" id="controller-status-6">
-                        <div class="controller-mini-card">
-                            <div class="controller-mini-header">Controller 6</div>
-                            <div class="controller-mini-name">-</div>
-                            <div class="controller-mini-time">--:--.---</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+<!-- Controller Status Leiste -->
+<div class="row g-2 mt-3" id="controllerStatusBar">
+    <!-- Wird per JavaScript gefuellt -->
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-// 🔧 KORRIGIERTES LEADERBOARD SYSTEM
-let dashboardData = {};  // ✅ Richtige Variable
-let sessionFastestLap = null;
-let trackRecord = null;
+let lbData = {};
+let lbTrackRecord = null;
 let previousPositions = {};
 
-// Controller-Farben
-const CONTROLLER_COLORS = {
-    1: '#FF4444', 2: '#4444FF', 3: '#44FF44', 
-    4: '#FFFF44', 5: '#FF8844', 6: '#8844FF'
-};
-
-// ✅ AKTUELLE SESSION FUNKTION HINZUFÜGEN:
-function getCurrentSessionLaps(controllerData) {
-    if (!controllerData.laps || controllerData.laps.length === 0) return [];
-    
-    const sortedLaps = [...controllerData.laps].sort((a, b) => 
-        new Date(b.timestamp) - new Date(a.timestamp)
-    );
-    
-    const latestTimestamp = new Date(sortedLaps[0].timestamp);
-    const sessionGapMinutes = 30;
-    const sessionStartTime = new Date(latestTimestamp.getTime() - (sessionGapMinutes * 60 * 1000));
-    
-    return controllerData.laps.filter(lap => {
-        const lapTime = new Date(lap.timestamp);
-        return lapTime >= sessionStartTime;
-    });
+function getSessionLaps(cd) {
+    if (!cd.laps || cd.laps.length === 0) return [];
+    const sorted = [...cd.laps].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const latest = new Date(sorted[0].timestamp);
+    const cutoff = new Date(latest.getTime() - 30 * 60 * 1000);
+    return cd.laps.filter(l => new Date(l.timestamp) >= cutoff);
 }
 
-// ✅ KORRIGIERTE HAUPT-STATS:
-function updateMainStats() {
-    let totalLaps = 0;
-    let activeDrivers = 0;
-
-    Object.keys(dashboardData).forEach(controllerId => {  // ✅ dashboardData statt leaderboardData
-        const controllerData = dashboardData[controllerId];
-        
-        if (controllerData && controllerData.laps) {
-            const currentSessionLaps = getCurrentSessionLaps(controllerData);
-            
-            if (currentSessionLaps.length > 0) {
-                activeDrivers++;
-                const lapNumbers = currentSessionLaps.map(lap => lap.lap || 0);
-                const sessionMaxLap = Math.max(...lapNumbers);
-                totalLaps += sessionMaxLap;  // ✅ Summe statt Maximum
-            }
-        }
-    });
-
-    document.getElementById('total-laps').textContent = totalLaps;
-    document.getElementById('active-drivers').textContent = activeDrivers;
-}
-
-// ✅ KORRIGIERTE SESSION FASTEST LAP:
-function updateSessionFastestLap() {
-    let fastestLap = null;
-    
-    Object.keys(dashboardData).forEach(controllerId => {  // ✅ dashboardData
-        const controllerData = dashboardData[controllerId];
-        
-        if (controllerData && controllerData.best_time_raw) {  // ✅ _raw verwenden
-            if (!fastestLap || controllerData.best_time_raw < fastestLap.time) {
-                fastestLap = {
-                    time: controllerData.best_time_raw,
-                    driver: controllerData.name || `Driver ${controllerId}`
-                };
-            }
-        }
-    });
-    
-    if (fastestLap) {
-        sessionFastestLap = fastestLap;
-        document.getElementById('fastest-lap-time').textContent = formatTime(fastestLap.time);
-        document.getElementById('fastest-lap-driver').textContent = fastestLap.driver;
+async function fetchLeaderboard() {
+    try {
+        const res = await fetch('/api/live-data');
+        lbData = await res.json();
+        updateLeaderboard();
+    } catch (e) {
+        console.error('Leaderboard-Fehler:', e);
     }
 }
 
-// ✅ KORRIGIERTE LEADERBOARD TABELLE:
-function updateLeaderboardTable() {
-    const tbody = document.getElementById('leaderboard-tbody');
+function updateLeaderboard() {
     const drivers = [];
-    
-    Object.keys(dashboardData).forEach(controllerId => {  // ✅ dashboardData
-        const controllerData = dashboardData[controllerId];
-        
-        if (controllerData && controllerData.laps) {
-            const currentSessionLaps = getCurrentSessionLaps(controllerData);
-            
-            if (currentSessionLaps.length > 0) {
-                const lapNumbers = currentSessionLaps.map(lap => lap.lap || 0);
-                const totalLaps = Math.max(...lapNumbers);
-                const lastLap = currentSessionLaps[0];
-                
-                drivers.push({
-                    controllerId: parseInt(controllerId),
-                    name: controllerData.name || `Driver ${controllerId}`,
-                    car: controllerData.car || `Car ${controllerId}`,
-                    color: controllerData.color || CONTROLLER_COLORS[controllerId],
-                    totalLaps: totalLaps,
-                    bestTime: controllerData.best_time_raw,  // ✅ _raw verwenden
-                    lastTime: lastLap ? lastLap.laptime_raw : null,
-                    isActive: true
-                });
-            }
+    let totalLaps = 0;
+    let fastest = null;
+
+    Object.entries(lbData).forEach(([cid, cd]) => {
+        const laps = getSessionLaps(cd);
+        if (laps.length === 0) return;
+
+        const lapNums = laps.map(l => l.lap || 0);
+        const maxLap = Math.max(...lapNums);
+        totalLaps += maxLap;
+
+        const sorted = [...laps].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+        const lastLap = sorted[0];
+
+        const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
+
+        drivers.push({
+            cid: parseInt(cid),
+            name: cd.name || 'Fahrer ' + cid,
+            car: cd.car || 'Auto ' + cid,
+            color: color,
+            totalLaps: maxLap,
+            bestTime: cd.best_time_raw,
+            lastTime: lastLap ? lastLap.laptime_raw : null,
+        });
+
+        if (cd.best_time_raw && (!fastest || cd.best_time_raw < fastest.time)) {
+            fastest = { time: cd.best_time_raw, driver: cd.name || 'Fahrer ' + cid };
         }
     });
-    
-    // Rest der Funktion bleibt gleich...
+
+    // Sortieren: Meiste Runden, dann beste Zeit
     drivers.sort((a, b) => {
-        if (a.totalLaps !== b.totalLaps) {
-            return b.totalLaps - a.totalLaps;
-        }
-        if (a.bestTime && b.bestTime) {
-            return a.bestTime - b.bestTime;
-        }
-        if (a.bestTime && !b.bestTime) return -1;
-        if (!a.bestTime && b.bestTime) return 1;
+        if (a.totalLaps !== b.totalLaps) return b.totalLaps - a.totalLaps;
+        if (a.bestTime && b.bestTime) return a.bestTime - b.bestTime;
+        if (a.bestTime) return -1;
+        if (b.bestTime) return 1;
         return 0;
     });
-    
+
+    // Stats
+    document.getElementById('lb-totalLaps').textContent = totalLaps;
+    document.getElementById('lb-drivers').textContent = drivers.length;
+    document.getElementById('lb-status').textContent = drivers.length > 0 ? 'Aktiv' : '--';
+
+    if (fastest) {
+        document.getElementById('lb-fastestTime').textContent = formatTime(fastest.time);
+        document.getElementById('lb-fastestDriver').textContent = fastest.driver;
+        if (!lbTrackRecord || fastest.time < lbTrackRecord.time) {
+            lbTrackRecord = fastest;
+        }
+    }
+    if (lbTrackRecord) {
+        document.getElementById('lb-recordTime').textContent = formatTime(lbTrackRecord.time);
+        document.getElementById('lb-recordDriver').textContent = lbTrackRecord.driver;
+    }
+
+    // Leaderboard Tabelle
+    const tbody = document.getElementById('leaderboardBody');
     if (drivers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">🏁 Warten auf Rennstart...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-5"><i class="fas fa-flag-checkered fa-2x mb-2 d-block"></i>Warte auf Rennstart...</td></tr>';
         return;
     }
-    
+
     const leader = drivers[0];
-    
-    tbody.innerHTML = drivers.map((driver, index) => {
-        const position = index + 1;
-        const wasPosition = previousPositions[driver.controllerId] || position;
-        
-        let positionChange = '';
-        if (wasPosition > position) positionChange = '<span class="text-success">↗️</span>';
-        else if (wasPosition < position) positionChange = '<span class="text-danger">↘️</span>';
-        
-        let gap = '';
-        if (position > 1) {
-            if (driver.totalLaps < leader.totalLaps) {
-                const lapDiff = leader.totalLaps - driver.totalLaps;
-                gap = `+${lapDiff} Runde${lapDiff > 1 ? 'n' : ''}`;
-            } else if (driver.bestTime && leader.bestTime && driver.bestTime !== leader.bestTime) {
-                const timeDiff = driver.bestTime - leader.bestTime;
-                gap = `+${formatTime(timeDiff)}`;
-            }
-        } else {
-            gap = '🏆 Leader';
+
+    tbody.innerHTML = drivers.map((d, i) => {
+        const pos = i + 1;
+        const prevPos = previousPositions[d.cid];
+        let change = '';
+        if (prevPos !== undefined) {
+            if (prevPos > pos) change = '<i class="fas fa-caret-up text-success ms-1"></i>';
+            else if (prevPos < pos) change = '<i class="fas fa-caret-down text-danger ms-1"></i>';
         }
-        
-        let status = '🏁 Aktiv';
-        if (position === 1) status = '👑 Leader';
-        else if (driver.bestTime === sessionFastestLap?.time) status = '🏆 Bestzeit';
-        else if (position <= 3) status = '🥉 Podium';
-        
+        previousPositions[d.cid] = pos;
+
+        let posClass = 'other';
+        if (pos === 1) posClass = 'gold';
+        else if (pos === 2) posClass = 'silver';
+        else if (pos === 3) posClass = 'bronze';
+
+        let gap = '';
+        if (pos === 1) {
+            gap = '<span class="text-warning fw-bold">Leader</span>';
+        } else if (d.totalLaps < leader.totalLaps) {
+            const diff = leader.totalLaps - d.totalLaps;
+            gap = '+' + diff + ' Runde' + (diff > 1 ? 'n' : '');
+        } else if (d.bestTime && leader.bestTime) {
+            gap = '+' + formatTime(d.bestTime - leader.bestTime);
+        }
+
+        const isFastest = fastest && d.bestTime === fastest.time;
+        let status = 'Aktiv';
+        if (pos === 1) status = '<i class="fas fa-crown text-warning"></i> Leader';
+        else if (isFastest) status = '<i class="fas fa-trophy text-warning"></i> Bestzeit';
+        else if (pos <= 3) status = '<i class="fas fa-medal"></i> Podium';
+
         let rowClass = '';
-        if (position === 1) rowClass = 'table-warning';
-        else if (position <= 3) rowClass = 'table-light';
-        
-        previousPositions[driver.controllerId] = position;
-        
-        return `
-            <tr class="${rowClass}" style="border-left: 5px solid ${driver.color}">
-                <td class="fw-bold">${position} ${positionChange}</td>
-                <td class="fw-bold" style="color: ${driver.color}">${driver.name}</td>
-                <td>${driver.car}</td>
-                <td><span class="badge" style="background: ${driver.color}; color: white;">C${driver.controllerId}</span></td>
-                <td class="fw-bold">${driver.totalLaps}</td>
-                <td class="font-monospace ${driver.bestTime === sessionFastestLap?.time ? 'bg-warning' : ''}">${formatTime(driver.bestTime)}${driver.bestTime === sessionFastestLap?.time ? ' 🏆' : ''}</td>
-                <td class="font-monospace">${formatTime(driver.lastTime)}</td>
-                <td class="font-monospace text-muted">${gap}</td>
-                <td>${status}</td>
-            </tr>
-        `;
+        if (pos === 1) rowClass = 'leaderboard-row leader';
+        else if (pos <= 3) rowClass = 'leaderboard-row podium';
+
+        return `<tr class="${rowClass}" style="border-left: 4px solid ${d.color}">
+            <td class="text-center"><span class="position-badge ${posClass}">${pos}</span>${change}</td>
+            <td class="fw-bold" style="color: ${d.color}">${d.name}</td>
+            <td class="text-muted">${d.car}</td>
+            <td class="text-center"><span class="controller-badge" style="background: ${d.color}">C${d.cid}</span></td>
+            <td class="text-center fw-bold">${d.totalLaps}</td>
+            <td class="text-center font-mono ${isFastest ? 'text-warning fw-bold' : ''}">${formatTime(d.bestTime)}${isFastest ? ' <i class="fas fa-trophy"></i>' : ''}</td>
+            <td class="text-center font-mono">${formatTime(d.lastTime)}</td>
+            <td class="text-center small">${gap}</td>
+            <td class="text-center small">${status}</td>
+        </tr>`;
+    }).join('');
+
+    // Controller Status Bar
+    renderStatusBar(drivers);
+}
+
+function renderStatusBar(drivers) {
+    const bar = document.getElementById('controllerStatusBar');
+    bar.innerHTML = ['1','2','3','4','5','6'].map(cid => {
+        const d = drivers.find(x => x.cid === parseInt(cid));
+        const color = d ? d.color : getControllerColor(cid);
+        const active = !!d;
+        return `<div class="col-md-2 col-4">
+            <div class="card" style="border-left: 4px solid ${color}; opacity: ${active ? 1 : 0.4}">
+                <div class="card-body py-2 px-3 text-center">
+                    <div class="small text-muted">Controller ${cid}</div>
+                    <div class="fw-bold small" style="color: ${active ? color : 'inherit'}">${d ? d.name : '--'}</div>
+                    <div class="font-mono small">${d ? formatTime(d.lastTime) : '--:--.---'}</div>
+                </div>
+            </div>
+        </div>`;
     }).join('');
 }
 
-// ✅ KORRIGIERTE CONTROLLER STATUS:
-function updateControllerStatus() {
-    for (let controllerId = 1; controllerId <= 6; controllerId++) {
-        const controllerData = dashboardData[controllerId.toString()];  // ✅ dashboardData
-        const statusElement = document.getElementById(`controller-status-${controllerId}`);
-        const color = CONTROLLER_COLORS[controllerId];
-        
-        const miniCard = statusElement.querySelector('.controller-mini-card');
-        const nameElement = statusElement.querySelector('.controller-mini-name');
-        const timeElement = statusElement.querySelector('.controller-mini-time');
-        
-        miniCard.style.borderLeft = `5px solid ${color}`;
-        
-        if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
-            const lastLap = controllerData.laps[0];
-            const name = controllerData.name || `Driver ${controllerId}`;
-            const lastTime = lastLap ? formatTime(lastLap.laptime_raw) : '--:--.---';
-            
-            nameElement.textContent = name;
-            nameElement.style.color = color;
-            timeElement.textContent = lastTime;
-            miniCard.classList.add('active');
-        } else {
-            nameElement.textContent = `Driver ${controllerId}`;
-            nameElement.style.color = '#6c757d';
-            timeElement.textContent = '--:--.---';
-            miniCard.classList.remove('active');
-        }
-    }
-}
-
-// ✅ HILFSFUNKTIONEN:
-function formatTime(timeMs) {
-    if (!timeMs || timeMs === 0) return '--:--.---';
-    
-    const minutes = Math.floor(timeMs / 60000);
-    const seconds = ((timeMs % 60000) / 1000).toFixed(3);
-    
-    if (minutes > 0) {
-        return `${minutes}:${seconds.padStart(6, '0')}`;
-    } else {
-        return `0:${seconds.padStart(6, '0')}`;
-    }
-}
-
-// ✅ DATEN LADEN UND UPDATES:
-async function fetchData() {
-    try {
-        const response = await fetch('/api/live-data');
-        dashboardData = await response.json();
-        
-        updateMainStats();
-        updateSessionFastestLap();
-        updateTrackRecord();
-        updateLeaderboardTable();
-        updateControllerStatus();
-        
-    } catch (error) {
-        console.error('❌ Fehler beim Laden der Daten:', error);
-    }
-}
-
-// ✅ TRACK RECORD:
-function updateTrackRecord() {
-    if (sessionFastestLap && (!trackRecord || sessionFastestLap.time < trackRecord.time)) {
-        trackRecord = {
-            time: sessionFastestLap.time,
-            driver: sessionFastestLap.driver,
-            date: new Date().toLocaleDateString('de-DE')
-        };
-    }
-    
-    if (trackRecord) {
-        document.getElementById('track-record-time').textContent = formatTime(trackRecord.time);
-        document.getElementById('track-record-driver').textContent = trackRecord.driver;
-        document.getElementById('track-record-date').textContent = trackRecord.date;
-    }
-}
-
-// CSS für Mini Cards
-const style = document.createElement('style');
-style.textContent = `
-    .controller-mini-card {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 15px;
-        text-align: center;
-        transition: all 0.3s ease;
-        border-left: 5px solid #dee2e6;
-        margin-bottom: 10px;
-    }
-    .controller-mini-card.active {
-        background: #e8f5e8;
-        transform: translateY(-2px);
-    }
-    .controller-mini-header {
-        font-size: 12px;
-        font-weight: bold;
-        color: #6c757d;
-        margin-bottom: 8px;
-        text-transform: uppercase;
-    }
-    .controller-mini-name {
-        font-weight: bold;
-        margin-bottom: 5px;
-        font-size: 14px;
-    }
-    .controller-mini-time {
-        font-family: 'Courier New', monospace;
-        font-size: 13px;
-        color: #495057;
-    }
-`;
-document.head.appendChild(style);
-
-// ✅ STARTEN:
-fetchData();  // Initial load
-setInterval(fetchData, 2000);  // Update alle 2 Sekunden
-
-console.log('🏁 Live Leaderboard gestartet!');
+// Start
+fetchLeaderboard();
+setInterval(fetchLeaderboard, 2000);
 </script>
 {% endblock %}
-

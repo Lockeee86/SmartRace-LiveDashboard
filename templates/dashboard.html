@@ -1,122 +1,66 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - SmartRace{% endblock %}
+{% block title %}Dashboard - SmartRace Live{% endblock %}
 
 {% block content %}
-
-<div class="container-fluid mt-3 mb-4">
-    <div class="d-flex justify-content-between align-items-center">
-        <h4>🏁 Race Dashboard</h4>
-        
-        <!-- ✅ SESSION AUSWAHL + TOGGLE -->
-        <div class="d-flex align-items-center gap-3">
-            <div class="d-flex align-items-center gap-2">
-                <label for="sessionSelect" class="form-label mb-0">
-                    <i class="fas fa-database"></i> Session:
-                </label>
-                <select id="sessionSelect" class="form-select form-select-sm" style="min-width: 250px;">
-                    <option value="current">🟢 Aktuelle Session</option>
-                    <option value="all">🌍 Alle Sessions</option>
-                    <!-- Wird dynamisch gefüllt -->
-                </select>
-                <button id="refreshSessions" class="btn btn-outline-primary btn-sm" title="Sessions aktualisieren">
-                    <i class="fas fa-sync-alt"></i>
-                </button>
-            </div>
-            
-            <!-- Legacy Toggle für Kompatibilität -->
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="sessionToggle" checked>
-                <label class="form-check-label fw-bold" for="sessionToggle">
-                    Live Modus
-                </label>
-            </div>
+<!-- Session-Auswahl -->
+<div class="session-selector d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-gauge-high me-2"></i>Race Dashboard</h5>
+    <div class="d-flex align-items-center gap-2">
+        <select id="sessionSelect" class="form-select form-select-sm" style="min-width: 280px;">
+            <option value="current">Aktuelle Session (Live)</option>
+            <option value="all">Alle Sessions</option>
+        </select>
+        <button id="refreshBtn" class="btn btn-sm btn-outline-primary" title="Aktualisieren">
+            <i class="fas fa-sync-alt"></i>
+        </button>
+        <div class="form-check form-switch ms-2 mb-0">
+            <input class="form-check-input" type="checkbox" id="liveToggle" checked>
+            <label class="form-check-label small" for="liveToggle">Live</label>
         </div>
     </div>
-    <hr>
 </div>
 
-<!-- Session Info Row -->
-<!-- Session Info Row - ERWEITERT -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <h5 class="card-title">🏁 Schnellste Runde (Session)</h5>
-                <h3 id="fastest-lap-time">--:--.---</h3>
-                <p id="fastest-lap-driver" class="mb-0">Kein Fahrer</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <h5 class="card-title">🏆 Streckenrekord</h5>
-                <h3 id="track-record-time">--:--.---</h3>
-                <p id="track-record-driver" class="mb-0">Unbekannt</p>
-                <small id="track-record-date" class="text-light">--</small>
-            </div>
-        </div>
-    </div>
-    
-    <!-- ✅ SESSION STATS - VOLLE BREITE mit Grauton -->
-    <div class="col-md-6">
-        <div class="card bg-secondary text-white">
+<!-- Stat Cards -->
+<div class="row g-3 mb-3">
+    <div class="col-md-4">
+        <div class="card stat-card fastest">
             <div class="card-body py-3">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                    <h5 class="card-title mb-0">📊 Session Stats</h5>
-                    <!-- SESSION ID & TYP - horizontal -->
-                    <div class="d-flex align-items-center gap-3">
-                        <div class="text-center">
-                            <small class="opacity-75 d-block">Session ID</small>
-                            <strong id="session-id" style="font-size: 0.9rem;">--</strong>
-                        </div>
-                        <div class="text-center">
-                            <small class="opacity-75 d-block">Typ</small>
-                            <strong id="session-type" style="font-size: 0.9rem;">--</strong>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- ✅ HAUPTSTATISTIKEN - horizontal -->
-                <div class="row g-3">
+                <div class="stat-label mb-1"><i class="fas fa-bolt me-1"></i> Schnellste Runde</div>
+                <div class="stat-value" id="fastestTime">--:--.---</div>
+                <div class="small mt-1" id="fastestDriver">Warte auf Daten...</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card record">
+            <div class="card-body py-3">
+                <div class="stat-label mb-1"><i class="fas fa-trophy me-1"></i> Streckenrekord</div>
+                <div class="stat-value" id="recordTime">--:--.---</div>
+                <div class="small mt-1" id="recordDriver">--</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card stats">
+            <div class="card-body py-3">
+                <div class="stat-label mb-2"><i class="fas fa-chart-bar me-1"></i> Session Stats</div>
+                <div class="row text-center g-2">
                     <div class="col-3">
-                        <div class="text-center">
-                            <strong id="total-laps" class="h4 d-block mb-1">0</strong>
-                            <small>Runden gesamt</small>
-                        </div>
-                    </div>
-                    <div class="col-3">
-                        <div class="text-center">
-                            <strong id="active-drivers" class="h4 d-block mb-1">0</strong>
-                            <small>Aktive Fahrer</small>
-                        </div>
+                        <div class="fw-bold fs-5" id="totalLaps">0</div>
+                        <div class="small text-muted">Runden</div>
                     </div>
                     <div class="col-3">
-                        <div class="text-center">
-                            <strong id="session-duration" class="h5 d-block mb-1">--</strong>
-                            <small>Session Dauer</small>
-                        </div>
+                        <div class="fw-bold fs-5" id="activeDrivers">0</div>
+                        <div class="small text-muted">Fahrer</div>
                     </div>
                     <div class="col-3">
-                        <div class="text-center">
-                            <strong id="avg-laptime" class="h5 d-block mb-1">--:--</strong>
-                            <small>∅ Rundenzeit</small>
-                        </div>
+                        <div class="fw-bold fs-5" id="sessionDuration">--</div>
+                        <div class="small text-muted">Dauer</div>
                     </div>
-                </div>
-                
-                <!-- ✅ ZUSÄTZLICHE INFOS - kompakt unten -->
-                <hr class="my-2 opacity-50">
-                <div class="row g-2 text-center">
-                    <div class="col-4">
-                        <small class="opacity-90">🏃‍♂️ <span id="fastest-driver">--</span></small>
-                    </div>
-                    <div class="col-4">
-                        <small class="opacity-90">🔄 <span id="most-laps-driver">--</span></small>
-                    </div>
-                    <div class="col-4">
-                        <small class="opacity-90">📅 <span id="session-date">--</span></small>
+                    <div class="col-3">
+                        <div class="fw-bold fs-5 font-mono" id="avgLap">--</div>
+                        <div class="small text-muted">Schnitt</div>
                     </div>
                 </div>
             </div>
@@ -124,942 +68,236 @@
     </div>
 </div>
 
-
-
-<!-- Controller Overview - 6 Tables -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">🎮 Controller Overview - Letzte 6 Zeiten</h5>
-                <div class="controllers-grid">
-
-                    <!-- Controller 1 -->
-                    <div class="controller-table" id="controller-1">
-                        <h6 class="controller-header">🎮 Controller 1</h6>
-                        <div class="driver-info">
-                            <div class="driver-name">-</div>
-                            <div class="car-name">-</div>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Runde</th>
-                                        <th>Zeit</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="controller-1-times">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Controller 2 -->
-                    <div class="controller-table" id="controller-2">
-                        <h6 class="controller-header">🎮 Controller 2</h6>
-                        <div class="driver-info">
-                            <div class="driver-name">-</div>
-                            <div class="car-name">-</div>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Runde</th>
-                                        <th>Zeit</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="controller-2-times">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Controller 3 -->
-                    <div class="controller-table" id="controller-3">
-                        <h6 class="controller-header">🎮 Controller 3</h6>
-                        <div class="driver-info">
-                            <div class="driver-name">-</div>
-                            <div class="car-name">-</div>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Runde</th>
-                                        <th>Zeit</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="controller-3-times">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Controller 4 -->
-                    <div class="controller-table" id="controller-4">
-                        <h6 class="controller-header">🎮 Controller 4</h6>
-                        <div class="driver-info">
-                            <div class="driver-name">-</div>
-                            <div class="car-name">-</div>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Runde</th>
-                                        <th>Zeit</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="controller-4-times">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Controller 5 -->
-                    <div class="controller-table" id="controller-5">
-                        <h6 class="controller-header">🎮 Controller 5</h6>
-                        <div class="driver-info">
-                            <div class="driver-name">-</div>
-                            <div class="car-name">-</div>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Runde</th>
-                                        <th>Zeit</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="controller-5-times">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Controller 6 -->
-                    <div class="controller-table" id="controller-6">
-                        <h6 class="controller-header">🎮 Controller 6</h6>
-                        <div class="driver-info">
-                            <div class="driver-name">-</div>
-                            <div class="car-name">-</div>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Runde</th>
-                                        <th>Zeit</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="controller-6-times">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-    </div>
+<!-- Controller Cards -->
+<div class="controller-grid" id="controllerGrid">
+    <!-- Wird per JavaScript gefuellt -->
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 let dashboardData = {};
-let sessionFastestLap = null;
 let trackRecord = null;
-let currentSessionFilter = 'current'; // Default: Aktuelle Session
-let availableSessions = [];
+let currentSession = 'current';
+let refreshTimer = null;
 
-// ✅ SESSIONS LADEN
+// Sessions laden
 async function loadSessions() {
     try {
-        console.log('🔄 Lade verfügbare Sessions...');
-        const response = await fetch('/api/sessions');
-        const data = await response.json();
-        
-        if (data.success) {
-            availableSessions = data.sessions;
-            updateSessionSelect();
-            console.log(`✅ ${availableSessions.length} Sessions geladen`);
-        } else {
-            console.error('❌ Sessions Load Error:', data.error);
-        }
-    } catch (error) {
-        console.error('❌ Sessions Network Error:', error);
+        const res = await fetch('/api/sessions');
+        const sessions = await res.json();
+        const sel = document.getElementById('sessionSelect');
+        // Behalte Standard-Optionen
+        sel.innerHTML = '<option value="current">Aktuelle Session (Live)</option><option value="all">Alle Sessions</option>';
+        sessions.forEach(s => {
+            const date = s.start_time ? new Date(s.start_time).toLocaleDateString('de-DE') : '';
+            const opt = document.createElement('option');
+            opt.value = s.event_id;
+            opt.textContent = `${s.event_id} (${s.event_type || 'Training'}) - ${date} - ${s.total_laps} Runden`;
+            sel.appendChild(opt);
+        });
+        sel.value = currentSession;
+    } catch (e) {
+        console.error('Sessions laden fehlgeschlagen:', e);
     }
 }
 
-// ✅ SESSION DROPDOWN AKTUALISIEREN
-function updateSessionSelect() {
-    const sessionSelect = document.getElementById('sessionSelect');
-    
-    // Standard-Optionen beibehalten
-    sessionSelect.innerHTML = `
-        <option value="current">🟢 Aktuelle Session</option>
-        <option value="all">🌍 Alle Sessions</option>
-    `;
-    
-    // Spezifische Sessions hinzufügen
-    availableSessions.forEach(session => {
-        const date = new Date(session.latest_timestamp).toLocaleDateString('de-DE');
-        const time = new Date(session.latest_timestamp).toLocaleTimeString('de-DE', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-        });
-        
-        const option = document.createElement('option');
-        option.value = session.event_id;
-        option.textContent = `📅 Session ${session.event_id} (${session.event_type}) - ${date} ${time} - ${session.total_laps} Runden`;
-        
-        sessionSelect.appendChild(option);
-    });
-    
-    // Aktuellen Filter wiederherstellen
-    sessionSelect.value = currentSessionFilter;
-}
-
+// Hauptdaten laden
 async function updateDashboard() {
     try {
-        console.log('🚀 Lade Live-Daten...');
-        
-        // ✅ SESSION FILTER PARAMETER
-        let apiUrl = '/api/live-data';
-        if (currentSessionFilter !== 'current' && currentSessionFilter !== 'all') {
-            apiUrl += `?session_id=${currentSessionFilter}`;
+        let url = '/api/live-data';
+        if (currentSession !== 'current' && currentSession !== 'all') {
+            url += '?session_id=' + encodeURIComponent(currentSession);
         }
-        
-        const response = await fetch(apiUrl);
-        console.log('📡 Response Status:', response.status);
 
-        const rawText = await response.text();
-        console.log('📄 Raw Response (first 200 chars):', rawText.substring(0, 200));
+        const res = await fetch(url);
+        dashboardData = await res.json();
+        renderStats();
+        renderControllers();
+    } catch (e) {
+        console.error('Dashboard-Update fehlgeschlagen:', e);
+    }
+}
 
-        dashboardData = JSON.parse(rawText);
-        console.log('📊 Live-Daten erhalten:', Object.keys(dashboardData).length, 'Controller');
+// Session-Runden filtern (bei "current" nur letzte 30 Min)
+function getSessionLaps(controllerData) {
+    if (!controllerData.laps || controllerData.laps.length === 0) return [];
+    if (currentSession !== 'current') return controllerData.laps;
 
-        // Detaillierte Controller-Analyse
-        Object.keys(dashboardData).forEach(controllerId => {
-            const controller = dashboardData[controllerId];
-            console.log(`🎮 Controller ${controllerId}:`);
-            console.log(`   👤 Name: ${controller.name}`);
-            console.log(`   🚗 Car: ${controller.car}`);
-            console.log(`   🎨 Color: ${controller.color}`);
-            console.log(`   🏁 Laps: ${controller.laps ? controller.laps.length : 0} Runden`);
+    const sorted = [...controllerData.laps].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const latest = new Date(sorted[0].timestamp);
+    const cutoff = new Date(latest.getTime() - 30 * 60 * 1000);
+    return controllerData.laps.filter(l => new Date(l.timestamp) >= cutoff);
+}
+
+// Stats rendern
+function renderStats() {
+    let totalLaps = 0, activeDrivers = 0, allTimes = [];
+    let fastest = null;
+    let startTime = null, endTime = null;
+
+    Object.entries(dashboardData).forEach(([cid, cd]) => {
+        const laps = getSessionLaps(cd);
+        if (laps.length === 0) return;
+        activeDrivers++;
+
+        const lapNums = laps.map(l => l.lap || 0);
+        totalLaps += Math.max(...lapNums);
+
+        laps.forEach(l => {
+            if (l.laptime_raw > 0) allTimes.push(l.laptime_raw);
+            const ts = new Date(l.timestamp);
+            if (!startTime || ts < startTime) startTime = ts;
+            if (!endTime || ts > endTime) endTime = ts;
         });
 
-        updateMainStats();         // ✅ Session Stats
-        updateControllerTables();  // ✅ Controller-Tabellen  
-        updateTrackRecord();       // ✅ Streckenrekord
-
-        // Session fastest lap berechnen
-        updateSessionFastestLap();
-
-    } catch (error) {
-        console.error('❌ Live-Daten Fehler:', error);
-    }
-}
-
-function updateSessionFastestLap() {
-    let fastestLap = null;
-
-    Object.keys(dashboardData).forEach(controllerId => {
-        const controllerData = dashboardData[controllerId];
-
-        if (controllerData && controllerData.best_time_raw) {
-            if (!fastestLap || controllerData.best_time_raw < fastestLap.time) {
-                fastestLap = {
-                    time: controllerData.best_time_raw,
-                    driver: controllerData.name || `Driver ${controllerId}`
-                };
-            }
+        if (cd.best_time_raw && (!fastest || cd.best_time_raw < fastest.time)) {
+            fastest = { time: cd.best_time_raw, driver: cd.name || ('Fahrer ' + cid) };
         }
     });
 
-    if (fastestLap) {
-        sessionFastestLap = fastestLap;
-        document.getElementById('fastest-lap-time').textContent = formatTime(fastestLap.time);
-        document.getElementById('fastest-lap-driver').textContent = fastestLap.driver;
-    }
-}
+    document.getElementById('totalLaps').textContent = totalLaps;
+    document.getElementById('activeDrivers').textContent = activeDrivers;
 
-function getCurrentSessionLaps(controllerData) {
-    if (!controllerData.laps || controllerData.laps.length === 0) return [];
+    if (fastest) {
+        document.getElementById('fastestTime').textContent = formatTime(fastest.time);
+        document.getElementById('fastestDriver').textContent = fastest.driver;
 
-    // ✅ Bei spezifischer Session-Auswahl: Alle Runden zurückgeben
-    if (currentSessionFilter !== 'current' && currentSessionFilter !== 'all') {
-        return controllerData.laps;
-    }
-
-    // ✅ Bei "current": Zeitbasierte Session-Erkennung
-    const sortedLaps = [...controllerData.laps].sort((a, b) => 
-        new Date(b.timestamp) - new Date(a.timestamp)
-    );
-
-    const latestTimestamp = new Date(sortedLaps[0].timestamp);
-    const sessionGapMinutes = 30;
-    const sessionStartTime = new Date(latestTimestamp.getTime() - (sessionGapMinutes * 60 * 1000));
-
-    const currentSessionLaps = controllerData.laps.filter(lap => {
-        const lapTime = new Date(lap.timestamp);
-        return lapTime >= sessionStartTime;
-    });
-
-    console.log(`🔍 Controller: ${currentSessionLaps.length} Runden in aktueller Session`);
-    return currentSessionLaps;
-}
-
-function updateMainStats() {
-    let totalLaps = 0;
-    let activeDrivers = 0;
-    let allSessionTimes = [];
-    let allSessionLaps = [];
-    let sessionStartTime = null;
-    let sessionEndTime = null;
-    let driverStats = {};
-
-    // ✅ SESSION INFO UPDATEN
-    updateSessionInfo();
-
-    Object.keys(dashboardData).forEach(controllerId => {
-        const controllerData = dashboardData[controllerId];
-
-        if (controllerData && controllerData.laps) {
-            const relevantLaps = getCurrentSessionLaps(controllerData);
-
-            if (relevantLaps.length > 0) {
-                activeDrivers++;
-                
-                // ✅ FAHRER STATISTIKEN SAMMELN
-                const driverName = controllerData.name || `Driver ${controllerId}`;
-                driverStats[driverName] = {
-                    laps: relevantLaps.length,
-                    times: relevantLaps.map(lap => lap.laptime_raw).filter(t => t > 0),
-                    controller: controllerId
-                };
-
-                // ✅ GESAMTSTATISTIKEN
-                const lapNumbers = relevantLaps.map(lap => lap.lap || 0);
-                const maxLap = Math.max(...lapNumbers);
-                totalLaps += maxLap;
-
-                // ✅ ZEITEN SAMMELN
-                const validTimes = relevantLaps.map(lap => lap.laptime_raw).filter(t => t > 0);
-                allSessionTimes = allSessionTimes.concat(validTimes);
-                allSessionLaps = allSessionLaps.concat(relevantLaps);
-
-                // ✅ SESSION ZEITBEREICH
-                relevantLaps.forEach(lap => {
-                    const lapTime = new Date(lap.timestamp);
-                    if (!sessionStartTime || lapTime < sessionStartTime) {
-                        sessionStartTime = lapTime;
-                    }
-                    if (!sessionEndTime || lapTime > sessionEndTime) {
-                        sessionEndTime = lapTime;
-                    }
-                });
-
-                console.log(`🏁 Controller ${controllerId} (${driverName}): ${maxLap} Runden, ${validTimes.length} gültige Zeiten`);
-            }
+        if (!trackRecord || fastest.time < trackRecord.time) {
+            trackRecord = { time: fastest.time, driver: fastest.driver };
         }
-    });
-
-    // ✅ BASIS STATS UPDATEN
-    document.getElementById('total-laps').textContent = totalLaps;
-    document.getElementById('active-drivers').textContent = activeDrivers;
-
-    // ✅ SESSION DAUER BERECHNEN
-    if (sessionStartTime && sessionEndTime) {
-        const durationMs = sessionEndTime - sessionStartTime;
-        const durationMinutes = Math.floor(durationMs / 60000);
-        const durationSeconds = Math.floor((durationMs % 60000) / 1000);
-        
-        let durationText = '';
-        if (durationMinutes >= 60) {
-            const hours = Math.floor(durationMinutes / 60);
-            const mins = durationMinutes % 60;
-            durationText = `${hours}h ${mins}m`;
-        } else if (durationMinutes > 0) {
-            durationText = `${durationMinutes}m ${durationSeconds}s`;
-        } else {
-            durationText = `${durationSeconds}s`;
-        }
-        
-        document.getElementById('session-duration').textContent = durationText;
-    } else {
-        document.getElementById('session-duration').textContent = '--';
-    }
-
-    // ✅ DURCHSCHNITTLICHE RUNDENZEIT
-    if (allSessionTimes.length > 0) {
-        const avgTime = allSessionTimes.reduce((sum, time) => sum + time, 0) / allSessionTimes.length;
-        document.getElementById('avg-laptime').textContent = formatTime(avgTime);
-    } else {
-        document.getElementById('avg-laptime').textContent = '--:--';
-    }
-
-    // ✅ SCHNELLSTER FAHRER
-    let fastestDriver = null;
-    Object.keys(driverStats).forEach(driverName => {
-        const stats = driverStats[driverName];
-        if (stats.times.length > 0) {
-            const bestTime = Math.min(...stats.times);
-            if (!fastestDriver || bestTime < fastestDriver.time) {
-                fastestDriver = {
-                    name: driverName,
-                    time: bestTime
-                };
-            }
-        }
-    });
-
-    // ✅ FAHRER MIT MEISTEN RUNDEN
-    let mostLapsDriver = null;
-    Object.keys(driverStats).forEach(driverName => {
-        const stats = driverStats[driverName];
-        if (!mostLapsDriver || stats.laps > mostLapsDriver.laps) {
-            mostLapsDriver = {
-                name: driverName,
-                laps: stats.laps
-            };
-        }
-    });
-
-    // ✅ SESSION DATUM
-    const sessionDateText = sessionStartTime ? 
-        sessionStartTime.toLocaleDateString('de-DE', { 
-            day: '2-digit', 
-            month: '2-digit' 
-        }) + ' ' + sessionStartTime.toLocaleTimeString('de-DE', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-        }) : '--';
-
-    // ✅ ZUSÄTZLICHE INFOS UPDATEN
-    document.getElementById('fastest-driver').textContent = fastestDriver ? 
-        `${fastestDriver.name}` : '🏃‍♂️ --';
-    
-    document.getElementById('most-laps-driver').textContent = mostLapsDriver ? 
-        `${mostLapsDriver.name} (${mostLapsDriver.laps})` : '🔄 --';
-    
-    document.getElementById('session-date').textContent = sessionDateText;
-
-    // ✅ SESSION-INFO IM TITLE ANZEIGEN
-    const sessionInfo = currentSessionFilter === 'current' ? 'Live Session' : 
-                       currentSessionFilter === 'all' ? 'Alle Sessions' : 
-                       `Session ${currentSessionFilter}`;
-    
-    console.log(`📊 ${sessionInfo}: ${totalLaps} Runden, ${activeDrivers} Fahrer, ${allSessionTimes.length} Zeiten`);
-    console.log(`🏆 Schnellster: ${fastestDriver?.name} (${formatTime(fastestDriver?.time)})`);
-    console.log(`🔄 Meiste Runden: ${mostLapsDriver?.name} (${mostLapsDriver?.laps})`);
-}
-
-// ✅ NEUE FUNKTION: SESSION INFO UPDATEN
-function updateSessionInfo() {
-    const sessionIdElement = document.getElementById('session-id');
-    const sessionTypeElement = document.getElementById('session-type');
-    
-    if (currentSessionFilter === 'current') {
-        // ✅ LIVE SESSION
-        sessionIdElement.textContent = 'LIVE';
-        sessionTypeElement.textContent = 'Aktiv';
-    } else if (currentSessionFilter === 'all') {
-        // ✅ ALLE SESSIONS
-        sessionIdElement.textContent = 'ALL';
-        sessionTypeElement.textContent = 'Gesamt';
-    } else {
-        // ✅ SPEZIFISCHE SESSION
-        const selectedSession = availableSessions.find(s => s.id == currentSessionFilter);
-        
-        if (selectedSession) {
-            sessionIdElement.textContent = selectedSession.id;
-            
-            // Session Typ basierend auf verfügbaren Daten ableiten
-            let sessionType = 'Training';
-            
-            // Einfache Logik für Session-Typ
-            if (selectedSession.name && selectedSession.name.toLowerCase().includes('race')) {
-                sessionType = 'Rennen';
-            } else if (selectedSession.name && selectedSession.name.toLowerCase().includes('quali')) {
-                sessionType = 'Qualifying';
-            } else if (selectedSession.name && selectedSession.name.toLowerCase().includes('practice')) {
-                sessionType = 'Training';
-            } else {
-                // Fallback: Typ basierend auf Anzahl Runden schätzen
-                const totalLaps = parseInt(document.getElementById('total-laps').textContent) || 0;
-                if (totalLaps > 100) {
-                    sessionType = 'Rennen';
-                } else if (totalLaps > 50) {
-                    sessionType = 'Qualifying';
-                } else {
-                    sessionType = 'Training';
-                }
-            }
-            
-            sessionTypeElement.textContent = sessionType;
-        } else {
-            sessionIdElement.textContent = currentSessionFilter;
-            sessionTypeElement.textContent = 'Unbekannt';
-        }
-    }
-    
-    console.log(`🔍 Session Info: ID=${sessionIdElement.textContent}, Type=${sessionTypeElement.textContent}`);
-}
-
-
-function updateControllerTables() {
-    const SHOW_ONLY_CURRENT_SESSION = document.getElementById('sessionToggle') ? 
-        document.getElementById('sessionToggle').checked : true;
-
-    for (let controllerId = 1; controllerId <= 6; controllerId++) {
-        const controllerData = dashboardData[controllerId.toString()];
-        let filteredControllerData = controllerData;
-
-        // ✅ SESSION + TOGGLE FILTER KOMBINIEREN
-        if (controllerData && controllerData.laps && controllerData.laps.length > 0) {
-            let filteredLaps = controllerData.laps;
-
-            // 1. Session-Filter anwenden (wenn nicht "all")
-            if (currentSessionFilter !== 'all') {
-                if (currentSessionFilter === 'current') {
-                    // Zeitbasierte aktuelle Session
-                    filteredLaps = getCurrentSessionLaps(controllerData);
-                } else {
-                    // Spezifische Session-ID
-                    filteredLaps = controllerData.laps.filter(lap => 
-                        (lap.event_id || lap.session_id) == currentSessionFilter
-                    );
-                }
-            }
-
-            // 2. Toggle-Filter: Nur letzte 10 Zeiten
-            if (SHOW_ONLY_CURRENT_SESSION) {
-                filteredLaps = filteredLaps.slice(-10);
-            }
-
-            console.log(`📊 Controller ${controllerId}: ${filteredLaps.length} Runden (nach Filter)`);
-
-            filteredControllerData = {
-                ...controllerData,
-                laps: filteredLaps
-            };
-        }
-
-        const tableBody = document.getElementById(`controller-${controllerId}-times`);
-        const driverName = document.querySelector(`#controller-${controllerId} .driver-name`);
-        const carName = document.querySelector(`#controller-${controllerId} .car-name`);
-        const controllerTable = document.getElementById(`controller-${controllerId}`);
-
-        // ✅ Farben setzen
-        let controllerColor = (filteredControllerData && filteredControllerData.color) 
-            ? filteredControllerData.color 
-            : getDefaultControllerColor(controllerId);
-
-        const lightColor = hexToRgba(controllerColor, 0.2);
-        const mediumColor = hexToRgba(controllerColor, 0.3);
-
-        controllerTable.style.setProperty('background', lightColor, 'important');
-        controllerTable.style.setProperty('border-left', `6px solid ${controllerColor}`, 'important');
-        controllerTable.style.setProperty('box-shadow', `0 2px 8px ${hexToRgba(controllerColor, 0.3)}`, 'important');
-
-        const driverInfo = controllerTable.querySelector('.driver-info');
-        if (driverInfo) {
-            driverInfo.style.setProperty('background', mediumColor, 'important');
-            driverInfo.style.setProperty('border', `1px solid ${controllerColor}`, 'important');
-            driverInfo.style.setProperty('color', '#000', 'important');
-        }
-
-        if (filteredControllerData && filteredControllerData.laps && filteredControllerData.laps.length > 0) {
-            driverName.textContent = filteredControllerData.name || `Driver ${controllerId}`;
-            carName.textContent = filteredControllerData.car || `Car ${controllerId}`;
-
-            // ✅ BESTE ZEIT berechnen
-            const myTimes = filteredControllerData.laps
-                .map(lap => lap.laptime_raw || 0)
-                .filter(time => time > 0);
-
-            if (myTimes.length > 0) {
-                const myBestTime = Math.min(...myTimes);
-
-                // Alle Session-Zeiten sammeln für Vergleich
-                let allSessionTimes = [];
-                for (let i = 1; i <= 10; i++) {
-                    const otherData = dashboardData[i.toString()];
-                    if (otherData && otherData.laps) {
-                        let otherLaps = getCurrentSessionLaps(otherData);
-                        const times = otherLaps
-                            .map(lap => lap.laptime_raw || 0)
-                            .filter(time => time > 0);
-                        allSessionTimes = allSessionTimes.concat(times);
-                    }
-                }
-
-                const sessionBestTime = allSessionTimes.length > 0 ? Math.min(...allSessionTimes) : null;
-                const isSessionBest = myBestTime === sessionBestTime;
-
-                // Bestzeit im Namen anzeigen
-                const bestTimeText = ` (${isSessionBest ? '🏆' : '⏱️'} ${formatTime(myBestTime)})`;
-                driverName.textContent = (filteredControllerData.name || `Driver ${controllerId}`) + bestTimeText;
-            }
-
-            // ✅ TABELLEN-INHALT AUFBAUEN
-            const recentLaps = filteredControllerData.laps.slice(-10).reverse(); // Neueste zuerst
-            const sessionBestTime = myTimes.length > 0 ? Math.min(...myTimes) : null;
-
-            tableBody.innerHTML = recentLaps.map((lap, index) => {
-                const lapTime = lap.laptime_raw || 0;
-                const isPersonalBest = sessionBestTime && lapTime === sessionBestTime;
-                const isLatest = index === 0; // Neueste Runde
-
-                let rowClass = '';
-                let rowStyle = '';
-
-                if (isPersonalBest) {
-                    rowClass = 'table-warning';
-                    rowStyle = 'background: linear-gradient(90deg, #ffd700, #ffed4a) !important;';
-                } else if (isLatest) {
-                    const gradientColor = hexToRgba(controllerColor, 0.4);
-                    rowStyle = `background: linear-gradient(90deg, ${gradientColor}, rgba(248,249,250,0.8)) !important;`;
-                }
-
-                return `
-                    <tr class="${rowClass}" style="${rowStyle}">
-                        <td>#${lap.lap || '-'}</td>
-                        <td>${lap.laptime_formatted || formatTime(lapTime)}</td>
-                        <td>${isPersonalBest ? '🏆' : (isLatest ? '🏁' : '')}</td>
-                    </tr>
-                `;
-            }).join('');
-
-        } else {
-            driverName.textContent = `Controller ${controllerId}`;
-            carName.textContent = 'Keine Daten';
-
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="3" class="text-muted text-center py-3">
-                        Noch keine Runden gefahren
-                    </td>
-                </tr>
-            `;
-        }
-    }
-}
-
-function updateTrackRecord() {
-    if (sessionFastestLap && (!trackRecord || sessionFastestLap.time < trackRecord.time)) {
-        trackRecord = {
-            time: sessionFastestLap.time,
-            driver: sessionFastestLap.driver,
-            date: new Date().toLocaleDateString('de-DE')
-        };
     }
 
     if (trackRecord) {
-        document.getElementById('track-record-time').textContent = formatTime(trackRecord.time);
-        document.getElementById('track-record-driver').textContent = trackRecord.driver;
-        document.getElementById('track-record-date').textContent = trackRecord.date;
-    }
-}
-
-function getDefaultControllerColor(controllerId) {
-    const colors = {
-        1: '#FF4444', // Rot
-        2: '#4444FF', // Blau  
-        3: '#44FF44', // Grün
-        4: '#FFFF44', // Gelb
-        5: '#FF8844', // Orange
-        6: '#8844FF'  // Violett
-    };
-
-    const color = colors[controllerId] || '#888888';
-    console.log(`🎨 getDefaultControllerColor(${controllerId}) = ${color}`);
-    return color;
-}
-
-function hexToRgba(hex, alpha) {
-    hex = hex.replace('#', '');
-
-    if (hex.length === 3) {
-        hex = hex.split('').map(char => char + char).join('');
+        document.getElementById('recordTime').textContent = formatTime(trackRecord.time);
+        document.getElementById('recordDriver').textContent = trackRecord.driver;
     }
 
-    const result = /^([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-
-    if (result) {
-        const r = parseInt(result[1], 16);
-        const g = parseInt(result[2], 16);
-        const b = parseInt(result[3], 16);
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-
-    return `rgba(128, 128, 128, ${alpha})`;
-}
-
-function formatTime(timeMs) {
-    if (!timeMs || timeMs === 0) return '--:--.---';
-
-    const minutes = Math.floor(timeMs / 60000);
-    const seconds = ((timeMs % 60000) / 1000).toFixed(3);
-
-    if (minutes > 0) {
-        return `${minutes}:${seconds.padStart(6, '0')}`;
-    } else {
-        return `0:${seconds.padStart(6, '0')}`;
-    }
-}
-
-// ✅ CSS für Controller-Tabellen
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
-    }
-
-    .controllers-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 20px;
-        margin-top: 15px;
-    }
-
-    .controller-table {
-        border-radius: 12px;
-        padding: 15px;
-        transition: all 0.3s ease;
-        border: 1px solid #595959;
-    }
-
-    .controller-table:hover {
-        transform: translateY(-2px);
-    }
-
-    .controller-header {
-        margin: 0 0 15px 0;
-        text-align: center;
-        font-weight: bold;
-        font-size: 16px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-
-    .driver-info {
-        text-align: center;
-        margin-bottom: 15px;
-        padding: 12px;
-        border-radius: 8px;
-        transition: all 0.3s ease;
-    }
-
-    .driver-name {
-        font-weight: bold;
-        font-size: 15px;
-        display: block;
-        margin-bottom: 4px;
-    }
-
-    .car-name {
-        font-size: 13px;
-        font-style: italic;
-    }
-
-    .controller-table table {
-        margin-bottom: 0;
-        border-radius: 6px;
-        overflow: hidden;
-    }
-
-    .controller-table th {
-        background: rgba(0,0,0,0.8) !important;
-        color: white !important;
-        font-size: 12px;
-        padding: 8px;
-        text-align: center;
-        font-weight: bold;
-    }
-
-    .controller-table td {
-        padding: 8px;
-        text-align: center;
-        font-size: 13px;
-        border-bottom: 1px solid rgba(0,0,0,0.1);
-    }
-
-    .form-switch .form-check-input:checked {
-        background-color: #28a745;
-        border-color: #28a745;
-    }
-
-    .form-check-label {
-        cursor: pointer;
-        user-select: none;
-    }
-    #session-id, #session-type {
-    font-size: 0.9rem;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    }
-    
-    #session-id {
-        color: rgba(255, 255, 255, 0.95);
-    }
-    
-    #session-type {
-        color: rgba(255, 255, 255, 0.9);
-    }
-    
-    .card .d-flex small {
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    /* ✅ Session Stats Card - Grauer Hintergrund */
-    .bg-secondary {
-        --bs-bg-opacity: 1;
-        background-color: #6c757d !important; /* Bootstrap Grau */
-    }
-    
-    /* ✅ Alternative: Dunklerer Grauton passend zum Theme */
-    .card.bg-secondary {
-        background: linear-gradient(135deg, #495057 0%, #6c757d 100%) !important;
-        border: 1px solid #545b62;
-    }
-    
-    /* ✅ Kompakte Session Stats */
-    .card.bg-secondary .card-body {
-        padding: 1rem !important;
-    }
-    
-    .card.bg-secondary small {
-        font-size: 0.75rem;
-        opacity: 0.9;
-    }
-    
-    .card.bg-secondary hr {
-        margin: 0.5rem 0 !important;
-        opacity: 0.3 !important;
-    }
-    
-    /* ✅ Session ID & Type Styling */
-    .card.bg-secondary #session-id, 
-    .card.bg-secondary #session-type {
-        font-size: 0.9rem !important;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-        color: rgba(255, 255, 255, 0.95);
-    }
-    
-    /* ✅ Responsive Anpassungen */
-    @media (max-width: 1200px) {
-        .row .col-md-6 .row .col-3 {
-            flex: 0 0 50% !important;
-            max-width: 50% !important;
-        }
-    }
-    
-    @media (max-width: 768px) {
-        .row .col-md-6 .row .col-3 {
-            flex: 0 0 100% !important;
-            max-width: 100% !important;
-            margin-bottom: 0.5rem;
-        }
-        
-        .card.bg-secondary .d-flex.gap-3 {
-            flex-direction: column !important;
-            gap: 1rem !important;
+    // Dauer
+    if (startTime && endTime) {
+        const ms = endTime - startTime;
+        const min = Math.floor(ms / 60000);
+        if (min >= 60) {
+            document.getElementById('sessionDuration').textContent = Math.floor(min/60) + 'h ' + (min%60) + 'm';
+        } else {
+            document.getElementById('sessionDuration').textContent = min + 'm';
         }
     }
 
-`;
-document.head.appendChild(style);
-
-// ✅ EVENT LISTENERS
-document.addEventListener('DOMContentLoaded', async function() {
-    // Sessions laden
-    await loadSessions();
-    
-    // Session-Auswahl Event Listener
-    const sessionSelect = document.getElementById('sessionSelect');
-    if (sessionSelect) {
-        sessionSelect.addEventListener('change', function() {
-            currentSessionFilter = this.value;
-            console.log(`🔄 Session changed to: ${currentSessionFilter}`);
-            updateDashboard();
-        });
+    // Durchschnitt
+    if (allTimes.length > 0) {
+        const avg = allTimes.reduce((a,b) => a+b, 0) / allTimes.length;
+        document.getElementById('avgLap').textContent = formatTime(avg);
     }
+}
 
-    // Refresh Sessions Button
-    const refreshBtn = document.getElementById('refreshSessions');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', async function() {
-            const button = this;
-            const originalHTML = button.innerHTML;
-            
-            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            button.disabled = true;
-            
-            try {
-                await loadSessions();
-                await updateDashboard();
-                console.log('✅ Sessions refreshed');
-            } catch (error) {
-                console.error('❌ Refresh error:', error);
-            } finally {
-                button.innerHTML = originalHTML;
-                button.disabled = false;
+// Controller-Karten rendern
+function renderControllers() {
+    const grid = document.getElementById('controllerGrid');
+    const controllerIds = Object.keys(dashboardData).sort((a,b) => parseInt(a) - parseInt(b));
+
+    // Alle 6 Controller zeigen (auch leere)
+    const allIds = ['1','2','3','4','5','6'];
+    const idsToShow = [...new Set([...allIds, ...controllerIds])].sort((a,b) => parseInt(a) - parseInt(b));
+
+    grid.innerHTML = idsToShow.map(cid => {
+        const cd = dashboardData[cid];
+        const color = (cd && cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
+        const laps = cd ? getSessionLaps(cd) : [];
+        const hasData = laps.length > 0;
+
+        const driverName = hasData ? (cd.name || 'Fahrer ' + cid) : 'Controller ' + cid;
+        const carName = hasData ? (cd.car || '') : 'Keine Daten';
+
+        // Bestzeit dieses Controllers in der Session
+        const times = laps.map(l => l.laptime_raw).filter(t => t > 0);
+        const bestTime = times.length > 0 ? Math.min(...times) : null;
+
+        // Globale Bestzeit fuer Highlight
+        let globalBest = null;
+        Object.values(dashboardData).forEach(d => {
+            if (d.best_time_raw && (!globalBest || d.best_time_raw < globalBest)) {
+                globalBest = d.best_time_raw;
             }
         });
-    }
+        const isGlobalBest = bestTime && bestTime === globalBest;
 
-    // Legacy Toggle
-    const sessionToggle = document.getElementById('sessionToggle');
-    if (sessionToggle) {
-        sessionToggle.addEventListener('change', function() {
-            console.log('🎛️ Toggle geändert:', this.checked);
-            updateControllerTables();
-        });
-    }
-    
-    console.log('✅ Dashboard loaded successfully');
-});
+        // Letzte 8 Runden (neueste zuerst)
+        const recentLaps = [...laps].sort((a,b) => (b.lap || 0) - (a.lap || 0)).slice(0, 8);
 
-// ✅ AUTO-REFRESH LOGIC
-let refreshInterval;
-
-function startAutoRefresh() {
-    // Nur bei aktueller Session Live-Updates
-    if (currentSessionFilter === 'current') {
-        refreshInterval = setInterval(updateDashboard, 2000);
-        console.log('🔄 Auto-refresh gestartet (2s)');
-    } else {
-        if (refreshInterval) {
-            clearInterval(refreshInterval);
-            console.log('⏸️ Auto-refresh gestoppt');
+        let tableRows = '';
+        if (recentLaps.length > 0) {
+            tableRows = recentLaps.map((l, idx) => {
+                let cls = '';
+                if (l.laptime_raw === bestTime && bestTime > 0) cls = 'row-pb';
+                else if (idx === 0) cls = 'row-latest';
+                const icon = (l.laptime_raw === bestTime && bestTime > 0) ? '<i class="fas fa-trophy text-warning"></i>' : (idx === 0 ? '<i class="fas fa-flag text-info"></i>' : '');
+                return `<tr class="${cls}">
+                    <td class="text-center">${l.lap || '-'}</td>
+                    <td class="font-mono text-center">${l.laptime_formatted || formatTime(l.laptime_raw)}</td>
+                    <td class="text-center">${icon}</td>
+                </tr>`;
+            }).join('');
+        } else {
+            tableRows = '<tr><td colspan="3" class="text-center text-muted py-3"><small>Noch keine Runden</small></td></tr>';
         }
+
+        return `
+        <div class="controller-card" style="--controller-color: ${color}; opacity: ${hasData ? 1 : 0.5}">
+            <div class="driver-header d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="driver-name">${driverName}</div>
+                    <div class="car-name">${carName}</div>
+                </div>
+                <div class="text-end">
+                    <span class="controller-badge" style="background: ${color}">C${cid}</span>
+                    ${bestTime ? `<div class="best-time mt-1 ${isGlobalBest ? 'text-warning' : ''}">${isGlobalBest ? '<i class="fas fa-trophy me-1"></i>' : '<i class="fas fa-stopwatch me-1 text-muted"></i>'}${formatTime(bestTime)}</div>` : ''}
+                </div>
+            </div>
+            <table class="table table-sm mb-0">
+                <thead><tr>
+                    <th class="text-center">Runde</th>
+                    <th class="text-center">Zeit</th>
+                    <th class="text-center" style="width: 40px;"></th>
+                </tr></thead>
+                <tbody>${tableRows}</tbody>
+            </table>
+        </div>`;
+    }).join('');
+}
+
+// Auto-Refresh
+function startRefresh() {
+    if (refreshTimer) clearInterval(refreshTimer);
+    const isLive = document.getElementById('liveToggle').checked;
+    if (isLive && (currentSession === 'current' || currentSession === 'all')) {
+        refreshTimer = setInterval(updateDashboard, 2000);
     }
 }
 
-// Initial load und Auto-refresh starten
-updateDashboard();
-startAutoRefresh();
-
-// Bei Session-Wechsel Auto-refresh anpassen
-document.getElementById('sessionSelect')?.addEventListener('change', function() {
-    startAutoRefresh();
+// Event-Listener
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadSessions();
+    await updateDashboard();
+    startRefresh();
 });
 
-console.log('🎯 Dashboard.html mit Session-Management geladen!');
+document.getElementById('sessionSelect').addEventListener('change', function() {
+    currentSession = this.value;
+    updateDashboard();
+    startRefresh();
+});
+
+document.getElementById('refreshBtn').addEventListener('click', async () => {
+    const btn = document.getElementById('refreshBtn');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+    await loadSessions();
+    await updateDashboard();
+    btn.innerHTML = '<i class="fas fa-sync-alt"></i>';
+    btn.disabled = false;
+});
+
+document.getElementById('liveToggle').addEventListener('change', startRefresh);
 </script>
 {% endblock %}
