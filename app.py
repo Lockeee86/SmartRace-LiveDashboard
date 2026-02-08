@@ -73,6 +73,17 @@ class RaceResult(db.Model):
 
 # Datenbank initialisieren
 with app.app_context():
+    # Alte Tabellen/Sequenzen bereinigen falls vorhanden (einmaliger Neuaufbau)
+    try:
+        db.session.execute(db.text(
+            "DROP TABLE IF EXISTS event CASCADE; "
+            "DROP TABLE IF EXISTS lap_time CASCADE; "
+            "DROP SEQUENCE IF EXISTS event_id_seq CASCADE; "
+            "DROP SEQUENCE IF EXISTS lap_time_id_seq CASCADE;"
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
     db.create_all()
 
 
