@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+
+{% block title %}Head-to-Head - SmartRace Live{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="session-selector d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-people-arrows me-2"></i>Head-to-Head Vergleich</h5>
+</div>
+
+<!-- Fahrerauswahl -->
+<div class="row g-3 mb-3">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-body py-2">
+                <label class="form-label small text-muted mb-1">Fahrer 1</label>
+                <select id="driver1Select" class="form-select form-select-sm">
+                    <option value="">Fahrer waehlen...</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 d-flex align-items-center justify-content-center">
+        <button class="btn btn-primary" id="compareBtn" disabled>
+            <i class="fas fa-exchange-alt me-1"></i> Vergleichen
+        </button>
+    </div>
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-body py-2">
+                <label class="form-label small text-muted mb-1">Fahrer 2</label>
+                <select id="driver2Select" class="form-select form-select-sm">
+                    <option value="">Fahrer waehlen...</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vergleich -->
+<div id="comparisonContainer" class="d-none">
+    <!-- Stats Vergleich -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-5">
+            <div class="card h2h-card" id="driver1Card">
+                <div class="card-body text-center">
+                    <h5 class="fw-bold" id="d1Name">--</h5>
+                    <div class="row g-2 mt-2">
+                        <div class="col-4">
+                            <div class="fw-bold fs-5" id="d1Laps">0</div>
+                            <div class="small text-muted">Runden</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="fw-bold fs-5" id="d1Sessions">0</div>
+                            <div class="small text-muted">Sessions</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="fw-bold fs-5" id="d1Wins">0</div>
+                            <div class="small text-muted">Siege</div>
+                        </div>
+                    </div>
+                    <hr class="my-2">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div class="small text-muted">Bestzeit</div>
+                            <div class="fw-bold font-mono fs-5" id="d1Best">--:--.---</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-muted">Durchschnitt</div>
+                            <div class="fw-bold font-mono" id="d1Avg">--:--.---</div>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <span class="badge bg-danger" id="d1Penalties">0 Strafen</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2 d-flex align-items-center justify-content-center">
+            <div class="text-center">
+                <div class="display-6 fw-bold text-muted">VS</div>
+                <div class="small text-muted mt-2" id="h2hVerdict">--</div>
+            </div>
+        </div>
+        <div class="col-md-5">
+            <div class="card h2h-card" id="driver2Card">
+                <div class="card-body text-center">
+                    <h5 class="fw-bold" id="d2Name">--</h5>
+                    <div class="row g-2 mt-2">
+                        <div class="col-4">
+                            <div class="fw-bold fs-5" id="d2Laps">0</div>
+                            <div class="small text-muted">Runden</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="fw-bold fs-5" id="d2Sessions">0</div>
+                            <div class="small text-muted">Sessions</div>
+                        </div>
+                        <div class="col-4">
+                            <div class="fw-bold fs-5" id="d2Wins">0</div>
+                            <div class="small text-muted">Siege</div>
+                        </div>
+                    </div>
+                    <hr class="my-2">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div class="small text-muted">Bestzeit</div>
+                            <div class="fw-bold font-mono fs-5" id="d2Best">--:--.---</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-muted">Durchschnitt</div>
+                            <div class="fw-bold font-mono" id="d2Avg">--:--.---</div>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <span class="badge bg-danger" id="d2Penalties">0 Strafen</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rundenzeiten-Chart -->
+    <div class="card mb-3">
+        <div class="card-header py-2">
+            <i class="fas fa-chart-line me-1"></i> Rundenzeiten-Vergleich
+        </div>
+        <div class="card-body">
+            <canvas id="h2hChart" height="300"></canvas>
+        </div>
+    </div>
+
+    <!-- Runde fuer Runde -->
+    <div class="card">
+        <div class="card-header py-2">
+            <i class="fas fa-list-ol me-1"></i> Runde fuer Runde
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 80px;">Runde</th>
+                            <th class="text-center" id="th-d1">Fahrer 1</th>
+                            <th class="text-center" style="width: 80px;">Diff</th>
+                            <th class="text-center" id="th-d2">Fahrer 2</th>
+                            <th class="text-center" style="width: 80px;">Schneller</th>
+                        </tr>
+                    </thead>
+                    <tbody id="h2hTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let h2hChart = null;
+
+async function loadDrivers() {
+    try {
+        const res = await fetch('/api/filters');
+        if (!res.ok) return;
+        const data = await res.json();
+        const sel1 = document.getElementById('driver1Select');
+        const sel2 = document.getElementById('driver2Select');
+        data.drivers.forEach(d => {
+            sel1.innerHTML += `<option value="${d}">${d}</option>`;
+            sel2.innerHTML += `<option value="${d}">${d}</option>`;
+        });
+    } catch (e) {
+        console.error('Fahrer laden fehlgeschlagen:', e);
+    }
+}
+
+function checkSelections() {
+    const d1 = document.getElementById('driver1Select').value;
+    const d2 = document.getElementById('driver2Select').value;
+    document.getElementById('compareBtn').disabled = !(d1 && d2 && d1 !== d2);
+}
+
+async function compare() {
+    const d1 = document.getElementById('driver1Select').value;
+    const d2 = document.getElementById('driver2Select').value;
+    if (!d1 || !d2 || d1 === d2) return;
+
+    try {
+        const res = await fetch(`/api/head-to-head?driver1=${encodeURIComponent(d1)}&driver2=${encodeURIComponent(d2)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        renderComparison(data, d1, d2);
+    } catch (e) {
+        console.error('Vergleich fehlgeschlagen:', e);
+    }
+}
+
+function renderComparison(data, d1Name, d2Name) {
+    document.getElementById('comparisonContainer').classList.remove('d-none');
+    const d1 = data[d1Name] || {};
+    const d2 = data[d2Name] || {};
+
+    // Namen
+    document.getElementById('d1Name').textContent = d1Name;
+    document.getElementById('d2Name').textContent = d2Name;
+    document.getElementById('th-d1').textContent = d1Name;
+    document.getElementById('th-d2').textContent = d2Name;
+
+    // Stats
+    document.getElementById('d1Laps').textContent = d1.total_laps || 0;
+    document.getElementById('d1Sessions').textContent = d1.total_sessions || 0;
+    document.getElementById('d1Wins').textContent = d1.wins || 0;
+    document.getElementById('d1Best').textContent = d1.best_time_formatted || '--:--.---';
+    document.getElementById('d1Avg').textContent = d1.avg_time_formatted || '--:--.---';
+    document.getElementById('d1Penalties').textContent = (d1.penalties || 0) + ' Strafen';
+
+    document.getElementById('d2Laps').textContent = d2.total_laps || 0;
+    document.getElementById('d2Sessions').textContent = d2.total_sessions || 0;
+    document.getElementById('d2Wins').textContent = d2.wins || 0;
+    document.getElementById('d2Best').textContent = d2.best_time_formatted || '--:--.---';
+    document.getElementById('d2Avg').textContent = d2.avg_time_formatted || '--:--.---';
+    document.getElementById('d2Penalties').textContent = (d2.penalties || 0) + ' Strafen';
+
+    // Highlight winner cards
+    const card1 = document.getElementById('driver1Card');
+    const card2 = document.getElementById('driver2Card');
+    card1.style.borderColor = 'var(--sr-border)';
+    card2.style.borderColor = 'var(--sr-border)';
+
+    if (d1.best_time && d2.best_time) {
+        if (d1.best_time < d2.best_time) {
+            card1.style.borderColor = 'var(--sr-success)';
+            document.getElementById('h2hVerdict').innerHTML = `<i class="fas fa-arrow-left text-success"></i> ${d1Name} schneller`;
+        } else if (d2.best_time < d1.best_time) {
+            card2.style.borderColor = 'var(--sr-success)';
+            document.getElementById('h2hVerdict').innerHTML = `<i class="fas fa-arrow-right text-success"></i> ${d2Name} schneller`;
+        } else {
+            document.getElementById('h2hVerdict').textContent = 'Gleichstand!';
+        }
+    }
+
+    // Chart
+    renderChart(d1, d2, d1Name, d2Name);
+
+    // Tabelle
+    renderTable(d1, d2);
+}
+
+function renderChart(d1, d2, name1, name2) {
+    const ctx = document.getElementById('h2hChart').getContext('2d');
+    if (h2hChart) h2hChart.destroy();
+
+    const laps1 = (d1.lap_times || []).map(l => ({ x: l.lap, y: l.time })).filter(p => p.y > 0);
+    const laps2 = (d2.lap_times || []).map(l => ({ x: l.lap, y: l.time })).filter(p => p.y > 0);
+
+    h2hChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [
+                {
+                    label: name1,
+                    data: laps1,
+                    borderColor: '#e74c3c',
+                    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                    tension: 0.3,
+                    pointRadius: 3,
+                    fill: false,
+                },
+                {
+                    label: name2,
+                    data: laps2,
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    tension: 0.3,
+                    pointRadius: 3,
+                    fill: false,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#e4e6eb' } },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `${ctx.dataset.label}: ${formatTime(ctx.parsed.y)}`,
+                    },
+                },
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: 'Runde', color: '#8b8fa3' },
+                    ticks: { color: '#8b8fa3', stepSize: 1 },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                },
+                y: {
+                    title: { display: true, text: 'Zeit (ms)', color: '#8b8fa3' },
+                    ticks: { color: '#8b8fa3', callback: v => formatTime(v) },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                },
+            },
+        },
+    });
+}
+
+function renderTable(d1, d2) {
+    const tbody = document.getElementById('h2hTableBody');
+    const laps1 = {};
+    const laps2 = {};
+    (d1.lap_times || []).forEach(l => { if (l.lap) laps1[l.lap] = l; });
+    (d2.lap_times || []).forEach(l => { if (l.lap) laps2[l.lap] = l; });
+
+    const allLaps = [...new Set([...Object.keys(laps1), ...Object.keys(laps2)])]
+        .map(Number).sort((a, b) => a - b);
+
+    if (allLaps.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Keine gemeinsamen Runden</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = allLaps.map(lap => {
+        const l1 = laps1[lap];
+        const l2 = laps2[lap];
+        const t1 = l1 ? l1.time : null;
+        const t2 = l2 ? l2.time : null;
+
+        let diff = '--';
+        let faster = '';
+        if (t1 && t2 && t1 > 0 && t2 > 0) {
+            const d = Math.abs(t1 - t2);
+            if (t1 < t2) {
+                diff = `<span class="text-success">-${formatTime(d)}</span>`;
+                faster = '<i class="fas fa-arrow-left text-success"></i>';
+            } else if (t2 < t1) {
+                diff = `<span class="text-primary">-${formatTime(d)}</span>`;
+                faster = '<i class="fas fa-arrow-right text-primary"></i>';
+            } else {
+                diff = '<span class="text-muted">0</span>';
+                faster = '=';
+            }
+        }
+
+        return `<tr>
+            <td class="text-center">${lap}</td>
+            <td class="text-center font-mono ${t1 && t2 && t1 < t2 ? 'text-success fw-bold' : ''}">${l1 ? l1.formatted : '--'}</td>
+            <td class="text-center small">${diff}</td>
+            <td class="text-center font-mono ${t1 && t2 && t2 < t1 ? 'text-primary fw-bold' : ''}">${l2 ? l2.formatted : '--'}</td>
+            <td class="text-center">${faster}</td>
+        </tr>`;
+    }).join('');
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+    loadDrivers();
+});
+
+document.getElementById('driver1Select').addEventListener('change', checkSelections);
+document.getElementById('driver2Select').addEventListener('change', checkSelections);
+document.getElementById('compareBtn').addEventListener('click', compare);
+</script>
+{% endblock %}

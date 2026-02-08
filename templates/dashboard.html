@@ -64,9 +64,26 @@
     </div>
 </div>
 
-<!-- Controller Cards -->
-<div class="controller-grid" id="controllerGrid">
-    <!-- Wird per JavaScript gefuellt -->
+<!-- Live-Feed Ticker + Controller Cards -->
+<div class="row g-3">
+    <!-- Controller Cards -->
+    <div class="col-lg-9">
+        <div class="controller-grid" id="controllerGrid">
+            <!-- Wird per JavaScript gefuellt -->
+        </div>
+    </div>
+    <!-- Live-Feed Ticker -->
+    <div class="col-lg-3">
+        <div class="card" style="height: 100%; max-height: 600px;">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-rss me-1"></i> Live-Ticker</span>
+                <span class="badge bg-danger pulse" style="font-size: 0.65rem;">LIVE</span>
+            </div>
+            <div class="card-body p-0" style="overflow-y: auto;" id="liveFeedContainer">
+                <div class="text-center text-muted py-4 small">Warte auf Events...</div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -75,6 +92,96 @@
 let dashboardData = {};
 let trackRecord = null;
 let currentSession = 'current';
+
+// Streckenrekord aus DB laden
+async function loadTrackRecord() {
+    try {
+        const res = await fetch('/api/track-record');
+        if (!res.ok) return;
+        const rec = await res.json();
+        if (rec && rec.laptime_ms) {
+            trackRecord = { time: rec.laptime_ms, driver: rec.driver_name };
+            document.getElementById('recordTime').textContent = rec.laptime_formatted;
+            document.getElementById('recordDriver').textContent = `${rec.driver_name} (${rec.car_name || '--'})`;
+        }
+    } catch (e) {
+        console.error('Streckenrekord-Fehler:', e);
+    }
+}
+
+// Live-Feed laden
+async function loadLiveFeed() {
+    try {
+        const res = await fetch('/api/live-feed?limit=25');
+        if (!res.ok) return;
+        const items = await res.json();
+        renderLiveFeed(items);
+    } catch (e) {
+        console.error('Live-Feed-Fehler:', e);
+    }
+}
+
+function renderLiveFeed(items) {
+    const container = document.getElementById('liveFeedContainer');
+    if (!items || items.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-4 small">Warte auf Events...</div>';
+        return;
+    }
+    container.innerHTML = items.map(item => {
+        const time = item.timestamp ? new Date(item.timestamp).toLocaleTimeString('de-DE') : '--';
+        const color = item.color || '#666';
+
+        if (item.type === 'lap') {
+            const pbIcon = item.is_pb ? ' <i class="fas fa-trophy text-warning"></i>' : '';
+            return `<div class="feed-item feed-lap" style="border-left-color: ${color}">
+                <div class="feed-time">${time}</div>
+                <div class="feed-content">
+                    <strong>${item.driver_name}</strong> - Runde ${item.lap_number}${pbIcon}
+                    <div class="feed-detail font-mono">${item.laptime_formatted}</div>
+                </div>
+            </div>`;
+        }
+        if (item.type === 'penalty') {
+            return `<div class="feed-item feed-penalty">
+                <div class="feed-time">${time}</div>
+                <div class="feed-content">
+                    <i class="fas fa-exclamation-triangle text-danger"></i>
+                    <strong>${item.driver_name}</strong> - ${item.penalty_type || 'Strafe'}
+                </div>
+            </div>`;
+        }
+        if (item.type === 'status') {
+            return `<div class="feed-item feed-status">
+                <div class="feed-time">${time}</div>
+                <div class="feed-content">
+                    <i class="fas fa-flag text-info"></i>
+                    Status: <strong>${item.status}</strong> ${item.race_type ? '(' + item.race_type + ')' : ''}
+                </div>
+            </div>`;
+        }
+        if (item.type === 'record') {
+            return `<div class="feed-item feed-record">
+                <div class="feed-time">${time}</div>
+                <div class="feed-content">
+                    <i class="fas fa-star text-warning"></i>
+                    <strong>NEUER REKORD!</strong> ${item.driver_name} - ${item.laptime_formatted}
+                </div>
+            </div>`;
+        }
+        if (item.type === 'dnf' || item.type === 'dq') {
+            const icon = item.type === 'dnf' ? 'fa-ban text-warning' : 'fa-times-circle text-danger';
+            const label = item.type === 'dnf' ? 'DNF' : 'DQ';
+            return `<div class="feed-item feed-${item.type}">
+                <div class="feed-time">${time}</div>
+                <div class="feed-content">
+                    <i class="fas ${icon}"></i>
+                    <strong>${item.driver_name}</strong> - ${label}
+                </div>
+            </div>`;
+        }
+        return '';
+    }).join('');
+}
 
 // Sessions laden
 async function loadSessions() {
@@ -168,7 +275,7 @@ function renderStats() {
 
     if (trackRecord) {
         document.getElementById('recordTime').textContent = formatTime(trackRecord.time);
-        document.getElementById('recordDriver').textContent = trackRecord.driver;
+        document.getElementById('recordDriver').textContent = trackRecord.driver || '--';
     }
 
     // Dauer
@@ -289,8 +396,9 @@ function renderControllers() {
 
 // Event-Listener
 document.addEventListener('DOMContentLoaded', async () => {
+    await loadTrackRecord();
     await loadSessions();
-    await updateDashboard();
+    await Promise.all([updateDashboard(), loadLiveFeed()]);
 });
 
 document.getElementById('sessionSelect').addEventListener('change', function() {
@@ -311,9 +419,18 @@ document.getElementById('refreshBtn').addEventListener('click', async () => {
 // WebSocket: Live-Updates statt Polling
 socket.on('new_data', () => {
     updateDashboard();
+    loadLiveFeed();
+});
+
+socket.on('track_record', (data) => {
+    if (data && data.laptime_ms) {
+        trackRecord = { time: data.laptime_ms, driver: data.driver_name };
+        document.getElementById('recordTime').textContent = data.laptime_formatted;
+        document.getElementById('recordDriver').textContent = `${data.driver_name} (${data.car_name || '--'})`;
+    }
 });
 
 // Fallback: alle 10 Sekunden aktualisieren
-setInterval(updateDashboard, 10000);
+setInterval(() => { updateDashboard(); loadLiveFeed(); }, 10000);
 </script>
 {% endblock %}
