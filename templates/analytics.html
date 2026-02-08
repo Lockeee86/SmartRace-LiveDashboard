@@ -95,8 +95,8 @@ async function loadSessions() {
         sessions.forEach(s => {
             const date = s.start_time ? new Date(s.start_time).toLocaleDateString('de-DE') : '';
             const opt = document.createElement('option');
-            opt.value = s.event_id;
-            opt.textContent = `${s.event_id} (${s.event_type || 'Training'}) - ${date}`;
+            opt.value = s.session_id;
+            opt.textContent = `${s.session_id} (${s.session_type || 'Training'}) - ${date}`;
             sel.appendChild(opt);
         });
     } catch (e) {

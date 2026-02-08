@@ -98,8 +98,8 @@
             <table class="table mb-0">
                 <thead>
                     <tr>
-                        <th class="sortable" data-col="event_id">Session <i class="fas fa-sort sort-icon"></i></th>
-                        <th class="sortable" data-col="event_type">Typ <i class="fas fa-sort sort-icon"></i></th>
+                        <th class="sortable" data-col="session_id">Session <i class="fas fa-sort sort-icon"></i></th>
+                        <th class="sortable" data-col="session_type">Typ <i class="fas fa-sort sort-icon"></i></th>
                         <th class="sortable" data-col="driver_name">Fahrer <i class="fas fa-sort sort-icon"></i></th>
                         <th class="sortable" data-col="car_name">Auto <i class="fas fa-sort sort-icon"></i></th>
                         <th class="sortable text-center" data-col="lap">Runde <i class="fas fa-sort sort-icon"></i></th>
@@ -136,8 +136,8 @@ async function loadSessions() {
         sessions.forEach(s => {
             const date = s.start_time ? new Date(s.start_time).toLocaleDateString('de-DE') : '';
             const opt = document.createElement('option');
-            opt.value = s.event_id;
-            opt.textContent = `${s.event_id} (${s.event_type || 'Training'}) - ${date} - ${s.total_laps} Runden`;
+            opt.value = s.session_id;
+            opt.textContent = `${s.session_id} (${s.session_type || 'Training'}) - ${date} - ${s.total_laps} Runden`;
             sel.appendChild(opt);
         });
         sel.value = currentSessionFilter;
@@ -232,7 +232,7 @@ function renderTable(data) {
         const rowClass = lap.is_pb ? 'row-pb' : '';
 
         let typeBadge = 'bg-secondary';
-        const et = (lap.event_type || '').toLowerCase();
+        const et = (lap.session_type || '').toLowerCase();
         if (et.includes('race')) typeBadge = 'bg-danger';
         else if (et.includes('quali')) typeBadge = 'bg-warning text-dark';
         else if (et.includes('practice') || et.includes('training')) typeBadge = 'bg-info';
@@ -243,8 +243,8 @@ function renderTable(data) {
         }) : '--';
 
         return `<tr class="${rowClass}">
-            <td><span class="badge ${typeBadge} small">${lap.event_id || '--'}</span></td>
-            <td class="small">${lap.event_type || '--'}</td>
+            <td><span class="badge ${typeBadge} small">${lap.session_id || '--'}</span></td>
+            <td class="small">${lap.session_type || '--'}</td>
             <td>${lap.driver_name || '--'}</td>
             <td class="small text-muted">${lap.car_name || '--'}</td>
             <td class="text-center">${lap.lap || '--'}</td>
