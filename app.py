@@ -132,6 +132,29 @@ def fmt_ms(ms):
     return f"{int(s // 60)}:{s % 60:06.3f}"
 
 
+# Events die eine NEUE Session starten (neues Rennen / Training)
+_NEW_SESSION_EVENTS = {'ui.reset', 'ui.status_change'}
+
+
+def _get_session_id(etype):
+    """Session-ID ermitteln.
+
+    Neue Session bei ui.reset / ui.status_change.
+    Alle anderen Events (lap_update, penalty, car_removed, race_result)
+    gehoeren zur aktuellen Session.
+    """
+    if etype in _NEW_SESSION_EVENTS:
+        return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    # Aktuelle Session aus letztem Event uebernehmen
+    latest = db.session.query(Event.session_id).order_by(Event.id.desc()).first()
+    if latest and latest.session_id:
+        return latest.session_id
+
+    # Allererster Event ueberhaupt -> neue Session
+    return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+
 # =============================================================================
 # Seiten
 # =============================================================================
@@ -174,9 +197,7 @@ def receive_smartrace():
         etype = data.get('event_type', 'unknown')
         ed = data.get('event_data') or {}
 
-        sid = (ed.get('event_id') or data.get('event_id')
-               or data.get('session_id')
-               or f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        sid = _get_session_id(etype)
 
         db.session.add(Event(
             session_id=sid, event_type=etype, raw_json=json.dumps(data),
