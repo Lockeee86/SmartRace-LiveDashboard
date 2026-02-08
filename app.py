@@ -533,11 +533,20 @@ def api_laps():
 
         df = request.args.get('date_from')
         if df:
-            q = q.filter(Lap.created_at >= f"{df} 00:00:00")
+            try:
+                date_from = datetime.strptime(df, '%Y-%m-%d')
+                q = q.filter(Lap.created_at >= date_from)
+            except ValueError:
+                pass
 
         dt = request.args.get('date_to')
         if dt:
-            q = q.filter(Lap.created_at <= f"{dt} 23:59:59")
+            try:
+                date_to = datetime.strptime(dt, '%Y-%m-%d').replace(
+                    hour=23, minute=59, second=59)
+                q = q.filter(Lap.created_at <= date_to)
+            except ValueError:
+                pass
 
         laps = q.order_by(Lap.created_at.desc()).limit(2000).all()
 
@@ -775,11 +784,20 @@ def api_export_csv():
 
         df = request.args.get('date_from')
         if df:
-            q = q.filter(Lap.created_at >= f"{df} 00:00:00")
+            try:
+                date_from = datetime.strptime(df, '%Y-%m-%d')
+                q = q.filter(Lap.created_at >= date_from)
+            except ValueError:
+                pass
 
         dt = request.args.get('date_to')
         if dt:
-            q = q.filter(Lap.created_at <= f"{dt} 23:59:59")
+            try:
+                date_to = datetime.strptime(dt, '%Y-%m-%d').replace(
+                    hour=23, minute=59, second=59)
+                q = q.filter(Lap.created_at <= date_to)
+            except ValueError:
+                pass
 
         laps = q.order_by(Lap.created_at.desc()).all()
 
@@ -1128,6 +1146,16 @@ def api_restore():
         db.session.rollback()
         log.error(f"restore: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/laps/count')
+def api_laps_count():
+    """Gesamtanzahl Runden (ohne Filter, fuer Datenbank-Seite)."""
+    try:
+        return jsonify({'count': Lap.query.count()})
+    except Exception as e:
+        log.error(f"laps-count: {e}")
+        return jsonify({'count': 0})
 
 
 @app.route('/api/health')

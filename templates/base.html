@@ -64,6 +64,9 @@
         </div>
     </nav>
 
+    <!-- Toast-Container fuer Benachrichtigungen -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
+
     <!-- Hauptinhalt -->
     <main class="container-fluid px-4 py-3">
         {% block content %}{% endblock %}
@@ -112,9 +115,41 @@
     }
 
     // =========================================================================
-    // WebSocket-Verbindung
+    // Toast-Benachrichtigungen
     // =========================================================================
-    const socket = io();
+    function showToast(message, type = 'info', duration = 5000) {
+        const container = document.getElementById('toastContainer');
+        const icons = {
+            success: 'fa-check-circle text-success',
+            danger: 'fa-exclamation-circle text-danger',
+            warning: 'fa-exclamation-triangle text-warning',
+            info: 'fa-info-circle text-info',
+        };
+        const id = 'toast-' + Date.now();
+        const html = `<div id="${id}" class="toast show" role="alert" style="background: var(--sr-card); border: 1px solid var(--sr-border);">
+            <div class="toast-body d-flex align-items-center gap-2">
+                <i class="fas ${icons[type] || icons.info}"></i>
+                <span style="color: var(--sr-text);">${message}</span>
+            </div>
+        </div>`;
+        container.insertAdjacentHTML('beforeend', html);
+        if (duration > 0) {
+            setTimeout(() => {
+                const el = document.getElementById(id);
+                if (el) el.remove();
+            }, duration);
+        }
+    }
+
+    // =========================================================================
+    // WebSocket-Verbindung (mit Reconnect)
+    // =========================================================================
+    const socket = io({
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 2000,
+        reconnectionDelayMax: 30000,
+    });
     const badge = document.getElementById('connectionBadge');
 
     socket.on('connect', () => {
@@ -127,9 +162,30 @@
         badge.innerHTML = '<i class="fas fa-circle me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Getrennt';
     });
 
+    socket.on('reconnect_attempt', (attempt) => {
+        badge.className = 'badge bg-warning ms-2';
+        badge.innerHTML = '<i class="fas fa-circle me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Verbinde... (' + attempt + ')';
+    });
+
+    socket.on('reconnect', () => {
+        showToast('Verbindung wiederhergestellt', 'success', 3000);
+    });
+
+    socket.on('reconnect_failed', () => {
+        badge.className = 'badge bg-danger ms-2';
+        badge.innerHTML = '<i class="fas fa-circle me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Offline';
+        showToast('Verbindung zum Server verloren. Bitte Seite neu laden.', 'danger', 0);
+    });
+
     socket.on('connect_error', () => {
         badge.className = 'badge bg-danger ms-2';
         badge.innerHTML = '<i class="fas fa-circle me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Fehler';
+    });
+
+    // Penalty-Benachrichtigung global
+    socket.on('penalty', (data) => {
+        const name = data.driver_name || 'Fahrer ' + (data.controller_id || '?');
+        showToast(`<strong>Strafe:</strong> ${name}`, 'warning', 6000);
     });
 
     // Rennstatus live aktualisieren

@@ -430,6 +430,10 @@ socket.on('track_record', (data) => {
     }
 });
 
+socket.on('penalty', () => {
+    loadLiveFeed();
+});
+
 // Fallback: alle 10 Sekunden aktualisieren
 setInterval(() => { updateDashboard(); loadLiveFeed(); }, 10000);
 </script>

@@ -6,6 +6,11 @@
 <!-- Header -->
 <div class="session-selector d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><i class="fas fa-people-arrows me-2"></i>Head-to-Head Vergleich</h5>
+    <div class="d-flex align-items-center gap-2">
+        <select id="h2hSession" class="form-select form-select-sm" style="min-width: 280px;">
+            <option value="all">Alle Sessions</option>
+        </select>
+    </div>
 </div>
 
 <!-- Fahrerauswahl -->
@@ -175,6 +180,25 @@ async function loadDrivers() {
     }
 }
 
+async function loadSessions() {
+    try {
+        const res = await fetch('/api/sessions');
+        if (!res.ok) return;
+        const sessions = await res.json();
+        const sel = document.getElementById('h2hSession');
+        sel.innerHTML = '<option value="all">Alle Sessions</option>';
+        sessions.forEach(s => {
+            const date = s.start_time ? new Date(s.start_time).toLocaleDateString('de-DE') : '';
+            const opt = document.createElement('option');
+            opt.value = s.session_id;
+            opt.textContent = `${s.session_type || 'Training'} - ${date} - ${s.total_laps} Runden`;
+            sel.appendChild(opt);
+        });
+    } catch (e) {
+        console.error('Sessions laden fehlgeschlagen:', e);
+    }
+}
+
 function checkSelections() {
     const d1 = document.getElementById('driver1Select').value;
     const d2 = document.getElementById('driver2Select').value;
@@ -184,16 +208,23 @@ function checkSelections() {
 async function compare() {
     const d1 = document.getElementById('driver1Select').value;
     const d2 = document.getElementById('driver2Select').value;
+    const sid = document.getElementById('h2hSession').value;
     if (!d1 || !d2 || d1 === d2) return;
 
     try {
-        const res = await fetch(`/api/head-to-head?driver1=${encodeURIComponent(d1)}&driver2=${encodeURIComponent(d2)}`);
-        if (!res.ok) return;
+        let url = `/api/head-to-head?driver1=${encodeURIComponent(d1)}&driver2=${encodeURIComponent(d2)}`;
+        if (sid && sid !== 'all') url += `&session_id=${encodeURIComponent(sid)}`;
+        const res = await fetch(url);
+        if (!res.ok) {
+            showToast('Vergleich fehlgeschlagen', 'danger');
+            return;
+        }
         const data = await res.json();
-        if (data.error) { alert(data.error); return; }
+        if (data.error) { showToast(data.error, 'danger'); return; }
         renderComparison(data, d1, d2);
     } catch (e) {
         console.error('Vergleich fehlgeschlagen:', e);
+        showToast('Vergleich fehlgeschlagen', 'danger');
     }
 }
 
@@ -355,8 +386,8 @@ function renderTable(d1, d2) {
 }
 
 // Init
-document.addEventListener('DOMContentLoaded', () => {
-    loadDrivers();
+document.addEventListener('DOMContentLoaded', async () => {
+    await Promise.all([loadDrivers(), loadSessions()]);
 });
 
 document.getElementById('driver1Select').addEventListener('change', checkSelections);

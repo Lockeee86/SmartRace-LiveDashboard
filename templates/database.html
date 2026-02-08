@@ -216,11 +216,11 @@ async function loadData() {
         renderTable(displayData);
         document.getElementById('statFiltered').textContent = displayData.length;
 
-        // Total separat
-        const totalRes = await fetch('/api/laps');
+        // Total separat (nur Count, nicht alle Daten)
+        const totalRes = await fetch('/api/laps/count');
         if (totalRes.ok) {
             const totalData = await totalRes.json();
-            document.getElementById('statTotal').textContent = totalData.length;
+            document.getElementById('statTotal').textContent = totalData.count;
         }
     } catch (e) {
         console.error('Daten-Fehler:', e);
