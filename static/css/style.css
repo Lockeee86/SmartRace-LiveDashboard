@@ -442,6 +442,86 @@ footer {
     color: var(--sr-muted);
 }
 
+/* Live-Feed Ticker */
+.feed-item {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--sr-border);
+    border-left: 3px solid transparent;
+    font-size: 0.8rem;
+    transition: background-color 0.2s;
+}
+
+.feed-item:hover {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.feed-item.feed-lap {
+    border-left-color: var(--sr-accent);
+}
+
+.feed-item.feed-penalty {
+    border-left-color: var(--sr-danger);
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.feed-item.feed-status {
+    border-left-color: var(--sr-accent);
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.feed-item.feed-record {
+    border-left-color: var(--sr-warning);
+    background: rgba(234, 179, 8, 0.1);
+}
+
+.feed-item.feed-dnf {
+    border-left-color: var(--sr-warning);
+}
+
+.feed-item.feed-dq {
+    border-left-color: var(--sr-danger);
+}
+
+.feed-time {
+    font-size: 0.65rem;
+    color: var(--sr-muted);
+    margin-bottom: 0.1rem;
+}
+
+.feed-content {
+    line-height: 1.3;
+}
+
+.feed-detail {
+    font-size: 0.75rem;
+    color: var(--sr-muted);
+}
+
+/* Fullscreen Mode */
+.fullscreen-mode {
+    background-color: var(--sr-bg);
+    padding: 1.5rem !important;
+    overflow-y: auto;
+}
+
+.fullscreen-mode .session-selector {
+    margin-bottom: 1rem;
+}
+
+.fullscreen-mode .table {
+    font-size: 1rem;
+}
+
+.fullscreen-mode .stat-card .stat-value {
+    font-size: 2.25rem;
+}
+
+/* Head-to-Head Cards */
+.h2h-card {
+    border: 2px solid var(--sr-border);
+    transition: border-color 0.3s;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .controller-grid {

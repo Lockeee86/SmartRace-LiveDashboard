@@ -8,6 +8,9 @@
     <h5 class="mb-0"><i class="fas fa-trophy me-2"></i>Live Leaderboard</h5>
     <div class="d-flex align-items-center gap-2">
         <span class="badge bg-danger pulse" id="liveBadge">LIVE</span>
+        <button class="btn btn-sm btn-outline-light" id="fullscreenBtn" title="Vollbild">
+            <i class="fas fa-expand"></i>
+        </button>
     </div>
 </div>
 
@@ -95,6 +98,42 @@
 let lbData = {};
 let lbTrackRecord = null;
 let previousPositions = {};
+
+// Streckenrekord aus DB laden
+async function loadTrackRecord() {
+    try {
+        const res = await fetch('/api/track-record');
+        if (!res.ok) return;
+        const rec = await res.json();
+        if (rec && rec.laptime_ms) {
+            lbTrackRecord = { time: rec.laptime_ms, driver: rec.driver_name };
+            document.getElementById('lb-recordTime').textContent = rec.laptime_formatted;
+            document.getElementById('lb-recordDriver').textContent = `${rec.driver_name} (${rec.car_name || '--'})`;
+        }
+    } catch (e) {}
+}
+
+// Fullscreen
+function toggleFullscreen() {
+    const main = document.querySelector('main');
+    if (!document.fullscreenElement) {
+        (main.requestFullscreen || main.webkitRequestFullscreen || main.msRequestFullscreen).call(main);
+    } else {
+        (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen).call(document);
+    }
+}
+
+document.addEventListener('fullscreenchange', () => {
+    const btn = document.getElementById('fullscreenBtn');
+    const main = document.querySelector('main');
+    if (document.fullscreenElement) {
+        btn.innerHTML = '<i class="fas fa-compress"></i>';
+        main.classList.add('fullscreen-mode');
+    } else {
+        btn.innerHTML = '<i class="fas fa-expand"></i>';
+        main.classList.remove('fullscreen-mode');
+    }
+});
 
 function getSessionLaps(cd) {
     if (!cd.laps || cd.laps.length === 0) return [];
@@ -299,11 +338,21 @@ function renderStatusBar(drivers) {
 }
 
 // Start
+loadTrackRecord();
 fetchLeaderboard();
+document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
 
 // WebSocket: Live-Updates statt Polling
 socket.on('new_data', () => {
     fetchLeaderboard();
+});
+
+socket.on('track_record', (data) => {
+    if (data && data.laptime_ms) {
+        lbTrackRecord = { time: data.laptime_ms, driver: data.driver_name };
+        document.getElementById('lb-recordTime').textContent = data.laptime_formatted;
+        document.getElementById('lb-recordDriver').textContent = `${data.driver_name} (${data.car_name || '--'})`;
+    }
 });
 
 // Fallback

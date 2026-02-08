@@ -96,6 +96,17 @@ class RaceStatus(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class TrackRecord(db.Model):
+    __tablename__ = 'sr_track_records'
+    id = db.Column(db.Integer, primary_key=True)
+    laptime_ms = db.Column(db.Integer, nullable=False)
+    driver_name = db.Column(db.String(100))
+    car_name = db.Column(db.String(100))
+    session_id = db.Column(db.String(100))
+    controller_id = db.Column(db.String(10))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 # =============================================================================
 # DB Init  (robust: erst versuchen, bei Fehler alles bereinigen)
 # =============================================================================
@@ -206,6 +217,10 @@ def page_database():
 def page_stats():
     return render_template('stats.html')
 
+@app.route('/head-to-head')
+def page_head_to_head():
+    return render_template('head-to-head.html')
+
 
 # =============================================================================
 # SmartRace Datenschnittstelle
@@ -283,14 +298,18 @@ def _save_lap(sid, ed):
     cd = ed.get('car_data') or {}
     ctrl = ed.get('controller_data') or {}
 
+    laptime_ms = ed.get('laptime_raw')
+    driver_name = dd.get('name') or f"Fahrer {cid}"
+    car_name = cd.get('name') or f"Auto {cid}"
+
     db.session.add(Lap(
         session_id=sid,
         session_type=_get_current_race_type(),
         controller_id=cid,
-        driver_name=dd.get('name') or f"Fahrer {cid}",
-        car_name=cd.get('name') or f"Auto {cid}",
+        driver_name=driver_name,
+        car_name=car_name,
         lap_number=ed.get('lap'),
-        laptime_ms=ed.get('laptime_raw'),
+        laptime_ms=laptime_ms,
         laptime_display=ed.get('laptime'),
         sector_1=ed.get('sector_1'),
         sector_2=ed.get('sector_2'),
@@ -299,6 +318,24 @@ def _save_lap(sid, ed):
         controller_color=rgb_to_hex(ctrl.get('color_bg')),
         is_personal_best=bool(ed.get('lap_pb', False)),
     ))
+
+    # Streckenrekord pruefen
+    if laptime_ms and laptime_ms > 0:
+        current_record = TrackRecord.query.order_by(TrackRecord.laptime_ms.asc()).first()
+        if not current_record or laptime_ms < current_record.laptime_ms:
+            db.session.add(TrackRecord(
+                laptime_ms=laptime_ms,
+                driver_name=driver_name,
+                car_name=car_name,
+                session_id=sid,
+                controller_id=cid,
+            ))
+            socketio.emit('track_record', {
+                'laptime_ms': laptime_ms,
+                'laptime_formatted': fmt_ms(laptime_ms),
+                'driver_name': driver_name,
+                'car_name': car_name,
+            })
 
 
 def _save_result(sid, ed):
@@ -768,6 +805,328 @@ def api_export_csv():
         })
     except Exception as e:
         log.error(f"csv-export: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/track-record')
+def api_track_record():
+    """Aktueller Streckenrekord (persistent)."""
+    try:
+        rec = TrackRecord.query.order_by(TrackRecord.laptime_ms.asc()).first()
+        if rec:
+            return jsonify({
+                'laptime_ms': rec.laptime_ms,
+                'laptime_formatted': fmt_ms(rec.laptime_ms),
+                'driver_name': rec.driver_name,
+                'car_name': rec.car_name,
+                'session_id': rec.session_id,
+                'created_at': rec.created_at.isoformat() if rec.created_at else None,
+            })
+        return jsonify(None)
+    except Exception as e:
+        log.error(f"track-record: {e}")
+        return jsonify(None)
+
+
+@app.route('/api/live-feed')
+def api_live_feed():
+    """Letzte Events als Live-Feed / Ticker."""
+    try:
+        limit = min(int(request.args.get('limit', 30)), 100)
+        items = []
+
+        # Letzte Runden
+        for lap in Lap.query.order_by(Lap.created_at.desc()).limit(limit).all():
+            items.append({
+                'type': 'lap',
+                'timestamp': lap.created_at.isoformat() if lap.created_at else None,
+                'controller_id': lap.controller_id,
+                'driver_name': lap.driver_name,
+                'car_name': lap.car_name,
+                'lap_number': lap.lap_number,
+                'laptime_ms': lap.laptime_ms,
+                'laptime_formatted': lap.laptime_display or fmt_ms(lap.laptime_ms) or '--',
+                'is_pb': lap.is_personal_best,
+                'color': lap.controller_color or lap.car_color,
+            })
+
+        # Letzte Penalties
+        for p in Penalty.query.order_by(Penalty.created_at.desc()).limit(10).all():
+            items.append({
+                'type': 'penalty',
+                'timestamp': p.created_at.isoformat() if p.created_at else None,
+                'controller_id': p.controller_id,
+                'driver_name': p.driver_name,
+                'penalty_type': p.penalty_type,
+            })
+
+        # Letzte Statusaenderungen
+        for s in RaceStatus.query.order_by(RaceStatus.updated_at.desc()).limit(5).all():
+            items.append({
+                'type': 'status',
+                'timestamp': s.updated_at.isoformat() if s.updated_at else None,
+                'status': s.status,
+                'race_type': s.race_type,
+            })
+
+        # DNF/DQ
+        for r in RaceResult.query.filter(
+            (RaceResult.retired == True) | (RaceResult.disqualified == True)
+        ).order_by(RaceResult.created_at.desc()).limit(5).all():
+            items.append({
+                'type': 'dnf' if r.retired else 'dq',
+                'timestamp': r.created_at.isoformat() if r.created_at else None,
+                'controller_id': r.controller_id,
+                'driver_name': r.driver_name,
+            })
+
+        # Streckenrekorde
+        for tr in TrackRecord.query.order_by(TrackRecord.created_at.desc()).limit(5).all():
+            items.append({
+                'type': 'record',
+                'timestamp': tr.created_at.isoformat() if tr.created_at else None,
+                'driver_name': tr.driver_name,
+                'car_name': tr.car_name,
+                'laptime_ms': tr.laptime_ms,
+                'laptime_formatted': fmt_ms(tr.laptime_ms),
+            })
+
+        items.sort(key=lambda x: x.get('timestamp') or '', reverse=True)
+        return jsonify(items[:limit])
+    except Exception as e:
+        log.error(f"live-feed: {e}")
+        return jsonify([])
+
+
+@app.route('/api/head-to-head')
+def api_head_to_head():
+    """Vergleich zweier Fahrer."""
+    try:
+        d1 = request.args.get('driver1', '')
+        d2 = request.args.get('driver2', '')
+        sid = request.args.get('session_id')
+
+        if not d1 or not d2:
+            return jsonify({'error': 'Zwei Fahrer angeben'}), 400
+
+        result = {}
+        for name in [d1, d2]:
+            q = Lap.query.filter(
+                Lap.driver_name == name,
+                Lap.laptime_ms > 0,
+            )
+            if sid and sid != 'all':
+                q = q.filter(Lap.session_id == sid)
+
+            laps = q.order_by(Lap.lap_number.asc()).all()
+            times = [l.laptime_ms for l in laps if l.laptime_ms and l.laptime_ms > 0]
+
+            # Siege gegeneinander (gleiche Session)
+            wins = 0
+            sessions = set(l.session_id for l in laps)
+            for s in sessions:
+                my_best = min(
+                    (l.laptime_ms for l in laps
+                     if l.session_id == s and l.laptime_ms and l.laptime_ms > 0),
+                    default=None,
+                )
+                opp_name = d2 if name == d1 else d1
+                opp_best_q = Lap.query.filter(
+                    Lap.driver_name == opp_name,
+                    Lap.session_id == s,
+                    Lap.laptime_ms > 0,
+                )
+                opp_best = min(
+                    (l.laptime_ms for l in opp_best_q.all()),
+                    default=None,
+                )
+                if my_best and opp_best and my_best < opp_best:
+                    wins += 1
+
+            penalty_cnt = Penalty.query.filter(Penalty.driver_name == name).count()
+
+            result[name] = {
+                'driver_name': name,
+                'total_laps': len(laps),
+                'best_time': min(times) if times else None,
+                'best_time_formatted': fmt_ms(min(times)) if times else '--',
+                'avg_time': round(sum(times) / len(times)) if times else None,
+                'avg_time_formatted': fmt_ms(round(sum(times) / len(times))) if times else '--',
+                'total_sessions': len(sessions),
+                'wins': wins,
+                'penalties': penalty_cnt,
+                'lap_times': [
+                    {
+                        'lap': l.lap_number,
+                        'time': l.laptime_ms,
+                        'formatted': l.laptime_display or fmt_ms(l.laptime_ms) or '--',
+                        'session_id': l.session_id,
+                    }
+                    for l in laps
+                ],
+            }
+
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"head-to-head: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/backup')
+def api_backup():
+    """Komplettes Datenbank-Backup als JSON."""
+    try:
+        backup = {
+            'version': 1,
+            'created_at': datetime.utcnow().isoformat(),
+            'laps': [],
+            'events': [],
+            'results': [],
+            'penalties': [],
+            'race_status': [],
+            'track_records': [],
+        }
+
+        for l in Lap.query.all():
+            backup['laps'].append({
+                'session_id': l.session_id, 'session_type': l.session_type,
+                'controller_id': l.controller_id, 'driver_name': l.driver_name,
+                'car_name': l.car_name, 'lap_number': l.lap_number,
+                'laptime_ms': l.laptime_ms, 'laptime_display': l.laptime_display,
+                'sector_1': l.sector_1, 'sector_2': l.sector_2, 'sector_3': l.sector_3,
+                'car_color': l.car_color, 'controller_color': l.controller_color,
+                'is_personal_best': l.is_personal_best,
+                'created_at': l.created_at.isoformat() if l.created_at else None,
+            })
+
+        for e in Event.query.all():
+            backup['events'].append({
+                'session_id': e.session_id, 'event_type': e.event_type,
+                'raw_json': e.raw_json,
+                'created_at': e.created_at.isoformat() if e.created_at else None,
+            })
+
+        for r in RaceResult.query.all():
+            backup['results'].append({
+                'session_id': r.session_id, 'position': r.position,
+                'controller_id': r.controller_id, 'driver_name': r.driver_name,
+                'total_laps': r.total_laps, 'best_laptime_ms': r.best_laptime_ms,
+                'gap': r.gap, 'disqualified': r.disqualified, 'retired': r.retired,
+                'created_at': r.created_at.isoformat() if r.created_at else None,
+            })
+
+        for p in Penalty.query.all():
+            backup['penalties'].append({
+                'session_id': p.session_id, 'controller_id': p.controller_id,
+                'driver_name': p.driver_name, 'penalty_type': p.penalty_type,
+                'created_at': p.created_at.isoformat() if p.created_at else None,
+            })
+
+        for s in RaceStatus.query.all():
+            backup['race_status'].append({
+                'session_id': s.session_id, 'status': s.status,
+                'race_type': s.race_type,
+                'updated_at': s.updated_at.isoformat() if s.updated_at else None,
+            })
+
+        for t in TrackRecord.query.all():
+            backup['track_records'].append({
+                'laptime_ms': t.laptime_ms, 'driver_name': t.driver_name,
+                'car_name': t.car_name, 'session_id': t.session_id,
+                'controller_id': t.controller_id,
+                'created_at': t.created_at.isoformat() if t.created_at else None,
+            })
+
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        return Response(
+            json.dumps(backup, ensure_ascii=False, indent=2),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment; filename=smartrace_backup_{ts}.json'},
+        )
+    except Exception as e:
+        log.error(f"backup: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/restore', methods=['POST'])
+def api_restore():
+    """Datenbank aus JSON-Backup wiederherstellen."""
+    try:
+        data = request.get_json(silent=True)
+        if not data or 'version' not in data:
+            return jsonify({'error': 'Ungueltiges Backup-Format'}), 400
+
+        counts = {}
+
+        if data.get('laps'):
+            for l in data['laps']:
+                db.session.add(Lap(
+                    session_id=l.get('session_id'), session_type=l.get('session_type'),
+                    controller_id=l.get('controller_id'), driver_name=l.get('driver_name'),
+                    car_name=l.get('car_name'), lap_number=l.get('lap_number'),
+                    laptime_ms=l.get('laptime_ms'), laptime_display=l.get('laptime_display'),
+                    sector_1=l.get('sector_1'), sector_2=l.get('sector_2'),
+                    sector_3=l.get('sector_3'), car_color=l.get('car_color'),
+                    controller_color=l.get('controller_color'),
+                    is_personal_best=l.get('is_personal_best', False),
+                    created_at=datetime.fromisoformat(l['created_at']) if l.get('created_at') else None,
+                ))
+            counts['laps'] = len(data['laps'])
+
+        if data.get('events'):
+            for e in data['events']:
+                db.session.add(Event(
+                    session_id=e.get('session_id'), event_type=e.get('event_type'),
+                    raw_json=e.get('raw_json'),
+                    created_at=datetime.fromisoformat(e['created_at']) if e.get('created_at') else None,
+                ))
+            counts['events'] = len(data['events'])
+
+        if data.get('results'):
+            for r in data['results']:
+                db.session.add(RaceResult(
+                    session_id=r.get('session_id'), position=r.get('position'),
+                    controller_id=r.get('controller_id'), driver_name=r.get('driver_name'),
+                    total_laps=r.get('total_laps'), best_laptime_ms=r.get('best_laptime_ms'),
+                    gap=r.get('gap'), disqualified=r.get('disqualified', False),
+                    retired=r.get('retired', False),
+                    created_at=datetime.fromisoformat(r['created_at']) if r.get('created_at') else None,
+                ))
+            counts['results'] = len(data['results'])
+
+        if data.get('penalties'):
+            for p in data['penalties']:
+                db.session.add(Penalty(
+                    session_id=p.get('session_id'), controller_id=p.get('controller_id'),
+                    driver_name=p.get('driver_name'), penalty_type=p.get('penalty_type'),
+                    created_at=datetime.fromisoformat(p['created_at']) if p.get('created_at') else None,
+                ))
+            counts['penalties'] = len(data['penalties'])
+
+        if data.get('race_status'):
+            for s in data['race_status']:
+                db.session.add(RaceStatus(
+                    session_id=s.get('session_id'), status=s.get('status'),
+                    race_type=s.get('race_type'),
+                    updated_at=datetime.fromisoformat(s['updated_at']) if s.get('updated_at') else None,
+                ))
+            counts['race_status'] = len(data['race_status'])
+
+        if data.get('track_records'):
+            for t in data['track_records']:
+                db.session.add(TrackRecord(
+                    laptime_ms=t.get('laptime_ms'), driver_name=t.get('driver_name'),
+                    car_name=t.get('car_name'), session_id=t.get('session_id'),
+                    controller_id=t.get('controller_id'),
+                    created_at=datetime.fromisoformat(t['created_at']) if t.get('created_at') else None,
+                ))
+            counts['track_records'] = len(data['track_records'])
+
+        db.session.commit()
+        return jsonify({'status': 'ok', 'imported': counts})
+    except Exception as e:
+        db.session.rollback()
+        log.error(f"restore: {e}")
         return jsonify({'error': str(e)}), 500
 
 
