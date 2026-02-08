@@ -1,583 +1,490 @@
 from flask import Flask, render_template, request, jsonify, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
-from sqlalchemy import func
+from sqlalchemy import func, text
 from datetime import datetime
 import json
 import os
 import csv
 import io
 import re
+import logging
+
+# =============================================================================
+# App
+# =============================================================================
 
 app = Flask(__name__)
 CORS(app)
 
-# Konfiguration
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
     'DATABASE_URL', 'sqlite:///smartrace.db'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'smartrace-secret-key')
 
 db = SQLAlchemy(app)
+log = logging.getLogger('smartrace')
 
 
 # =============================================================================
-# Datenbank-Modelle
+# Modelle  (Prefix "sr_" um Konflikte mit alten Tabellen zu vermeiden)
 # =============================================================================
 
 class Event(db.Model):
-    __tablename__ = 'events'
+    __tablename__ = 'sr_events'
     id = db.Column(db.Integer, primary_key=True)
-    event_id = db.Column(db.String(100), index=True)
+    session_id = db.Column(db.String(100), index=True)
     event_type = db.Column(db.String(50))
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    data = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    raw_json = db.Column(db.Text)
 
 
-class LapTime(db.Model):
-    __tablename__ = 'lap_times'
+class Lap(db.Model):
+    __tablename__ = 'sr_laps'
     id = db.Column(db.Integer, primary_key=True)
-    event_id = db.Column(db.String(100), index=True)
-    event_type = db.Column(db.String(50))
+    session_id = db.Column(db.String(100), index=True)
+    session_type = db.Column(db.String(50))
     controller_id = db.Column(db.String(10), index=True)
     driver_name = db.Column(db.String(100))
     car_name = db.Column(db.String(100))
-    lap = db.Column(db.Integer)
-    laptime_raw = db.Column(db.Integer)
-    laptime = db.Column(db.String(20))
+    lap_number = db.Column(db.Integer)
+    laptime_ms = db.Column(db.Integer)
+    laptime_display = db.Column(db.String(20))
     sector_1 = db.Column(db.String(20))
     sector_2 = db.Column(db.String(20))
     sector_3 = db.Column(db.String(20))
     car_color = db.Column(db.String(20))
     controller_color = db.Column(db.String(20))
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
-    is_pb = db.Column(db.Boolean, default=False)
+    is_personal_best = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
 class RaceResult(db.Model):
-    __tablename__ = 'race_results'
+    __tablename__ = 'sr_results'
     id = db.Column(db.Integer, primary_key=True)
-    event_id = db.Column(db.String(100), index=True)
+    session_id = db.Column(db.String(100), index=True)
     position = db.Column(db.Integer)
     controller_id = db.Column(db.String(10))
     driver_name = db.Column(db.String(100))
-    laps = db.Column(db.Integer)
-    best_laptime = db.Column(db.Integer)
+    total_laps = db.Column(db.Integer)
+    best_laptime_ms = db.Column(db.Integer)
     gap = db.Column(db.String(50))
-    pitstops = db.Column(db.Integer, default=0)
     disqualified = db.Column(db.Boolean, default=False)
     retired = db.Column(db.Boolean, default=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
-# Datenbank initialisieren
-with app.app_context():
-    # Alte Tabellen/Sequenzen bereinigen falls vorhanden (einmaliger Neuaufbau)
+# =============================================================================
+# DB Init  (robust: erst versuchen, bei Fehler alles bereinigen)
+# =============================================================================
+
+def init_db():
     try:
-        db.session.execute(db.text(
-            "DROP TABLE IF EXISTS event CASCADE; "
-            "DROP TABLE IF EXISTS lap_time CASCADE; "
-            "DROP SEQUENCE IF EXISTS event_id_seq CASCADE; "
-            "DROP SEQUENCE IF EXISTS lap_time_id_seq CASCADE;"
-        ))
-        db.session.commit()
-    except Exception:
+        db.create_all()
+        log.info("DB-Tabellen bereit.")
+    except Exception as e:
+        log.warning(f"create_all fehlgeschlagen: {e}")
         db.session.rollback()
-    db.create_all()
+        # Alle alten Tabellen/Sequenzen entfernen (PostgreSQL)
+        try:
+            db.session.execute(text("""
+                DO $$ DECLARE r RECORD;
+                BEGIN
+                    FOR r IN (SELECT tablename FROM pg_tables
+                              WHERE schemaname = 'public') LOOP
+                        EXECUTE 'DROP TABLE IF EXISTS '
+                                || quote_ident(r.tablename) || ' CASCADE';
+                    END LOOP;
+                END $$;
+            """))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        db.create_all()
+        log.info("DB nach Bereinigung neu erstellt.")
+
+
+with app.app_context():
+    init_db()
 
 
 # =============================================================================
 # Hilfsfunktionen
 # =============================================================================
 
-def rgb_to_hex(rgb_string):
-    """Konvertiert rgb(r,g,b) zu #rrggbb"""
-    if not rgb_string:
-        return '#333333'
-    if rgb_string.startswith('#'):
-        return rgb_string
-    try:
-        numbers = re.findall(r'\d+', rgb_string)
-        if len(numbers) >= 3:
-            r, g, b = int(numbers[0]), int(numbers[1]), int(numbers[2])
-            return f"#{r:02x}{g:02x}{b:02x}"
-    except (ValueError, IndexError):
-        pass
-    return '#333333'
+def rgb_to_hex(val):
+    """'rgb(r,g,b)' -> '#rrggbb', gibt None bei ungueltigem Input."""
+    if not val:
+        return None
+    if val.startswith('#'):
+        return val
+    nums = re.findall(r'\d+', val)
+    if len(nums) >= 3:
+        return f"#{int(nums[0]):02x}{int(nums[1]):02x}{int(nums[2]):02x}"
+    return None
 
 
-def format_time(milliseconds):
-    """Formatiert Millisekunden zu M:SS.mmm"""
-    if not milliseconds or milliseconds <= 0:
-        return "--:--.---"
-    seconds = milliseconds / 1000
-    minutes = int(seconds // 60)
-    remaining = seconds % 60
-    return f"{minutes}:{remaining:06.3f}"
+def fmt_ms(ms):
+    """Millisekunden -> 'M:SS.mmm'"""
+    if not ms or ms <= 0:
+        return None
+    s = ms / 1000
+    return f"{int(s // 60)}:{s % 60:06.3f}"
 
 
 # =============================================================================
-# Frontend-Routen
+# Seiten
 # =============================================================================
 
 @app.route('/')
-def dashboard():
+def page_dashboard():
     return render_template('dashboard.html')
 
-
 @app.route('/leaderboard')
-def leaderboard():
+def page_leaderboard():
     return render_template('leaderboard.html')
 
-
 @app.route('/analytics')
-def analytics():
+def page_analytics():
     return render_template('analytics.html')
 
-
 @app.route('/database')
-def database_view():
+def page_database():
     return render_template('database.html')
 
 
 # =============================================================================
-# SmartRace Datenschnittstelle - Empfangs-Endpoint
+# SmartRace Datenschnittstelle
 # =============================================================================
 
 @app.route('/api/smartrace', methods=['POST', 'OPTIONS'])
-def smartrace_endpoint():
-    """Empfaengt Daten von der SmartRace Datenschnittstelle.
+def receive_smartrace():
+    """Empfaengt Events von SmartRace (POST mit JSON).
 
-    SmartRace sendet POST-Requests mit JSON-Body bei verschiedenen Events:
-    - ui.lap_update: Runde abgeschlossen
-    - ui.race_result: Rennergebnis
-    - ui.status_change: Statusaenderung (prepare_for_start, running, ended, etc.)
-    - ui.penalty: Strafe
-    - ui.reset: UI zurueckgesetzt
-    - ui.car_removed: Auto entfernt
-    - ui.fuel_update: Tankstand
-    - ui.weather_change: Wetter
-    - ui.vsc: Virtual Safety Car
-    - ui.damage: Schaden
+    Format: { "time": ..., "event_type": "ui.lap_update", "event_data": { ... } }
     """
     if request.method == 'OPTIONS':
         return '', 200
 
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'Kein JSON'}), 400
+
     try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No JSON data received'}), 400
+        etype = data.get('event_type', 'unknown')
+        ed = data.get('event_data') or {}
 
-        event_type = data.get('event_type', 'unknown')
-        event_data = data.get('event_data', {})
-        timestamp = data.get('time')
+        sid = (ed.get('event_id') or data.get('event_id')
+               or data.get('session_id')
+               or f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
 
-        # Event-ID bestimmen
-        event_id = (
-            data.get('event_id')
-            or event_data.get('event_id')
-            or data.get('session_id')
-            or f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        )
+        db.session.add(Event(
+            session_id=sid, event_type=etype, raw_json=json.dumps(data),
+        ))
 
-        # Roh-Event speichern
-        event = Event(
-            event_id=event_id,
-            event_type=event_type,
-            data=json.dumps(data)
-        )
-        db.session.add(event)
-
-        # Event-spezifische Verarbeitung
-        if event_type == 'ui.lap_update':
-            _process_lap_update(event_id, event_type, event_data)
-        elif event_type == 'ui.race_result':
-            _process_race_result(event_id, event_data)
+        if etype == 'ui.lap_update':
+            _save_lap(sid, etype, ed)
+        elif etype == 'ui.race_result':
+            _save_result(sid, ed)
 
         db.session.commit()
-        return jsonify({'status': 'success', 'event_type': event_type})
+        log.info(f"Event: {etype} | Session: {sid}")
+        return jsonify({'status': 'ok', 'event_type': etype})
 
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"SmartRace endpoint error: {e}")
-        return jsonify({'error': str(e)}), 400
-
-
-def _process_lap_update(event_id, event_type, event_data):
-    """Verarbeitet ein Runden-Update von SmartRace."""
-    controller_id = str(event_data.get('controller_id', '0'))
-
-    # Fahrer-Daten
-    driver_data = event_data.get('driver_data', {}) or {}
-    driver_name = driver_data.get('name', f"Fahrer {controller_id}")
-
-    # Auto-Daten
-    car_data = event_data.get('car_data', {}) or {}
-    car_name = car_data.get('name', f"Auto {controller_id}")
-    car_color = rgb_to_hex(car_data.get('color', '#000000'))
-
-    # Controller-Daten
-    controller_data = event_data.get('controller_data', {}) or {}
-    controller_color = rgb_to_hex(controller_data.get('color_bg', '#333333'))
-
-    lap_time = LapTime(
-        event_id=event_id,
-        event_type=event_type,
-        controller_id=controller_id,
-        driver_name=driver_name,
-        car_name=car_name,
-        lap=event_data.get('lap'),
-        laptime_raw=event_data.get('laptime_raw'),
-        laptime=event_data.get('laptime'),
-        sector_1=event_data.get('sector_1'),
-        sector_2=event_data.get('sector_2'),
-        sector_3=event_data.get('sector_3'),
-        car_color=car_color,
-        controller_color=controller_color,
-        is_pb=event_data.get('lap_pb', False),
-    )
-    db.session.add(lap_time)
-
-
-def _process_race_result(event_id, event_data):
-    """Verarbeitet ein Rennergebnis von SmartRace."""
-    result_data = event_data.get('result', {})
-    for position_str, result in result_data.items():
-        race_result = RaceResult(
-            event_id=event_id,
-            position=int(position_str),
-            controller_id=str(result.get('controller_id', '')),
-            driver_name=result.get('driver_name', ''),
-            laps=result.get('laps', 0),
-            best_laptime=result.get('best_laptime'),
-            gap=result.get('gap', ''),
-            pitstops=result.get('pitstops', 0),
-            disqualified=result.get('disqualified', False),
-            retired=result.get('retired', False),
-        )
-        db.session.add(race_result)
-
-
-# =============================================================================
-# API-Endpunkte
-# =============================================================================
-
-@app.route('/api/laps')
-def get_laps():
-    """Gibt alle Rundenzeiten zurueck, optional gefiltert."""
-    try:
-        query = LapTime.query
-
-        session_id = request.args.get('session_id')
-        if session_id and session_id != 'all':
-            query = query.filter(LapTime.event_id == session_id)
-
-        driver = request.args.get('driver')
-        if driver:
-            query = query.filter(LapTime.driver_name.ilike(f'%{driver}%'))
-
-        car = request.args.get('car')
-        if car:
-            query = query.filter(LapTime.car_name.ilike(f'%{car}%'))
-
-        date_from = request.args.get('date_from')
-        if date_from:
-            query = query.filter(LapTime.timestamp >= f"{date_from} 00:00:00")
-
-        date_to = request.args.get('date_to')
-        if date_to:
-            query = query.filter(LapTime.timestamp <= f"{date_to} 23:59:59")
-
-        laps = query.order_by(LapTime.timestamp.desc()).limit(2000).all()
-
-        return jsonify([{
-            'id': lap.id,
-            'event_id': lap.event_id,
-            'event_type': lap.event_type,
-            'controller_id': lap.controller_id,
-            'driver_name': lap.driver_name,
-            'car_name': lap.car_name,
-            'lap': lap.lap,
-            'laptime_raw': lap.laptime_raw,
-            'laptime_formatted': format_time(lap.laptime_raw),
-            'sector_1': lap.sector_1,
-            'sector_2': lap.sector_2,
-            'sector_3': lap.sector_3,
-            'car_color': lap.car_color,
-            'controller_color': lap.controller_color,
-            'is_pb': lap.is_pb,
-            'timestamp': lap.timestamp.isoformat() if lap.timestamp else None,
-        } for lap in laps])
-
-    except Exception as e:
-        app.logger.error(f"Get laps error: {e}")
+        log.error(f"SmartRace-Fehler: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/sessions')
-def get_sessions():
-    """Gibt alle verfuegbaren Sessions mit Metadaten zurueck."""
-    try:
-        sessions = db.session.query(
-            LapTime.event_id,
-            LapTime.event_type,
-            func.count(LapTime.id).label('total_laps'),
-            func.count(func.distinct(LapTime.controller_id)).label('drivers'),
-            func.min(LapTime.timestamp).label('start_time'),
-            func.max(LapTime.timestamp).label('end_time'),
-        ).group_by(
-            LapTime.event_id,
-            LapTime.event_type,
-        ).order_by(
-            func.max(LapTime.timestamp).desc()
-        ).all()
+def _save_lap(sid, etype, ed):
+    cid = str(ed.get('controller_id', '0'))
+    dd = ed.get('driver_data') or {}
+    cd = ed.get('car_data') or {}
+    ctrl = ed.get('controller_data') or {}
 
-        return jsonify([{
-            'event_id': s.event_id,
-            'event_type': s.event_type,
-            'total_laps': s.total_laps,
-            'drivers': s.drivers,
-            'start_time': s.start_time.isoformat() if s.start_time else None,
-            'end_time': s.end_time.isoformat() if s.end_time else None,
-        } for s in sessions])
+    db.session.add(Lap(
+        session_id=sid,
+        session_type=etype,
+        controller_id=cid,
+        driver_name=dd.get('name') or f"Fahrer {cid}",
+        car_name=cd.get('name') or f"Auto {cid}",
+        lap_number=ed.get('lap'),
+        laptime_ms=ed.get('laptime_raw'),
+        laptime_display=ed.get('laptime'),
+        sector_1=ed.get('sector_1'),
+        sector_2=ed.get('sector_2'),
+        sector_3=ed.get('sector_3'),
+        car_color=rgb_to_hex(cd.get('color')),
+        controller_color=rgb_to_hex(ctrl.get('color_bg')),
+        is_personal_best=bool(ed.get('lap_pb', False)),
+    ))
 
-    except Exception as e:
-        app.logger.error(f"Get sessions error: {e}")
-        return jsonify({'error': str(e)}), 500
 
+def _save_result(sid, ed):
+    for pos, r in (ed.get('result') or {}).items():
+        db.session.add(RaceResult(
+            session_id=sid,
+            position=int(pos),
+            controller_id=str(r.get('controller_id', '')),
+            driver_name=r.get('driver_name', ''),
+            total_laps=r.get('laps', 0),
+            best_laptime_ms=r.get('best_laptime'),
+            gap=r.get('gap', ''),
+            disqualified=bool(r.get('disqualified', False)),
+            retired=bool(r.get('retired', False)),
+        ))
+
+
+# =============================================================================
+# API
+# =============================================================================
 
 @app.route('/api/live-data')
-def live_data():
-    """Gibt Live-Daten fuer das Dashboard zurueck, gruppiert nach Controller."""
+def api_live_data():
+    """Live-Daten gruppiert nach Controller."""
     try:
-        session_id = request.args.get('session_id')
+        q = Lap.query
+        sid = request.args.get('session_id')
+        if sid and sid != 'all':
+            q = q.filter(Lap.session_id == sid)
 
-        query = LapTime.query
-        if session_id and session_id != 'all':
-            query = query.filter(LapTime.event_id == session_id)
-
-        laps = query.order_by(LapTime.timestamp.desc()).all()
-
+        laps = q.order_by(Lap.created_at.desc()).all()
         if not laps:
             return jsonify({})
 
-        controller_data = {}
-
+        ctrls = {}
         for lap in laps:
             cid = str(lap.controller_id)
-
-            if cid not in controller_data:
-                controller_data[cid] = {
-                    'name': lap.driver_name or f'Fahrer {cid}',
-                    'car': lap.car_name or f'Auto {cid}',
-                    'color': lap.controller_color or '#333333',
+            if cid not in ctrls:
+                ctrls[cid] = {
+                    'name': lap.driver_name,
+                    'car': lap.car_name,
+                    'color': lap.controller_color or lap.car_color,
                     'laps': [],
-                    'lap_count': 0,
                     'best_time_raw': None,
-                    'best_time_formatted': '--:--.---',
                 }
-
-            controller_data[cid]['laps'].append({
-                'lap': lap.lap or 0,
-                'laptime_raw': lap.laptime_raw or 0,
-                'laptime_formatted': lap.laptime or format_time(lap.laptime_raw),
-                'timestamp': lap.timestamp.isoformat() if lap.timestamp else None,
-                'is_pb': lap.is_pb or False,
-                'event_id': lap.event_id,
+            ctrls[cid]['laps'].append({
+                'lap': lap.lap_number or 0,
+                'laptime_raw': lap.laptime_ms or 0,
+                'laptime_formatted': lap.laptime_display or fmt_ms(lap.laptime_ms) or '--:--.---',
+                'timestamp': lap.created_at.isoformat() if lap.created_at else None,
+                'is_pb': lap.is_personal_best,
+                'session_id': lap.session_id,
             })
+            if lap.laptime_ms and lap.laptime_ms > 0:
+                best = ctrls[cid]['best_time_raw']
+                if best is None or lap.laptime_ms < best:
+                    ctrls[cid]['best_time_raw'] = lap.laptime_ms
 
-            if lap.laptime_raw and lap.laptime_raw > 0:
-                current_best = controller_data[cid]['best_time_raw']
-                if current_best is None or lap.laptime_raw < current_best:
-                    controller_data[cid]['best_time_raw'] = lap.laptime_raw
-                    controller_data[cid]['best_time_formatted'] = (
-                        lap.laptime or format_time(lap.laptime_raw)
-                    )
+        for c in ctrls.values():
+            nums = [l['lap'] for l in c['laps'] if l['lap']]
+            c['lap_count'] = max(nums) if nums else 0
 
-        for cid in controller_data:
-            lap_list = controller_data[cid]['laps']
-            if lap_list:
-                controller_data[cid]['lap_count'] = max(
-                    l['lap'] for l in lap_list
-                )
-
-        return jsonify(controller_data)
-
+        return jsonify(ctrls)
     except Exception as e:
-        app.logger.error(f"Live data error: {e}")
+        log.error(f"live-data: {e}")
         return jsonify({}), 500
 
 
-@app.route('/api/analytics')
-def analytics_data():
-    """Gibt aggregierte Analytics-Daten fuer Charts zurueck."""
+@app.route('/api/sessions')
+def api_sessions():
+    """Alle Sessions mit Statistiken."""
     try:
-        session_id = request.args.get('session_id')
+        rows = db.session.query(
+            Lap.session_id,
+            Lap.session_type,
+            func.count(Lap.id).label('total_laps'),
+            func.count(func.distinct(Lap.controller_id)).label('drivers'),
+            func.min(Lap.created_at).label('start_time'),
+            func.max(Lap.created_at).label('end_time'),
+        ).group_by(Lap.session_id, Lap.session_type
+        ).order_by(func.max(Lap.created_at).desc()).all()
 
-        query = LapTime.query
-        if session_id and session_id != 'all':
-            query = query.filter(LapTime.event_id == session_id)
-
-        laps = query.all()
-
-        driver_stats = {}
-        for lap in laps:
-            name = lap.driver_name or f"Fahrer {lap.controller_id}"
-            if name not in driver_stats:
-                driver_stats[name] = {
-                    'laps': [],
-                    'best_time': float('inf'),
-                    'total_laps': 0,
-                }
-
-            if lap.laptime_raw and lap.laptime_raw > 0:
-                driver_stats[name]['laps'].append(lap.laptime_raw)
-                driver_stats[name]['total_laps'] += 1
-                if lap.laptime_raw < driver_stats[name]['best_time']:
-                    driver_stats[name]['best_time'] = lap.laptime_raw
-
-        result = {}
-        for name, stats in driver_stats.items():
-            if stats['laps']:
-                avg_time = sum(stats['laps']) / len(stats['laps'])
-                best = stats['best_time']
-                result[name] = {
-                    'avg_time': round(avg_time),
-                    'best_time': best if best != float('inf') else 0,
-                    'total_laps': stats['total_laps'],
-                    'laps': stats['laps'][:50],
-                }
-
-        return jsonify(result)
-
+        return jsonify([{
+            'session_id': r.session_id,
+            'session_type': r.session_type,
+            'total_laps': r.total_laps,
+            'drivers': r.drivers,
+            'start_time': r.start_time.isoformat() if r.start_time else None,
+            'end_time': r.end_time.isoformat() if r.end_time else None,
+        } for r in rows])
     except Exception as e:
-        app.logger.error(f"Analytics error: {e}")
-        return jsonify({'error': str(e)}), 500
+        log.error(f"sessions: {e}")
+        return jsonify([])
 
 
-@app.route('/api/filters')
-def get_filters():
-    """Gibt verfuegbare Filter-Optionen (Fahrer, Autos, Events) zurueck."""
+@app.route('/api/laps')
+def api_laps():
+    """Rundenzeiten mit Filtern."""
     try:
-        drivers = db.session.query(LapTime.driver_name.distinct()).filter(
-            LapTime.driver_name.isnot(None),
-            LapTime.driver_name != '',
-        ).all()
+        q = Lap.query
 
-        cars = db.session.query(LapTime.car_name.distinct()).filter(
-            LapTime.car_name.isnot(None),
-            LapTime.car_name != '',
-        ).all()
-
-        events = db.session.query(LapTime.event_id.distinct()).filter(
-            LapTime.event_id.isnot(None),
-            LapTime.event_id != '',
-        ).all()
-
-        return jsonify({
-            'drivers': sorted([d[0] for d in drivers if d[0]]),
-            'cars': sorted([c[0] for c in cars if c[0]]),
-            'events': sorted([e[0] for e in events if e[0]]),
-        })
-
-    except Exception as e:
-        app.logger.error(f"Filters error: {e}")
-        return jsonify({'drivers': [], 'cars': [], 'events': []})
-
-
-@app.route('/api/export/csv')
-def export_csv():
-    """Exportiert Rundenzeiten als CSV-Datei."""
-    try:
-        query = LapTime.query
+        sid = request.args.get('session_id')
+        if sid and sid != 'all':
+            q = q.filter(Lap.session_id == sid)
 
         driver = request.args.get('driver')
         if driver:
-            query = query.filter(LapTime.driver_name.ilike(f'%{driver}%'))
+            q = q.filter(Lap.driver_name.ilike(f'%{driver}%'))
 
         car = request.args.get('car')
         if car:
-            query = query.filter(LapTime.car_name.ilike(f'%{car}%'))
+            q = q.filter(Lap.car_name.ilike(f'%{car}%'))
+
+        df = request.args.get('date_from')
+        if df:
+            q = q.filter(Lap.created_at >= f"{df} 00:00:00")
+
+        dt = request.args.get('date_to')
+        if dt:
+            q = q.filter(Lap.created_at <= f"{dt} 23:59:59")
+
+        laps = q.order_by(Lap.created_at.desc()).limit(2000).all()
+
+        return jsonify([{
+            'id': l.id,
+            'session_id': l.session_id,
+            'session_type': l.session_type,
+            'controller_id': l.controller_id,
+            'driver_name': l.driver_name,
+            'car_name': l.car_name,
+            'lap': l.lap_number,
+            'laptime_raw': l.laptime_ms,
+            'laptime_formatted': l.laptime_display or fmt_ms(l.laptime_ms) or '--:--.---',
+            'sector_1': l.sector_1,
+            'sector_2': l.sector_2,
+            'sector_3': l.sector_3,
+            'car_color': l.car_color,
+            'controller_color': l.controller_color,
+            'is_pb': l.is_personal_best,
+            'timestamp': l.created_at.isoformat() if l.created_at else None,
+        } for l in laps])
+    except Exception as e:
+        log.error(f"laps: {e}")
+        return jsonify([])
+
+
+@app.route('/api/analytics')
+def api_analytics():
+    """Aggregierte Daten fuer Charts."""
+    try:
+        q = Lap.query
+        sid = request.args.get('session_id')
+        if sid and sid != 'all':
+            q = q.filter(Lap.session_id == sid)
+
+        stats = {}
+        for lap in q.all():
+            name = lap.driver_name or f"Fahrer {lap.controller_id}"
+            if name not in stats:
+                stats[name] = {'laps': [], 'best': None, 'count': 0}
+
+            if lap.laptime_ms and lap.laptime_ms > 0:
+                stats[name]['laps'].append(lap.laptime_ms)
+                stats[name]['count'] += 1
+                b = stats[name]['best']
+                if b is None or lap.laptime_ms < b:
+                    stats[name]['best'] = lap.laptime_ms
+
+        return jsonify({
+            name: {
+                'avg_time': round(sum(s['laps']) / len(s['laps'])),
+                'best_time': s['best'] or 0,
+                'total_laps': s['count'],
+                'laps': s['laps'][:50],
+            }
+            for name, s in stats.items() if s['laps']
+        })
+    except Exception as e:
+        log.error(f"analytics: {e}")
+        return jsonify({})
+
+
+@app.route('/api/filters')
+def api_filters():
+    """Filterwerte fuer Dropdowns."""
+    try:
+        drivers = [r[0] for r in db.session.query(Lap.driver_name.distinct()).filter(
+            Lap.driver_name.isnot(None), Lap.driver_name != ''
+        ).all() if r[0]]
+
+        cars = [r[0] for r in db.session.query(Lap.car_name.distinct()).filter(
+            Lap.car_name.isnot(None), Lap.car_name != ''
+        ).all() if r[0]]
+
+        return jsonify({'drivers': sorted(drivers), 'cars': sorted(cars)})
+    except Exception as e:
+        log.error(f"filters: {e}")
+        return jsonify({'drivers': [], 'cars': []})
+
+
+@app.route('/api/export/csv')
+def api_export_csv():
+    """CSV-Export."""
+    try:
+        q = Lap.query
+        for key, col in [('driver', Lap.driver_name), ('car', Lap.car_name)]:
+            val = request.args.get(key)
+            if val:
+                q = q.filter(col.ilike(f'%{val}%'))
 
         event = request.args.get('event')
         if event:
-            query = query.filter(LapTime.event_id == event)
+            q = q.filter(Lap.session_id == event)
 
-        date_from = request.args.get('date_from')
-        if date_from:
-            query = query.filter(LapTime.timestamp >= f"{date_from} 00:00:00")
+        df = request.args.get('date_from')
+        if df:
+            q = q.filter(Lap.created_at >= f"{df} 00:00:00")
 
-        date_to = request.args.get('date_to')
-        if date_to:
-            query = query.filter(LapTime.timestamp <= f"{date_to} 23:59:59")
+        dt = request.args.get('date_to')
+        if dt:
+            q = q.filter(Lap.created_at <= f"{dt} 23:59:59")
 
-        laps = query.order_by(LapTime.timestamp.desc()).all()
+        laps = q.order_by(Lap.created_at.desc()).all()
 
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow([
-            'Event ID', 'Event Type', 'Zeitstempel', 'Controller',
-            'Fahrer', 'Auto', 'Runde', 'Rundenzeit (ms)', 'Rundenzeit',
-            'Sektor 1', 'Sektor 2', 'Sektor 3', 'Personal Best',
-        ])
-
-        for lap in laps:
-            writer.writerow([
-                lap.event_id or '',
-                lap.event_type or '',
-                lap.timestamp.strftime('%Y-%m-%d %H:%M:%S') if lap.timestamp else '',
-                lap.controller_id or '',
-                lap.driver_name or '',
-                lap.car_name or '',
-                lap.lap or 0,
-                lap.laptime_raw or 0,
-                lap.laptime or format_time(lap.laptime_raw),
-                lap.sector_1 or '',
-                lap.sector_2 or '',
-                lap.sector_3 or '',
-                'Ja' if lap.is_pb else 'Nein',
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(['Session', 'Typ', 'Zeitstempel', 'Controller', 'Fahrer',
+                     'Auto', 'Runde', 'Zeit (ms)', 'Zeit', 'S1', 'S2', 'S3', 'PB'])
+        for l in laps:
+            w.writerow([
+                l.session_id or '', l.session_type or '',
+                l.created_at.strftime('%Y-%m-%d %H:%M:%S') if l.created_at else '',
+                l.controller_id or '', l.driver_name or '', l.car_name or '',
+                l.lap_number or 0, l.laptime_ms or 0,
+                l.laptime_display or fmt_ms(l.laptime_ms) or '',
+                l.sector_1 or '', l.sector_2 or '', l.sector_3 or '',
+                'Ja' if l.is_personal_best else 'Nein',
             ])
 
-        output.seek(0)
-        filename = f"smartrace_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-
-        return Response(
-            output.getvalue(),
-            mimetype='text/csv',
-            headers={
-                'Content-Disposition': f'attachment; filename={filename}',
-                'Content-Type': 'text/csv; charset=utf-8',
-            },
-        )
-
+        buf.seek(0)
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        return Response(buf.getvalue(), mimetype='text/csv', headers={
+            'Content-Disposition': f'attachment; filename=smartrace_{ts}.csv',
+        })
     except Exception as e:
-        app.logger.error(f"CSV export error: {e}")
+        log.error(f"csv-export: {e}")
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/health')
-def health_check():
-    """Health-Check fuer Docker/Portainer."""
+def api_health():
+    """Health-Check fuer Docker."""
     try:
-        db.session.execute(db.text('SELECT 1'))
-        return jsonify({
-            'status': 'healthy',
-            'database': 'connected',
-            'timestamp': datetime.utcnow().isoformat(),
-        })
+        db.session.execute(text('SELECT 1'))
+        return jsonify({'status': 'ok'})
     except Exception as e:
-        return jsonify({
-            'status': 'unhealthy',
-            'database': str(e),
-        }), 503
+        return jsonify({'status': 'error', 'detail': str(e)}), 503
 
 
 # =============================================================================
-# App starten
+# Start
 # =============================================================================
 
 if __name__ == '__main__':
-    debug = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
-    port = int(os.getenv('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    app.run(
+        host='0.0.0.0',
+        port=int(os.getenv('PORT', 5000)),
+        debug=os.getenv('FLASK_DEBUG', 'false').lower() == 'true',
+    )
