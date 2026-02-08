@@ -7,7 +7,7 @@
 <div class="session-selector d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><i class="fas fa-trophy me-2"></i>Live Leaderboard</h5>
     <div class="d-flex align-items-center gap-2">
-        <span class="badge bg-danger pulse">LIVE</span>
+        <span class="badge bg-danger pulse" id="liveBadge">LIVE</span>
     </div>
 </div>
 
@@ -45,8 +45,8 @@
                         <div class="small text-muted">Fahrer</div>
                     </div>
                     <div class="col-4">
-                        <div class="fw-bold fs-5" id="lb-status">--</div>
-                        <div class="small text-muted">Status</div>
+                        <div class="fw-bold fs-5" id="lb-penalties">0</div>
+                        <div class="small text-muted">Strafen</div>
                     </div>
                 </div>
             </div>
@@ -68,12 +68,13 @@
                         <th class="text-center">Runden</th>
                         <th class="text-center">Beste Zeit</th>
                         <th class="text-center">Letzte Zeit</th>
+                        <th class="text-center">Sektoren</th>
                         <th class="text-center">Abstand</th>
                         <th class="text-center">Status</th>
                     </tr>
                 </thead>
                 <tbody id="leaderboardBody">
-                    <tr><td colspan="9" class="text-center text-muted py-5">
+                    <tr><td colspan="10" class="text-center text-muted py-5">
                         <i class="fas fa-flag-checkered fa-2x mb-2 d-block"></i>
                         Warte auf Rennstart...
                     </td></tr>
@@ -98,6 +99,7 @@ let previousPositions = {};
 function getSessionLaps(cd) {
     if (!cd.laps || cd.laps.length === 0) return [];
     const sorted = [...cd.laps].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+    if (!sorted[0] || !sorted[0].timestamp) return cd.laps;
     const latest = new Date(sorted[0].timestamp);
     const cutoff = new Date(latest.getTime() - 30 * 60 * 1000);
     return cd.laps.filter(l => new Date(l.timestamp) >= cutoff);
@@ -106,6 +108,7 @@ function getSessionLaps(cd) {
 async function fetchLeaderboard() {
     try {
         const res = await fetch('/api/live-data');
+        if (!res.ok) return;
         lbData = await res.json();
         updateLeaderboard();
     } catch (e) {
@@ -116,18 +119,20 @@ async function fetchLeaderboard() {
 function updateLeaderboard() {
     const drivers = [];
     let totalLaps = 0;
+    let totalPenalties = 0;
     let fastest = null;
 
     Object.entries(lbData).forEach(([cid, cd]) => {
         const laps = getSessionLaps(cd);
         if (laps.length === 0) return;
 
-        const lapNums = laps.map(l => l.lap || 0);
-        const maxLap = Math.max(...lapNums);
-        totalLaps += maxLap;
+        const lapNums = laps.map(l => l.lap || 0).filter(n => n > 0);
+        const maxLap = lapNums.length > 0 ? Math.max(...lapNums) : 0;
+        totalLaps += laps.length;
+        totalPenalties += cd.penalties || 0;
 
         const sorted = [...laps].sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
-        const lastLap = sorted[0];
+        const lastLap = sorted[0] || {};
 
         const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
 
@@ -138,7 +143,13 @@ function updateLeaderboard() {
             color: color,
             totalLaps: maxLap,
             bestTime: cd.best_time_raw,
-            lastTime: lastLap ? lastLap.laptime_raw : null,
+            lastTime: lastLap.laptime_raw || null,
+            lastSector1: lastLap.sector_1 || null,
+            lastSector2: lastLap.sector_2 || null,
+            lastSector3: lastLap.sector_3 || null,
+            penalties: cd.penalties || 0,
+            retired: cd.retired || false,
+            disqualified: cd.disqualified || false,
         });
 
         if (cd.best_time_raw && (!fastest || cd.best_time_raw < fastest.time)) {
@@ -146,8 +157,10 @@ function updateLeaderboard() {
         }
     });
 
-    // Sortieren: Meiste Runden, dann beste Zeit
+    // Sortieren: DQ/DNF ans Ende, dann meiste Runden, dann beste Zeit
     drivers.sort((a, b) => {
+        if (a.disqualified !== b.disqualified) return a.disqualified ? 1 : -1;
+        if (a.retired !== b.retired) return a.retired ? 1 : -1;
         if (a.totalLaps !== b.totalLaps) return b.totalLaps - a.totalLaps;
         if (a.bestTime && b.bestTime) return a.bestTime - b.bestTime;
         if (a.bestTime) return -1;
@@ -158,7 +171,7 @@ function updateLeaderboard() {
     // Stats
     document.getElementById('lb-totalLaps').textContent = totalLaps;
     document.getElementById('lb-drivers').textContent = drivers.length;
-    document.getElementById('lb-status').textContent = drivers.length > 0 ? 'Aktiv' : '--';
+    document.getElementById('lb-penalties').textContent = totalPenalties;
 
     if (fastest) {
         document.getElementById('lb-fastestTime').textContent = formatTime(fastest.time);
@@ -175,11 +188,11 @@ function updateLeaderboard() {
     // Leaderboard Tabelle
     const tbody = document.getElementById('leaderboardBody');
     if (drivers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-5"><i class="fas fa-flag-checkered fa-2x mb-2 d-block"></i>Warte auf Rennstart...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-5"><i class="fas fa-flag-checkered fa-2x mb-2 d-block"></i>Warte auf Rennstart...</td></tr>';
         return;
     }
 
-    const leader = drivers[0];
+    const leader = drivers.find(d => !d.retired && !d.disqualified) || drivers[0];
 
     tbody.innerHTML = drivers.map((d, i) => {
         const pos = i + 1;
@@ -192,12 +205,19 @@ function updateLeaderboard() {
         previousPositions[d.cid] = pos;
 
         let posClass = 'other';
-        if (pos === 1) posClass = 'gold';
-        else if (pos === 2) posClass = 'silver';
-        else if (pos === 3) posClass = 'bronze';
+        if (!d.retired && !d.disqualified) {
+            if (pos === 1) posClass = 'gold';
+            else if (pos === 2) posClass = 'silver';
+            else if (pos === 3) posClass = 'bronze';
+        }
 
+        // Abstand
         let gap = '';
-        if (pos === 1) {
+        if (d.disqualified) {
+            gap = '<span class="text-danger fw-bold">DQ</span>';
+        } else if (d.retired) {
+            gap = '<span class="text-warning fw-bold">DNF</span>';
+        } else if (d === leader) {
             gap = '<span class="text-warning fw-bold">Leader</span>';
         } else if (d.totalLaps < leader.totalLaps) {
             const diff = leader.totalLaps - d.totalLaps;
@@ -207,29 +227,51 @@ function updateLeaderboard() {
         }
 
         const isFastest = fastest && d.bestTime === fastest.time;
-        let status = 'Aktiv';
-        if (pos === 1) status = '<i class="fas fa-crown text-warning"></i> Leader';
-        else if (isFastest) status = '<i class="fas fa-trophy text-warning"></i> Bestzeit';
-        else if (pos <= 3) status = '<i class="fas fa-medal"></i> Podium';
+
+        // Status
+        let status = '';
+        if (d.disqualified) {
+            status = '<span class="badge bg-danger">Disqualifiziert</span>';
+        } else if (d.retired) {
+            status = '<span class="badge bg-warning text-dark">Ausgeschieden</span>';
+        } else if (d.penalties > 0) {
+            status = `<span class="badge bg-danger"><i class="fas fa-exclamation-triangle"></i> ${d.penalties}x Strafe</span>`;
+        } else if (pos === 1) {
+            status = '<i class="fas fa-crown text-warning"></i> Leader';
+        } else if (isFastest) {
+            status = '<i class="fas fa-trophy text-warning"></i> Bestzeit';
+        } else if (pos <= 3) {
+            status = '<i class="fas fa-medal"></i> Podium';
+        } else {
+            status = '<span class="text-muted">Aktiv</span>';
+        }
+
+        // Sektoren
+        let sectors = '--';
+        if (d.lastSector1 || d.lastSector2 || d.lastSector3) {
+            sectors = `<span class="sector-mini">${d.lastSector1 || '--'}</span> <span class="sector-mini">${d.lastSector2 || '--'}</span> <span class="sector-mini">${d.lastSector3 || '--'}</span>`;
+        }
 
         let rowClass = '';
-        if (pos === 1) rowClass = 'leaderboard-row leader';
+        if (d.disqualified) rowClass = 'leaderboard-row disqualified';
+        else if (d.retired) rowClass = 'leaderboard-row retired';
+        else if (pos === 1) rowClass = 'leaderboard-row leader';
         else if (pos <= 3) rowClass = 'leaderboard-row podium';
 
         return `<tr class="${rowClass}" style="border-left: 4px solid ${d.color}">
             <td class="text-center"><span class="position-badge ${posClass}">${pos}</span>${change}</td>
-            <td class="fw-bold" style="color: ${d.color}">${d.name}</td>
+            <td class="fw-bold ${d.disqualified ? 'text-decoration-line-through text-muted' : ''}" style="color: ${d.disqualified ? '' : d.color}">${d.name}</td>
             <td class="text-muted">${d.car}</td>
             <td class="text-center"><span class="controller-badge" style="background: ${d.color}">C${d.cid}</span></td>
             <td class="text-center fw-bold">${d.totalLaps}</td>
             <td class="text-center font-mono ${isFastest ? 'text-warning fw-bold' : ''}">${formatTime(d.bestTime)}${isFastest ? ' <i class="fas fa-trophy"></i>' : ''}</td>
             <td class="text-center font-mono">${formatTime(d.lastTime)}</td>
+            <td class="text-center font-mono small">${sectors}</td>
             <td class="text-center small">${gap}</td>
             <td class="text-center small">${status}</td>
         </tr>`;
     }).join('');
 
-    // Controller Status Bar
     renderStatusBar(drivers);
 }
 
@@ -239,11 +281,16 @@ function renderStatusBar(drivers) {
         const d = drivers.find(x => x.cid === parseInt(cid));
         const color = d ? d.color : getControllerColor(cid);
         const active = !!d;
+        let statusIcon = '';
+        if (d && d.disqualified) statusIcon = '<span class="badge bg-danger ms-1">DQ</span>';
+        else if (d && d.retired) statusIcon = '<span class="badge bg-warning text-dark ms-1">DNF</span>';
+        else if (d && d.penalties > 0) statusIcon = `<span class="badge bg-danger ms-1">${d.penalties}P</span>`;
+
         return `<div class="col-md-2 col-4">
             <div class="card" style="border-left: 4px solid ${color}; opacity: ${active ? 1 : 0.4}">
                 <div class="card-body py-2 px-3 text-center">
                     <div class="small text-muted">Controller ${cid}</div>
-                    <div class="fw-bold small" style="color: ${active ? color : 'inherit'}">${d ? d.name : '--'}</div>
+                    <div class="fw-bold small" style="color: ${active ? color : 'inherit'}">${d ? d.name : '--'}${statusIcon}</div>
                     <div class="font-mono small">${d ? formatTime(d.lastTime) : '--:--.---'}</div>
                 </div>
             </div>
@@ -253,6 +300,13 @@ function renderStatusBar(drivers) {
 
 // Start
 fetchLeaderboard();
-setInterval(fetchLeaderboard, 2000);
+
+// WebSocket: Live-Updates statt Polling
+socket.on('new_data', () => {
+    fetchLeaderboard();
+});
+
+// Fallback
+setInterval(fetchLeaderboard, 10000);
 </script>
 {% endblock %}

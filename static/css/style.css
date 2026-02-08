@@ -140,6 +140,40 @@ body {
     background-color: var(--controller-color, #666);
 }
 
+.controller-card.retired {
+    opacity: 0.6;
+}
+
+.controller-card.retired::after {
+    content: 'DNF';
+    position: absolute;
+    top: 10px;
+    right: -25px;
+    background: var(--sr-warning);
+    color: #000;
+    padding: 2px 30px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    transform: rotate(45deg);
+}
+
+.controller-card.disqualified {
+    opacity: 0.5;
+}
+
+.controller-card.disqualified::after {
+    content: 'DQ';
+    position: absolute;
+    top: 10px;
+    right: -25px;
+    background: var(--sr-danger);
+    color: #fff;
+    padding: 2px 30px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    transform: rotate(45deg);
+}
+
 .controller-card .driver-header {
     padding-left: 0.75rem;
     margin-bottom: 0.75rem;
@@ -160,6 +194,38 @@ body {
     font-family: 'Courier New', monospace;
     font-weight: 700;
     font-size: 0.95rem;
+}
+
+/* Sector badges */
+.sector-row {
+    display: flex;
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+}
+
+.sector-badge {
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.25rem;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--sr-muted);
+    border: 1px solid var(--sr-border);
+}
+
+.sector-mini {
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+    padding: 0.05rem 0.25rem;
+    border-radius: 0.2rem;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--sr-muted);
+}
+
+/* Race Status Badge */
+.race-status-badge {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.65rem;
 }
 
 /* Tables */
@@ -215,6 +281,16 @@ body {
 
 .leaderboard-row.podium {
     background: rgba(255, 255, 255, 0.03) !important;
+}
+
+.leaderboard-row.retired {
+    background: rgba(234, 179, 8, 0.05) !important;
+    opacity: 0.7;
+}
+
+.leaderboard-row.disqualified {
+    background: rgba(239, 68, 68, 0.05) !important;
+    opacity: 0.6;
 }
 
 .position-badge {

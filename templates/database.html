@@ -126,10 +126,10 @@ let allData = [];
 let currentSort = { col: null, dir: null };
 let currentSessionFilter = 'all';
 
-// Sessions laden
 async function loadSessions() {
     try {
         const res = await fetch('/api/sessions');
+        if (!res.ok) return;
         const sessions = await res.json();
         const sel = document.getElementById('sessionSelect');
         sel.innerHTML = '<option value="all">Alle Sessions</option>';
@@ -137,7 +137,7 @@ async function loadSessions() {
             const date = s.start_time ? new Date(s.start_time).toLocaleDateString('de-DE') : '';
             const opt = document.createElement('option');
             opt.value = s.session_id;
-            opt.textContent = `${s.session_id} (${s.session_type || 'Training'}) - ${date} - ${s.total_laps} Runden`;
+            opt.textContent = `${s.session_type || 'Training'} - ${date} - ${s.total_laps} Runden`;
             sel.appendChild(opt);
         });
         sel.value = currentSessionFilter;
@@ -146,10 +146,10 @@ async function loadSessions() {
     }
 }
 
-// Filter laden
 async function loadFilters() {
     try {
         const res = await fetch('/api/filters');
+        if (!res.ok) return;
         const data = await res.json();
 
         const driverSel = document.getElementById('driverFilter');
@@ -177,7 +177,6 @@ async function loadFilters() {
     }
 }
 
-// Daten laden
 async function loadData() {
     try {
         const params = new URLSearchParams();
@@ -197,9 +196,9 @@ async function loadData() {
         if (dateTo) params.append('date_to', dateTo);
 
         const res = await fetch('/api/laps?' + params);
+        if (!res.ok) return;
         allData = await res.json();
 
-        // Sortierung beibehalten
         let displayData = allData;
         if (currentSort.col) {
             displayData = sortData(allData, currentSort.col, currentSort.dir);
@@ -208,18 +207,18 @@ async function loadData() {
         renderTable(displayData);
         document.getElementById('statFiltered').textContent = displayData.length;
 
-        // Total separat laden
+        // Total separat
         const totalRes = await fetch('/api/laps');
-        const totalData = await totalRes.json();
-        document.getElementById('statTotal').textContent = totalData.length;
-
+        if (totalRes.ok) {
+            const totalData = await totalRes.json();
+            document.getElementById('statTotal').textContent = totalData.length;
+        }
     } catch (e) {
         console.error('Daten-Fehler:', e);
         showStatus('Fehler beim Laden der Daten', 'danger');
     }
 }
 
-// Tabelle rendern
 function renderTable(data) {
     const tbody = document.getElementById('dataBody');
 
@@ -233,7 +232,7 @@ function renderTable(data) {
 
         let typeBadge = 'bg-secondary';
         const et = (lap.session_type || '').toLowerCase();
-        if (et.includes('race')) typeBadge = 'bg-danger';
+        if (et.includes('race') || et.includes('rennen')) typeBadge = 'bg-danger';
         else if (et.includes('quali')) typeBadge = 'bg-warning text-dark';
         else if (et.includes('practice') || et.includes('training')) typeBadge = 'bg-info';
 
@@ -258,11 +257,9 @@ function renderTable(data) {
     }).join('');
 }
 
-// Sortierung
 function sortData(data, col, dir) {
     return [...data].sort((a, b) => {
         let va = a[col], vb = b[col];
-
         if (col === 'timestamp') {
             va = va ? new Date(va) : new Date(0);
             vb = vb ? new Date(vb) : new Date(0);
@@ -276,7 +273,6 @@ function sortData(data, col, dir) {
             va = (va || '').toString().toLowerCase();
             vb = (vb || '').toString().toLowerCase();
         }
-
         if (va < vb) return dir === 'asc' ? -1 : 1;
         if (va > vb) return dir === 'asc' ? 1 : -1;
         return 0;
@@ -289,31 +285,24 @@ function setupSorting() {
             const col = th.dataset.col;
             let dir = 'asc';
             if (currentSort.col === col && currentSort.dir === 'asc') dir = 'desc';
-
             document.querySelectorAll('.sortable').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
             th.classList.add('sort-' + dir);
             currentSort = { col, dir };
-
             renderTable(sortData(allData, col, dir));
         });
     });
 }
 
-// CSV Export
 function exportCSV() {
     const params = new URLSearchParams();
     const session = document.getElementById('sessionSelect').value;
     if (session !== 'all') params.append('event', session);
-
     const driver = document.getElementById('driverFilter').value;
     if (driver) params.append('driver', driver);
-
     const car = document.getElementById('carFilter').value;
     if (car) params.append('car', car);
-
     const dateFrom = document.getElementById('dateFrom').value;
     if (dateFrom) params.append('date_from', dateFrom);
-
     const dateTo = document.getElementById('dateTo').value;
     if (dateTo) params.append('date_to', dateTo);
 
@@ -323,11 +312,9 @@ function exportCSV() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
     showStatus('CSV wird heruntergeladen...', 'success');
 }
 
-// Filter zuruecksetzen
 function clearFilters() {
     document.getElementById('sessionSelect').value = 'all';
     document.getElementById('driverFilter').value = '';
@@ -340,7 +327,6 @@ function clearFilters() {
     loadData();
 }
 
-// Status-Nachricht
 function showStatus(msg, type) {
     const el = document.getElementById('statusAlert');
     el.className = 'alert alert-' + type + ' mb-3';
@@ -375,10 +361,13 @@ document.getElementById('refreshBtn').addEventListener('click', async function()
     this.disabled = false;
 });
 
-// Auto-Refresh alle 30s
-setInterval(() => {
-    if (currentSessionFilter === 'all') loadData();
-}, 30000);
+// WebSocket: Live-Updates
+socket.on('new_data', () => {
+    loadData();
+});
+
+// Fallback
+setInterval(() => { loadData(); }, 30000);
 
 // Keyboard Shortcuts
 document.addEventListener('keydown', e => {

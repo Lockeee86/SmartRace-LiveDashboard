@@ -14,10 +14,6 @@
         <button id="refreshBtn" class="btn btn-sm btn-outline-primary" title="Aktualisieren">
             <i class="fas fa-sync-alt"></i>
         </button>
-        <div class="form-check form-switch ms-2 mb-0">
-            <input class="form-check-input" type="checkbox" id="liveToggle" checked>
-            <label class="form-check-label small" for="liveToggle">Live</label>
-        </div>
     </div>
 </div>
 
@@ -79,21 +75,20 @@
 let dashboardData = {};
 let trackRecord = null;
 let currentSession = 'current';
-let refreshTimer = null;
 
 // Sessions laden
 async function loadSessions() {
     try {
         const res = await fetch('/api/sessions');
+        if (!res.ok) return;
         const sessions = await res.json();
         const sel = document.getElementById('sessionSelect');
-        // Behalte Standard-Optionen
         sel.innerHTML = '<option value="current">Aktuelle Session (Live)</option><option value="all">Alle Sessions</option>';
         sessions.forEach(s => {
             const date = s.start_time ? new Date(s.start_time).toLocaleDateString('de-DE') : '';
             const opt = document.createElement('option');
             opt.value = s.session_id;
-            opt.textContent = `${s.session_id} (${s.session_type || 'Training'}) - ${date} - ${s.total_laps} Runden`;
+            opt.textContent = `${s.session_type || 'Training'} - ${date} - ${s.total_laps} Runden`;
             sel.appendChild(opt);
         });
         sel.value = currentSession;
@@ -109,8 +104,8 @@ async function updateDashboard() {
         if (currentSession !== 'current' && currentSession !== 'all') {
             url += '?session_id=' + encodeURIComponent(currentSession);
         }
-
         const res = await fetch(url);
+        if (!res.ok) return;
         dashboardData = await res.json();
         renderStats();
         renderControllers();
@@ -125,6 +120,7 @@ function getSessionLaps(controllerData) {
     if (currentSession !== 'current') return controllerData.laps;
 
     const sorted = [...controllerData.laps].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    if (!sorted[0] || !sorted[0].timestamp) return controllerData.laps;
     const latest = new Date(sorted[0].timestamp);
     const cutoff = new Date(latest.getTime() - 30 * 60 * 1000);
     return controllerData.laps.filter(l => new Date(l.timestamp) >= cutoff);
@@ -141,14 +137,16 @@ function renderStats() {
         if (laps.length === 0) return;
         activeDrivers++;
 
-        const lapNums = laps.map(l => l.lap || 0);
-        totalLaps += Math.max(...lapNums);
+        // Fix: Rundenanzahl = Summe aller Runden pro Controller
+        totalLaps += laps.length;
 
         laps.forEach(l => {
             if (l.laptime_raw > 0) allTimes.push(l.laptime_raw);
-            const ts = new Date(l.timestamp);
-            if (!startTime || ts < startTime) startTime = ts;
-            if (!endTime || ts > endTime) endTime = ts;
+            if (l.timestamp) {
+                const ts = new Date(l.timestamp);
+                if (!startTime || ts < startTime) startTime = ts;
+                if (!endTime || ts > endTime) endTime = ts;
+            }
         });
 
         if (cd.best_time_raw && (!fastest || cd.best_time_raw < fastest.time)) {
@@ -195,8 +193,6 @@ function renderStats() {
 function renderControllers() {
     const grid = document.getElementById('controllerGrid');
     const controllerIds = Object.keys(dashboardData).sort((a,b) => parseInt(a) - parseInt(b));
-
-    // Alle 6 Controller zeigen (auch leere)
     const allIds = ['1','2','3','4','5','6'];
     const idsToShow = [...new Set([...allIds, ...controllerIds])].sort((a,b) => parseInt(a) - parseInt(b));
 
@@ -209,7 +205,7 @@ function renderControllers() {
         const driverName = hasData ? (cd.name || 'Fahrer ' + cid) : 'Controller ' + cid;
         const carName = hasData ? (cd.car || '') : 'Keine Daten';
 
-        // Bestzeit dieses Controllers in der Session
+        // Bestzeit dieses Controllers
         const times = laps.map(l => l.laptime_raw).filter(t => t > 0);
         const bestTime = times.length > 0 ? Math.min(...times) : null;
 
@@ -222,12 +218,35 @@ function renderControllers() {
         });
         const isGlobalBest = bestTime && bestTime === globalBest;
 
-        // Letzte 8 Runden (neueste zuerst)
-        const recentLaps = [...laps].sort((a,b) => (b.lap || 0) - (a.lap || 0)).slice(0, 8);
+        // Penalties & Status
+        const penalties = cd ? (cd.penalties || 0) : 0;
+        const isRetired = cd ? cd.retired : false;
+        const isDQ = cd ? cd.disqualified : false;
+
+        // Letzte Runde fuer Sektoren
+        const recentLaps = [...laps].sort((a,b) => (b.lap || 0) - (a.lap || 0));
+        const latestLap = recentLaps[0] || {};
+        const displayLaps = recentLaps.slice(0, 8);
+
+        // Status-Badges
+        let statusBadges = '';
+        if (isDQ) statusBadges += '<span class="badge bg-danger ms-1">DQ</span>';
+        else if (isRetired) statusBadges += '<span class="badge bg-warning text-dark ms-1">DNF</span>';
+        if (penalties > 0) statusBadges += `<span class="badge bg-danger ms-1"><i class="fas fa-exclamation-triangle"></i> ${penalties}</span>`;
+
+        // Sektoren der letzten Runde
+        let sectorHtml = '';
+        if (latestLap.sector_1 || latestLap.sector_2 || latestLap.sector_3) {
+            sectorHtml = `<div class="sector-row">
+                <span class="sector-badge" title="Sektor 1">S1: ${latestLap.sector_1 || '--'}</span>
+                <span class="sector-badge" title="Sektor 2">S2: ${latestLap.sector_2 || '--'}</span>
+                <span class="sector-badge" title="Sektor 3">S3: ${latestLap.sector_3 || '--'}</span>
+            </div>`;
+        }
 
         let tableRows = '';
-        if (recentLaps.length > 0) {
-            tableRows = recentLaps.map((l, idx) => {
+        if (displayLaps.length > 0) {
+            tableRows = displayLaps.map((l, idx) => {
                 let cls = '';
                 if (l.laptime_raw === bestTime && bestTime > 0) cls = 'row-pb';
                 else if (idx === 0) cls = 'row-latest';
@@ -243,15 +262,17 @@ function renderControllers() {
         }
 
         return `
-        <div class="controller-card" style="--controller-color: ${color}; opacity: ${hasData ? 1 : 0.5}">
+        <div class="controller-card ${isRetired ? 'retired' : ''} ${isDQ ? 'disqualified' : ''}" style="--controller-color: ${color}; opacity: ${hasData ? 1 : 0.5}">
             <div class="driver-header d-flex justify-content-between align-items-start">
                 <div>
-                    <div class="driver-name">${driverName}</div>
+                    <div class="driver-name">${driverName}${statusBadges}</div>
                     <div class="car-name">${carName}</div>
+                    ${sectorHtml}
                 </div>
                 <div class="text-end">
                     <span class="controller-badge" style="background: ${color}">C${cid}</span>
                     ${bestTime ? `<div class="best-time mt-1 ${isGlobalBest ? 'text-warning' : ''}">${isGlobalBest ? '<i class="fas fa-trophy me-1"></i>' : '<i class="fas fa-stopwatch me-1 text-muted"></i>'}${formatTime(bestTime)}</div>` : ''}
+                    <div class="small text-muted mt-1">${laps.length} Runden</div>
                 </div>
             </div>
             <table class="table table-sm mb-0">
@@ -266,26 +287,15 @@ function renderControllers() {
     }).join('');
 }
 
-// Auto-Refresh
-function startRefresh() {
-    if (refreshTimer) clearInterval(refreshTimer);
-    const isLive = document.getElementById('liveToggle').checked;
-    if (isLive && (currentSession === 'current' || currentSession === 'all')) {
-        refreshTimer = setInterval(updateDashboard, 2000);
-    }
-}
-
 // Event-Listener
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSessions();
     await updateDashboard();
-    startRefresh();
 });
 
 document.getElementById('sessionSelect').addEventListener('change', function() {
     currentSession = this.value;
     updateDashboard();
-    startRefresh();
 });
 
 document.getElementById('refreshBtn').addEventListener('click', async () => {
@@ -298,6 +308,12 @@ document.getElementById('refreshBtn').addEventListener('click', async () => {
     btn.disabled = false;
 });
 
-document.getElementById('liveToggle').addEventListener('change', startRefresh);
+// WebSocket: Live-Updates statt Polling
+socket.on('new_data', () => {
+    updateDashboard();
+});
+
+// Fallback: alle 10 Sekunden aktualisieren
+setInterval(updateDashboard, 10000);
 </script>
 {% endblock %}
