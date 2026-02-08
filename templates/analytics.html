@@ -42,13 +42,23 @@
 
 <!-- Charts Row 2 -->
 <div class="row g-3 mb-3">
-    <div class="col-12">
+    <div class="col-md-8">
         <div class="card">
             <div class="card-header border-0 bg-transparent">
                 <h6 class="mb-0"><i class="fas fa-chart-line me-2 text-info"></i>Rundenzeiten-Verlauf</h6>
             </div>
             <div class="card-body pt-0">
                 <canvas id="progressChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header border-0 bg-transparent">
+                <h6 class="mb-0"><i class="fas fa-car me-2 text-warning"></i>Auto-Vergleich</h6>
+            </div>
+            <div class="card-body pt-0">
+                <canvas id="carChart" height="300"></canvas>
             </div>
         </div>
     </div>
@@ -83,12 +93,13 @@
 {% block scripts %}
 <script>
 const CHART_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#e67e22', '#9b59b6', '#1abc9c', '#e84393'];
-let bestTimesChart, radarChart, progressChart;
+let bestTimesChart, radarChart, progressChart, carChart;
 let currentAnalyticsSession = 'all';
 
 async function loadSessions() {
     try {
         const res = await fetch('/api/sessions');
+        if (!res.ok) return;
         const sessions = await res.json();
         const sel = document.getElementById('analyticsSession');
         sel.innerHTML = '<option value="all">Alle Sessions</option>';
@@ -96,7 +107,7 @@ async function loadSessions() {
             const date = s.start_time ? new Date(s.start_time).toLocaleDateString('de-DE') : '';
             const opt = document.createElement('option');
             opt.value = s.session_id;
-            opt.textContent = `${s.session_id} (${s.session_type || 'Training'}) - ${date}`;
+            opt.textContent = `${s.session_type || 'Training'} - ${date}`;
             sel.appendChild(opt);
         });
     } catch (e) {
@@ -111,11 +122,23 @@ async function loadAnalytics() {
             url += '?session_id=' + encodeURIComponent(currentAnalyticsSession);
         }
         const res = await fetch(url);
+        if (!res.ok) return;
         const data = await res.json();
         renderCharts(data);
         renderStatsTable(data);
     } catch (e) {
         console.error('Analytics-Fehler:', e);
+    }
+}
+
+async function loadCarStats() {
+    try {
+        const res = await fetch('/api/car-stats');
+        if (!res.ok) return;
+        const data = await res.json();
+        renderCarChart(data);
+    } catch (e) {
+        console.error('Car-Stats-Fehler:', e);
     }
 }
 
@@ -146,11 +169,7 @@ function renderCharts(data) {
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: ctx => ctx.parsed.y + 's'
-                    }
-                }
+                tooltip: { callbacks: { label: ctx => ctx.parsed.y + 's' } }
             },
             scales: {
                 y: {
@@ -159,10 +178,7 @@ function renderCharts(data) {
                     grid: { color: 'rgba(255,255,255,0.05)' },
                     ticks: { color: '#8b8fa3' }
                 },
-                x: {
-                    grid: { display: false },
-                    ticks: { color: '#8b8fa3' }
-                }
+                x: { grid: { display: false }, ticks: { color: '#8b8fa3' } }
             }
         }
     });
@@ -170,9 +186,9 @@ function renderCharts(data) {
     // 2. Radar Chart
     const ctx2 = document.getElementById('radarChart').getContext('2d');
     if (radarChart) radarChart.destroy();
-    const maxLaps = Math.max(...drivers.map(d => data[d].total_laps));
-    const maxBest = Math.max(...drivers.map(d => data[d].best_time / 1000));
-    const maxAvg = Math.max(...drivers.map(d => data[d].avg_time / 1000));
+    const maxLaps = Math.max(1, ...drivers.map(d => data[d].total_laps));
+    const maxBest = Math.max(1, ...drivers.map(d => data[d].best_time / 1000));
+    const maxAvg = Math.max(1, ...drivers.map(d => data[d].avg_time / 1000));
 
     radarChart = new Chart(ctx2, {
         type: 'radar',
@@ -203,9 +219,7 @@ function renderCharts(data) {
                     pointLabels: { color: '#8b8fa3' }
                 }
             },
-            plugins: {
-                legend: { labels: { color: '#8b8fa3' } }
-            }
+            plugins: { legend: { labels: { color: '#8b8fa3' } } }
         }
     });
 
@@ -213,24 +227,18 @@ function renderCharts(data) {
     const ctx3 = document.getElementById('progressChart').getContext('2d');
     if (progressChart) progressChart.destroy();
 
-    const datasets = drivers.map((d, i) => {
-        const lapData = data[d].laps
-            .map((ms, idx) => ({ x: idx + 1, y: ms / 1000 }))
-            .filter(p => p.y > 0.5 && p.y < 120);
-
-        return {
-            label: d + ' (' + lapData.length + ' Runden)',
-            data: lapData,
-            borderColor: colors[i],
-            backgroundColor: colors[i] + '10',
-            fill: false,
-            tension: 0.3,
-            pointRadius: 3,
-            pointHoverRadius: 6,
-            borderWidth: 2,
-            pointBackgroundColor: colors[i],
-        };
-    });
+    const datasets = drivers.map((d, i) => ({
+        label: d + ' (' + data[d].total_laps + ' Runden)',
+        data: data[d].laps.map((ms, idx) => ({ x: idx + 1, y: ms / 1000 })),
+        borderColor: colors[i],
+        backgroundColor: colors[i] + '10',
+        fill: false,
+        tension: 0.3,
+        pointRadius: 3,
+        pointHoverRadius: 6,
+        borderWidth: 2,
+        pointBackgroundColor: colors[i],
+    }));
 
     progressChart = new Chart(ctx3, {
         type: 'line',
@@ -267,9 +275,61 @@ function renderCharts(data) {
     });
 }
 
+function renderCarChart(cars) {
+    if (!cars || cars.length === 0) return;
+
+    const ctx = document.getElementById('carChart').getContext('2d');
+    if (carChart) carChart.destroy();
+
+    const colors = cars.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]);
+
+    carChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: cars.map(c => c.car_name),
+            datasets: [
+                {
+                    label: 'Beste Zeit (s)',
+                    data: cars.map(c => (c.best_time / 1000).toFixed(3)),
+                    backgroundColor: colors.map(c => c + '80'),
+                    borderColor: colors,
+                    borderWidth: 2,
+                    borderRadius: 6,
+                },
+                {
+                    label: 'Durchschnitt (s)',
+                    data: cars.map(c => (c.avg_time / 1000).toFixed(3)),
+                    backgroundColor: colors.map(c => c + '30'),
+                    borderColor: colors.map(c => c + '80'),
+                    borderWidth: 1,
+                    borderRadius: 6,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: {
+                legend: { labels: { color: '#8b8fa3' } },
+                tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.x + 's' } }
+            },
+            scales: {
+                x: {
+                    beginAtZero: false,
+                    title: { display: true, text: 'Zeit (s)', color: '#8b8fa3' },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#8b8fa3' }
+                },
+                y: { grid: { display: false }, ticks: { color: '#8b8fa3' } }
+            }
+        }
+    });
+}
+
 function renderStatsTable(data) {
     const tbody = document.getElementById('statsTable');
-    const drivers = Object.entries(data).sort((a,b) => a[1].best_time - b[1].best_time);
+    const drivers = Object.entries(data).sort((a,b) => (a[1].best_time || 999999) - (b[1].best_time || 999999));
 
     if (drivers.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Keine Daten vorhanden</td></tr>';
@@ -279,8 +339,7 @@ function renderStatsTable(data) {
     tbody.innerHTML = drivers.map(([name, stats], i) => {
         const avg = stats.avg_time / 1000;
         const best = stats.best_time / 1000;
-        // Konsistenz: wie nah ist Durchschnitt an Bestzeit (in %)
-        const consistency = best > 0 ? ((best / avg) * 100).toFixed(1) : '--';
+        const consistency = (best > 0 && avg > 0) ? ((best / avg) * 100).toFixed(1) : '--';
         const color = CHART_COLORS[i % CHART_COLORS.length];
 
         return `<tr>
@@ -303,7 +362,7 @@ function renderStatsTable(data) {
 // Event Listener
 document.addEventListener('DOMContentLoaded', async () => {
     await loadSessions();
-    await loadAnalytics();
+    await Promise.all([loadAnalytics(), loadCarStats()]);
 });
 
 document.getElementById('analyticsSession').addEventListener('change', function() {
@@ -312,10 +371,16 @@ document.getElementById('analyticsSession').addEventListener('change', function(
 });
 
 document.getElementById('analyticsRefresh').addEventListener('click', () => {
-    loadAnalytics();
+    Promise.all([loadAnalytics(), loadCarStats()]);
 });
 
-// Auto-Refresh alle 30s
-setInterval(loadAnalytics, 30000);
+// WebSocket: Live-Updates
+socket.on('new_data', () => {
+    loadAnalytics();
+    loadCarStats();
+});
+
+// Fallback
+setInterval(() => { loadAnalytics(); loadCarStats(); }, 30000);
 </script>
 {% endblock %}

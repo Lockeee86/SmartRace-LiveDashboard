@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify, Response
 from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO
 from flask_cors import CORS
 from sqlalchemy import func, text
 from datetime import datetime
@@ -21,8 +22,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
     'DATABASE_URL', 'sqlite:///smartrace.db'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'sr-dashboard-secret')
 
 db = SQLAlchemy(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 log = logging.getLogger('smartrace')
 
 
@@ -74,6 +77,25 @@ class RaceResult(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class Penalty(db.Model):
+    __tablename__ = 'sr_penalties'
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.String(100), index=True)
+    controller_id = db.Column(db.String(10))
+    driver_name = db.Column(db.String(100))
+    penalty_type = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class RaceStatus(db.Model):
+    __tablename__ = 'sr_race_status'
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.String(100), index=True)
+    status = db.Column(db.String(50))
+    race_type = db.Column(db.String(50))
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 # =============================================================================
 # DB Init  (robust: erst versuchen, bei Fehler alles bereinigen)
 # =============================================================================
@@ -85,7 +107,6 @@ def init_db():
     except Exception as e:
         log.warning(f"create_all fehlgeschlagen: {e}")
         db.session.rollback()
-        # Alle alten Tabellen/Sequenzen entfernen (PostgreSQL)
         try:
             db.session.execute(text("""
                 DO $$ DECLARE r RECORD;
@@ -146,13 +167,19 @@ def _get_session_id(etype):
     if etype in _NEW_SESSION_EVENTS:
         return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-    # Aktuelle Session aus letztem Event uebernehmen
     latest = db.session.query(Event.session_id).order_by(Event.id.desc()).first()
     if latest and latest.session_id:
         return latest.session_id
 
-    # Allererster Event ueberhaupt -> neue Session
     return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+
+def _get_current_race_type():
+    """Aktuellen Renntyp aus letztem Status-Event ermitteln."""
+    rs = RaceStatus.query.order_by(RaceStatus.id.desc()).first()
+    if rs and rs.race_type:
+        return rs.race_type
+    return 'Training'
 
 
 # =============================================================================
@@ -174,6 +201,10 @@ def page_analytics():
 @app.route('/database')
 def page_database():
     return render_template('database.html')
+
+@app.route('/stats')
+def page_stats():
+    return render_template('stats.html')
 
 
 # =============================================================================
@@ -204,12 +235,40 @@ def receive_smartrace():
         ))
 
         if etype == 'ui.lap_update':
-            _save_lap(sid, etype, ed)
+            _save_lap(sid, ed)
         elif etype == 'ui.race_result':
             _save_result(sid, ed)
+        elif etype == 'ui.status_change':
+            _save_status(sid, ed)
+        elif etype == 'ui.penalty':
+            _save_penalty(sid, ed)
+        elif etype == 'ui.car_removed':
+            _save_car_removed(sid, ed)
 
         db.session.commit()
         log.info(f"Event: {etype} | Session: {sid}")
+
+        # WebSocket: alle verbundenen Clients benachrichtigen
+        socketio.emit('new_data', {
+            'event_type': etype,
+            'session_id': sid,
+        })
+
+        if etype == 'ui.status_change':
+            socketio.emit('race_status', {
+                'session_id': sid,
+                'status': ed.get('status') or ed.get('new_status') or 'unknown',
+                'race_type': (ed.get('type') or ed.get('race_type')
+                              or ed.get('mode') or ''),
+            })
+
+        if etype == 'ui.penalty':
+            socketio.emit('penalty', {
+                'session_id': sid,
+                'controller_id': str(ed.get('controller_id', '')),
+                'driver_name': (ed.get('driver_data') or {}).get('name', ''),
+            })
+
         return jsonify({'status': 'ok', 'event_type': etype})
 
     except Exception as e:
@@ -218,7 +277,7 @@ def receive_smartrace():
         return jsonify({'error': str(e)}), 500
 
 
-def _save_lap(sid, etype, ed):
+def _save_lap(sid, ed):
     cid = str(ed.get('controller_id', '0'))
     dd = ed.get('driver_data') or {}
     cd = ed.get('car_data') or {}
@@ -226,7 +285,7 @@ def _save_lap(sid, etype, ed):
 
     db.session.add(Lap(
         session_id=sid,
-        session_type=etype,
+        session_type=_get_current_race_type(),
         controller_id=cid,
         driver_name=dd.get('name') or f"Fahrer {cid}",
         car_name=cd.get('name') or f"Auto {cid}",
@@ -257,6 +316,61 @@ def _save_result(sid, ed):
         ))
 
 
+def _save_status(sid, ed):
+    status = (ed.get('status') or ed.get('new_status')
+              or ed.get('state') or 'unknown')
+    race_type = (ed.get('type') or ed.get('race_type')
+                 or ed.get('mode') or ed.get('session_type') or '')
+
+    db.session.add(RaceStatus(
+        session_id=sid,
+        status=status,
+        race_type=race_type,
+    ))
+
+
+def _save_penalty(sid, ed):
+    cid = str(ed.get('controller_id', '0'))
+    dd = ed.get('driver_data') or {}
+    penalty_type = (ed.get('type') or ed.get('penalty')
+                    or ed.get('penalty_type') or 'Strafe')
+
+    db.session.add(Penalty(
+        session_id=sid,
+        controller_id=cid,
+        driver_name=dd.get('name') or f"Fahrer {cid}",
+        penalty_type=penalty_type,
+    ))
+
+
+def _save_car_removed(sid, ed):
+    cid = str(ed.get('controller_id', '0'))
+    dd = ed.get('driver_data') or {}
+
+    db.session.add(RaceResult(
+        session_id=sid,
+        position=0,
+        controller_id=cid,
+        driver_name=dd.get('name') or f"Fahrer {cid}",
+        total_laps=0,
+        retired=True,
+    ))
+
+
+# =============================================================================
+# WebSocket
+# =============================================================================
+
+@socketio.on('connect')
+def handle_connect():
+    log.info("WebSocket-Client verbunden")
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    log.info("WebSocket-Client getrennt")
+
+
 # =============================================================================
 # API
 # =============================================================================
@@ -274,6 +388,27 @@ def api_live_data():
         if not laps:
             return jsonify({})
 
+        # Penalties pro Controller zaehlen
+        penalty_q = Penalty.query
+        if sid and sid != 'all':
+            penalty_q = penalty_q.filter(Penalty.session_id == sid)
+        penalty_counts = {}
+        for p in penalty_q.all():
+            penalty_counts[p.controller_id] = penalty_counts.get(p.controller_id, 0) + 1
+
+        # DNF/DQ Status pruefen
+        dnf_dq = {}
+        result_q = RaceResult.query
+        if sid and sid != 'all':
+            result_q = result_q.filter(RaceResult.session_id == sid)
+        for r in result_q.filter(
+            (RaceResult.retired == True) | (RaceResult.disqualified == True)
+        ).all():
+            dnf_dq[r.controller_id] = {
+                'retired': r.retired,
+                'disqualified': r.disqualified,
+            }
+
         ctrls = {}
         for lap in laps:
             cid = str(lap.controller_id)
@@ -284,6 +419,9 @@ def api_live_data():
                     'color': lap.controller_color or lap.car_color,
                     'laps': [],
                     'best_time_raw': None,
+                    'penalties': penalty_counts.get(cid, 0),
+                    'retired': dnf_dq.get(cid, {}).get('retired', False),
+                    'disqualified': dnf_dq.get(cid, {}).get('disqualified', False),
                 }
             ctrls[cid]['laps'].append({
                 'lap': lap.lap_number or 0,
@@ -292,6 +430,9 @@ def api_live_data():
                 'timestamp': lap.created_at.isoformat() if lap.created_at else None,
                 'is_pb': lap.is_personal_best,
                 'session_id': lap.session_id,
+                'sector_1': lap.sector_1,
+                'sector_2': lap.sector_2,
+                'sector_3': lap.sector_3,
             })
             if lap.laptime_ms and lap.laptime_ms > 0:
                 best = ctrls[cid]['best_time_raw']
@@ -422,6 +563,147 @@ def api_analytics():
         return jsonify({})
 
 
+@app.route('/api/penalties')
+def api_penalties():
+    """Strafen mit optionalem Session-Filter."""
+    try:
+        q = Penalty.query
+        sid = request.args.get('session_id')
+        if sid and sid != 'all':
+            q = q.filter(Penalty.session_id == sid)
+
+        return jsonify([{
+            'id': p.id,
+            'session_id': p.session_id,
+            'controller_id': p.controller_id,
+            'driver_name': p.driver_name,
+            'penalty_type': p.penalty_type,
+            'timestamp': p.created_at.isoformat() if p.created_at else None,
+        } for p in q.order_by(Penalty.created_at.desc()).all()])
+    except Exception as e:
+        log.error(f"penalties: {e}")
+        return jsonify([])
+
+
+@app.route('/api/race-status')
+def api_race_status():
+    """Aktueller Rennstatus."""
+    try:
+        rs = RaceStatus.query.order_by(RaceStatus.id.desc()).first()
+        if rs:
+            return jsonify({
+                'session_id': rs.session_id,
+                'status': rs.status,
+                'race_type': rs.race_type,
+                'updated_at': rs.updated_at.isoformat() if rs.updated_at else None,
+            })
+        return jsonify({'status': 'waiting', 'race_type': '', 'session_id': ''})
+    except Exception as e:
+        log.error(f"race-status: {e}")
+        return jsonify({'status': 'unknown'})
+
+
+@app.route('/api/driver-stats')
+def api_driver_stats():
+    """Fahrer-Statistiken ueber alle Sessions."""
+    try:
+        lap_rows = db.session.query(
+            Lap.driver_name,
+            func.count(Lap.id).label('total_laps'),
+            func.count(func.distinct(Lap.session_id)).label('total_sessions'),
+            func.min(Lap.laptime_ms).label('best_time'),
+            func.avg(Lap.laptime_ms).label('avg_time'),
+        ).filter(
+            Lap.laptime_ms > 0,
+            Lap.driver_name.isnot(None),
+            Lap.driver_name != '',
+        ).group_by(Lap.driver_name).all()
+
+        # Siege und Podien aus Ergebnissen
+        result_stats = {}
+        for row in db.session.query(
+            RaceResult.driver_name,
+            RaceResult.position,
+        ).filter(
+            RaceResult.position > 0,
+            RaceResult.retired == False,
+            RaceResult.disqualified == False,
+        ).all():
+            name = row.driver_name
+            if name not in result_stats:
+                result_stats[name] = {'wins': 0, 'podiums': 0}
+            if row.position == 1:
+                result_stats[name]['wins'] += 1
+            if row.position <= 3:
+                result_stats[name]['podiums'] += 1
+
+        # Penalty-Counts
+        penalty_rows = db.session.query(
+            Penalty.driver_name,
+            func.count(Penalty.id).label('cnt'),
+        ).group_by(Penalty.driver_name).all()
+        penalty_map = {r.driver_name: r.cnt for r in penalty_rows}
+
+        drivers = []
+        for r in lap_rows:
+            rs = result_stats.get(r.driver_name, {'wins': 0, 'podiums': 0})
+            avg = round(r.avg_time) if r.avg_time else 0
+            drivers.append({
+                'driver_name': r.driver_name,
+                'total_laps': r.total_laps,
+                'total_sessions': r.total_sessions,
+                'best_time': r.best_time,
+                'best_time_formatted': fmt_ms(r.best_time) or '--',
+                'avg_time': avg,
+                'avg_time_formatted': fmt_ms(avg) or '--',
+                'wins': rs['wins'],
+                'podiums': rs['podiums'],
+                'penalties': penalty_map.get(r.driver_name, 0),
+            })
+
+        return jsonify(sorted(drivers, key=lambda d: d['best_time'] or 999999))
+    except Exception as e:
+        log.error(f"driver-stats: {e}")
+        return jsonify([])
+
+
+@app.route('/api/car-stats')
+def api_car_stats():
+    """Auto-Statistiken ueber alle Sessions."""
+    try:
+        rows = db.session.query(
+            Lap.car_name,
+            func.count(Lap.id).label('total_laps'),
+            func.count(func.distinct(Lap.session_id)).label('total_sessions'),
+            func.count(func.distinct(Lap.driver_name)).label('total_drivers'),
+            func.min(Lap.laptime_ms).label('best_time'),
+            func.avg(Lap.laptime_ms).label('avg_time'),
+        ).filter(
+            Lap.laptime_ms > 0,
+            Lap.car_name.isnot(None),
+            Lap.car_name != '',
+        ).group_by(Lap.car_name).all()
+
+        cars = []
+        for r in rows:
+            avg = round(r.avg_time) if r.avg_time else 0
+            cars.append({
+                'car_name': r.car_name,
+                'total_laps': r.total_laps,
+                'total_sessions': r.total_sessions,
+                'total_drivers': r.total_drivers,
+                'best_time': r.best_time,
+                'best_time_formatted': fmt_ms(r.best_time) or '--',
+                'avg_time': avg,
+                'avg_time_formatted': fmt_ms(avg) or '--',
+            })
+
+        return jsonify(sorted(cars, key=lambda c: c['best_time'] or 999999))
+    except Exception as e:
+        log.error(f"car-stats: {e}")
+        return jsonify([])
+
+
 @app.route('/api/filters')
 def api_filters():
     """Filterwerte fuer Dropdowns."""
@@ -504,7 +786,8 @@ def api_health():
 # =============================================================================
 
 if __name__ == '__main__':
-    app.run(
+    socketio.run(
+        app,
         host='0.0.0.0',
         port=int(os.getenv('PORT', 5000)),
         debug=os.getenv('FLASK_DEBUG', 'false').lower() == 'true',

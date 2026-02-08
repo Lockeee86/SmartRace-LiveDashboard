@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Statistiken - SmartRace Live{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="session-selector d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-chart-column me-2"></i>Statistiken</h5>
+    <div class="d-flex align-items-center gap-2">
+        <button id="statsRefresh" class="btn btn-sm btn-outline-primary" title="Aktualisieren">
+            <i class="fas fa-sync-alt"></i>
+        </button>
+    </div>
+</div>
+
+<!-- Highlight Cards -->
+<div class="row g-3 mb-3">
+    <div class="col-md-3">
+        <div class="card stat-card fastest">
+            <div class="card-body py-3 text-center">
+                <div class="stat-label mb-1"><i class="fas fa-bolt me-1"></i> Schnellster Fahrer</div>
+                <div class="stat-value" id="hl-fastestTime">--:--.---</div>
+                <div class="small mt-1" id="hl-fastestDriver">--</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card record">
+            <div class="card-body py-3 text-center">
+                <div class="stat-label mb-1"><i class="fas fa-trophy me-1"></i> Meiste Siege</div>
+                <div class="stat-value" id="hl-mostWins">0</div>
+                <div class="small mt-1" id="hl-mostWinsDriver">--</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card stats">
+            <div class="card-body py-3 text-center">
+                <div class="stat-label mb-1"><i class="fas fa-road me-1"></i> Meiste Runden</div>
+                <div class="stat-value" id="hl-mostLaps">0</div>
+                <div class="small mt-1" id="hl-mostLapsDriver">--</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card" style="background: linear-gradient(135deg, #2d1f1f, #1a1212); border-left: 4px solid #e67e22;">
+            <div class="card-body py-3 text-center">
+                <div class="stat-label mb-1"><i class="fas fa-car me-1"></i> Schnellstes Auto</div>
+                <div class="stat-value" id="hl-fastestCarTime">--:--.---</div>
+                <div class="small mt-1" id="hl-fastestCar">--</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Fahrer-Statistiken -->
+<div class="card mb-3">
+    <div class="card-header border-0 bg-transparent">
+        <h6 class="mb-0"><i class="fas fa-users me-2 text-primary"></i>Fahrer-Statistiken</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;">#</th>
+                        <th>Fahrer</th>
+                        <th class="text-center">Sessions</th>
+                        <th class="text-center">Runden</th>
+                        <th class="text-center">Beste Zeit</th>
+                        <th class="text-center">Durchschnitt</th>
+                        <th class="text-center">Siege</th>
+                        <th class="text-center">Podien</th>
+                        <th class="text-center">Strafen</th>
+                    </tr>
+                </thead>
+                <tbody id="driverStatsBody">
+                    <tr><td colspan="9" class="text-center text-muted py-4">Lade Daten...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Auto-Statistiken -->
+<div class="card">
+    <div class="card-header border-0 bg-transparent">
+        <h6 class="mb-0"><i class="fas fa-car me-2 text-warning"></i>Auto-Statistiken</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;">#</th>
+                        <th>Auto</th>
+                        <th class="text-center">Sessions</th>
+                        <th class="text-center">Fahrer</th>
+                        <th class="text-center">Runden</th>
+                        <th class="text-center">Beste Zeit</th>
+                        <th class="text-center">Durchschnitt</th>
+                    </tr>
+                </thead>
+                <tbody id="carStatsBody">
+                    <tr><td colspan="7" class="text-center text-muted py-4">Lade Daten...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadDriverStats() {
+    try {
+        const res = await fetch('/api/driver-stats');
+        if (!res.ok) return;
+        const data = await res.json();
+        renderDriverStats(data);
+    } catch (e) {
+        console.error('Driver-Stats-Fehler:', e);
+    }
+}
+
+async function loadCarStats() {
+    try {
+        const res = await fetch('/api/car-stats');
+        if (!res.ok) return;
+        const data = await res.json();
+        renderCarStats(data);
+    } catch (e) {
+        console.error('Car-Stats-Fehler:', e);
+    }
+}
+
+function renderDriverStats(drivers) {
+    // Highlight Cards
+    if (drivers.length > 0) {
+        const fastest = drivers[0];
+        document.getElementById('hl-fastestTime').textContent = fastest.best_time_formatted;
+        document.getElementById('hl-fastestDriver').textContent = fastest.driver_name;
+
+        const mostWins = [...drivers].sort((a,b) => b.wins - a.wins)[0];
+        if (mostWins.wins > 0) {
+            document.getElementById('hl-mostWins').textContent = mostWins.wins;
+            document.getElementById('hl-mostWinsDriver').textContent = mostWins.driver_name;
+        }
+
+        const mostLaps = [...drivers].sort((a,b) => b.total_laps - a.total_laps)[0];
+        document.getElementById('hl-mostLaps').textContent = mostLaps.total_laps;
+        document.getElementById('hl-mostLapsDriver').textContent = mostLaps.driver_name;
+    }
+
+    // Tabelle
+    const tbody = document.getElementById('driverStatsBody');
+    if (drivers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Keine Fahrerdaten vorhanden</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = drivers.map((d, i) => {
+        const winsHtml = d.wins > 0 ? `<span class="text-warning fw-bold">${d.wins}</span>` : '<span class="text-muted">0</span>';
+        const podiumsHtml = d.podiums > 0 ? `<span class="text-info fw-bold">${d.podiums}</span>` : '<span class="text-muted">0</span>';
+        const penaltiesHtml = d.penalties > 0 ? `<span class="text-danger fw-bold">${d.penalties}</span>` : '<span class="text-muted">0</span>';
+
+        return `<tr>
+            <td class="text-muted">${i + 1}</td>
+            <td class="fw-bold">${d.driver_name}</td>
+            <td class="text-center">${d.total_sessions}</td>
+            <td class="text-center">${d.total_laps}</td>
+            <td class="text-center font-mono fw-bold">${d.best_time_formatted}</td>
+            <td class="text-center font-mono">${d.avg_time_formatted}</td>
+            <td class="text-center">${winsHtml}</td>
+            <td class="text-center">${podiumsHtml}</td>
+            <td class="text-center">${penaltiesHtml}</td>
+        </tr>`;
+    }).join('');
+}
+
+function renderCarStats(cars) {
+    // Highlight: schnellstes Auto
+    if (cars.length > 0) {
+        document.getElementById('hl-fastestCarTime').textContent = cars[0].best_time_formatted;
+        document.getElementById('hl-fastestCar').textContent = cars[0].car_name;
+    }
+
+    const tbody = document.getElementById('carStatsBody');
+    if (cars.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Keine Autodaten vorhanden</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = cars.map((c, i) => `<tr>
+        <td class="text-muted">${i + 1}</td>
+        <td class="fw-bold">${c.car_name}</td>
+        <td class="text-center">${c.total_sessions}</td>
+        <td class="text-center">${c.total_drivers}</td>
+        <td class="text-center">${c.total_laps}</td>
+        <td class="text-center font-mono fw-bold">${c.best_time_formatted}</td>
+        <td class="text-center font-mono">${c.avg_time_formatted}</td>
+    </tr>`).join('');
+}
+
+// Event Listener
+document.addEventListener('DOMContentLoaded', async () => {
+    await Promise.all([loadDriverStats(), loadCarStats()]);
+});
+
+document.getElementById('statsRefresh').addEventListener('click', async function() {
+    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    this.disabled = true;
+    await Promise.all([loadDriverStats(), loadCarStats()]);
+    this.innerHTML = '<i class="fas fa-sync-alt"></i>';
+    this.disabled = false;
+});
+
+// WebSocket: Live-Updates
+socket.on('new_data', () => {
+    loadDriverStats();
+    loadCarStats();
+});
+
+// Fallback
+setInterval(() => { loadDriverStats(); loadCarStats(); }, 30000);
+</script>
+{% endblock %}

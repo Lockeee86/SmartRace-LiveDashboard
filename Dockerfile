@@ -12,5 +12,5 @@ COPY . .
 
 EXPOSE 5000
 
-# --preload: App einmal laden, dann forken (DB-Init nur 1x)
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "--preload", "app:app"]
+# eventlet Worker fuer WebSocket-Support, 1 Worker (eventlet handled Concurrency)
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--worker-class", "eventlet", "--workers", "1", "--timeout", "120", "app:app"]
