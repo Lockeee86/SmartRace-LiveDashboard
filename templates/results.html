@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+
+{% block title %}Renn-Ergebnis - SmartRace Live{% endblock %}
+
+{% block styles %}
+<style>
+@media print {
+    .navbar, footer, .no-print, .toast-container { display: none !important; }
+    body { background: #fff !important; color: #000 !important; }
+    .card { border: 1px solid #ccc !important; background: #fff !important; }
+    .table { color: #000 !important; }
+    .podium-bar { color: #000 !important; }
+    .stat-card { background: #f5f5f5 !important; border: 1px solid #ccc !important; }
+    .stat-card .stat-value, .stat-card .stat-label { color: #000 !important; }
+}
+.podium { display: flex; align-items: flex-end; justify-content: center; gap: 0.5rem; margin: 1.5rem 0; }
+.podium-place { text-align: center; border-radius: 0.5rem 0.5rem 0 0; padding: 1rem 1.5rem 0.5rem; min-width: 140px; }
+.podium-place.p1 { background: linear-gradient(180deg, #f1c40f33, #f1c40f11); border: 2px solid #f1c40f; height: 180px; }
+.podium-place.p2 { background: linear-gradient(180deg, #bdc3c733, #bdc3c711); border: 2px solid #bdc3c7; height: 140px; }
+.podium-place.p3 { background: linear-gradient(180deg, #e67e2233, #e67e2211); border: 2px solid #e67e22; height: 110px; }
+.podium-pos { font-size: 2rem; font-weight: 800; }
+.podium-name { font-weight: 700; font-size: 1rem; margin-top: 0.25rem; }
+.podium-time { font-family: 'Courier New', monospace; font-size: 0.85rem; opacity: 0.8; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="session-selector d-flex justify-content-between align-items-center mb-3 no-print">
+    <h5 class="mb-0"><i class="fas fa-flag-checkered me-2"></i>Renn-Ergebnis</h5>
+    <div class="d-flex align-items-center gap-2">
+        <select id="resultSession" class="form-select form-select-sm" style="min-width: 280px;">
+            <option value="">Letzte Session</option>
+        </select>
+        <button class="btn btn-sm btn-outline-primary" onclick="window.print()" title="Drucken">
+            <i class="fas fa-print"></i>
+        </button>
+    </div>
+</div>
+
+<!-- Session Info -->
+<div class="row g-3 mb-3">
+    <div class="col-md-3">
+        <div class="card stat-card fastest">
+            <div class="card-body py-3 text-center">
+                <div class="stat-label mb-1"><i class="fas fa-trophy me-1"></i> Typ</div>
+                <div class="stat-value fs-4" id="rs-type">--</div>
+                <div class="small mt-1" id="rs-date">--</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card record">
+            <div class="card-body py-3 text-center">
+                <div class="stat-label mb-1"><i class="fas fa-bolt me-1"></i> Schnellste Runde</div>
+                <div class="stat-value" id="rs-fastest">--:--.---</div>
+                <div class="small mt-1" id="rs-fastestDriver">--</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card stats">
+            <div class="card-body py-3 text-center">
+                <div class="stat-label mb-1"><i class="fas fa-road me-1"></i> Runden gesamt</div>
+                <div class="stat-value" id="rs-laps">0</div>
+                <div class="small mt-1" id="rs-drivers">0 Fahrer</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card" style="background: linear-gradient(135deg, #2d1f1f, #1a1212); border-left: 4px solid #e67e22;">
+            <div class="card-body py-3 text-center">
+                <div class="stat-label mb-1"><i class="fas fa-exclamation-triangle me-1"></i> Strafen</div>
+                <div class="stat-value" id="rs-penalties">0</div>
+                <div class="small mt-1" id="rs-duration">--</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Podium -->
+<div id="podiumContainer" class="d-none">
+    <div class="podium" id="podium"></div>
+</div>
+
+<!-- Ergebnis-Tabelle -->
+<div class="card">
+    <div class="card-header border-0 bg-transparent">
+        <h6 class="mb-0"><i class="fas fa-list-ol me-2"></i>Ergebnis</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th class="text-center" style="width: 60px;">Pos</th>
+                        <th>Fahrer</th>
+                        <th>Auto</th>
+                        <th class="text-center">Runden</th>
+                        <th class="text-center">Beste Zeit</th>
+                        <th class="text-center">Durchschnitt</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="resultBody">
+                    <tr><td colspan="7" class="text-center text-muted py-4">Lade Ergebnis...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadSessions() {
+    try {
+        const res = await fetch('/api/sessions');
+        if (!res.ok) return;
+        const sessions = await res.json();
+        const sel = document.getElementById('resultSession');
+        sessions.forEach(s => {
+            const date = s.start_time ? new Date(s.start_time).toLocaleDateString('de-DE') : '';
+            const opt = document.createElement('option');
+            opt.value = s.session_id;
+            opt.textContent = `${s.session_type || 'Training'} - ${date} - ${s.total_laps} Runden`;
+            sel.appendChild(opt);
+        });
+    } catch (e) {}
+}
+
+async function loadResult(sessionId) {
+    try {
+        let url = '/api/live-data';
+        if (sessionId) url += '?session_id=' + encodeURIComponent(sessionId);
+
+        const [dataRes, penaltyRes] = await Promise.all([
+            fetch(url),
+            fetch('/api/penalties' + (sessionId ? '?session_id=' + encodeURIComponent(sessionId) : '')),
+        ]);
+        if (!dataRes.ok) return;
+        const data = await dataRes.json();
+        const penalties = penaltyRes.ok ? await penaltyRes.json() : [];
+        renderResult(data, penalties);
+    } catch (e) {
+        console.error('Ergebnis-Fehler:', e);
+    }
+}
+
+function renderResult(data, penalties) {
+    const drivers = [];
+    let totalLaps = 0;
+
+    Object.entries(data).forEach(([cid, cd]) => {
+        if (!cd.laps || cd.laps.length === 0) return;
+        const times = cd.laps.map(l => l.laptime_raw).filter(t => t > 0);
+        const best = times.length > 0 ? Math.min(...times) : null;
+        const avg = times.length > 0 ? Math.round(times.reduce((a,b) => a+b, 0) / times.length) : null;
+        totalLaps += cd.laps.length;
+
+        const driverPenalties = penalties.filter(p => p.controller_id === cid);
+
+        drivers.push({
+            name: cd.name || 'Fahrer ' + cid,
+            car: cd.car || '',
+            color: cd.color || getControllerColor(cid),
+            laps: cd.laps.length,
+            bestTime: best,
+            avgTime: avg,
+            penalties: driverPenalties.length,
+            retired: cd.retired || false,
+            disqualified: cd.disqualified || false,
+        });
+    });
+
+    drivers.sort((a, b) => {
+        if (a.disqualified !== b.disqualified) return a.disqualified ? 1 : -1;
+        if (a.retired !== b.retired) return a.retired ? 1 : -1;
+        if (a.laps !== b.laps) return b.laps - a.laps;
+        if (a.bestTime && b.bestTime) return a.bestTime - b.bestTime;
+        return 0;
+    });
+
+    // Stats
+    const fastest = drivers.find(d => d.bestTime);
+    if (fastest) {
+        document.getElementById('rs-fastest').textContent = formatTime(fastest.bestTime);
+        document.getElementById('rs-fastestDriver').textContent = fastest.name;
+    }
+    document.getElementById('rs-laps').textContent = totalLaps;
+    document.getElementById('rs-drivers').textContent = drivers.length + ' Fahrer';
+    document.getElementById('rs-penalties').textContent = penalties.length;
+
+    // Podium
+    const podium = drivers.filter(d => !d.retired && !d.disqualified).slice(0, 3);
+    if (podium.length >= 2) {
+        document.getElementById('podiumContainer').classList.remove('d-none');
+        const order = podium.length >= 3 ? [podium[1], podium[0], podium[2]] : [podium[1], podium[0]];
+        const posClasses = podium.length >= 3 ? ['p2', 'p1', 'p3'] : ['p2', 'p1'];
+        const posNums = podium.length >= 3 ? [2, 1, 3] : [2, 1];
+
+        document.getElementById('podium').innerHTML = order.map((d, i) =>
+            `<div class="podium-place ${posClasses[i]}">
+                <div class="podium-pos">${posNums[i]}</div>
+                <div class="podium-name" style="color: ${d.color}">${d.name}</div>
+                <div class="podium-time">${formatTime(d.bestTime)}</div>
+                <div class="small text-muted">${d.car}</div>
+            </div>`
+        ).join('');
+    }
+
+    // Tabelle
+    const tbody = document.getElementById('resultBody');
+    if (drivers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Keine Daten</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = drivers.map((d, i) => {
+        const pos = i + 1;
+        let posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : 'other';
+        if (d.retired || d.disqualified) posClass = 'other';
+
+        let status = '<span class="text-muted">Aktiv</span>';
+        if (d.disqualified) status = '<span class="badge bg-danger">DQ</span>';
+        else if (d.retired) status = '<span class="badge bg-warning text-dark">DNF</span>';
+        else if (d.penalties > 0) status = `<span class="badge bg-danger">${d.penalties}x Strafe</span>`;
+        else if (pos === 1) status = '<i class="fas fa-crown text-warning"></i> Sieger';
+        else if (pos <= 3) status = '<i class="fas fa-medal"></i> Podium';
+
+        return `<tr style="border-left: 4px solid ${d.color}">
+            <td class="text-center"><span class="position-badge ${posClass}">${d.retired ? '-' : (d.disqualified ? '-' : pos)}</span></td>
+            <td class="fw-bold" style="color: ${d.color}">${d.name}</td>
+            <td class="text-muted">${d.car}</td>
+            <td class="text-center">${d.laps}</td>
+            <td class="text-center font-mono fw-bold">${formatTime(d.bestTime)}</td>
+            <td class="text-center font-mono">${formatTime(d.avgTime)}</td>
+            <td class="text-center">${status}</td>
+        </tr>`;
+    }).join('');
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadSessions();
+    await loadResult();
+});
+
+document.getElementById('resultSession').addEventListener('change', function() {
+    loadResult(this.value);
+});
+
+socket.on('new_data', () => {
+    const sid = document.getElementById('resultSession').value;
+    loadResult(sid);
+});
+</script>
+{% endblock %}

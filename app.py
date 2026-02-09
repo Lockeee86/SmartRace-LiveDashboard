@@ -119,6 +119,18 @@ class TrackRecord(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class PersonalRecord(db.Model):
+    __tablename__ = 'sr_personal_records'
+    id = db.Column(db.Integer, primary_key=True)
+    driver_name = db.Column(db.String(100), unique=True, index=True)
+    laptime_ms = db.Column(db.Integer, nullable=False)
+    car_name = db.Column(db.String(100))
+    session_id = db.Column(db.String(100))
+    controller_id = db.Column(db.String(10))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 # =============================================================================
 # DB Init  (robust: erst versuchen, bei Fehler alles bereinigen)
 # =============================================================================
@@ -232,6 +244,14 @@ def page_stats():
 @app.route('/head-to-head')
 def page_head_to_head():
     return render_template('head-to-head.html')
+
+@app.route('/results')
+def page_results():
+    return render_template('results.html')
+
+@app.route('/session-compare')
+def page_session_compare():
+    return render_template('session-compare.html')
 
 
 # =============================================================================
@@ -348,6 +368,20 @@ def _save_lap(sid, ed):
                 'driver_name': driver_name,
                 'car_name': car_name,
             })
+
+        # Persoenlicher Rekord pruefen
+        pr = PersonalRecord.query.filter_by(driver_name=driver_name).first()
+        if not pr:
+            db.session.add(PersonalRecord(
+                driver_name=driver_name, laptime_ms=laptime_ms,
+                car_name=car_name, session_id=sid, controller_id=cid,
+            ))
+        elif laptime_ms < pr.laptime_ms:
+            pr.laptime_ms = laptime_ms
+            pr.car_name = car_name
+            pr.session_id = sid
+            pr.controller_id = cid
+            pr.updated_at = datetime.utcnow()
 
 
 def _save_result(sid, ed):
@@ -1121,7 +1155,15 @@ def api_backup():
                 'car_name': t.car_name, 'session_id': t.session_id,
                 'controller_id': t.controller_id,
                 'created_at': t.created_at.isoformat() if t.created_at else None,
-            } for t in TrackRecord.query.all()], ensure_ascii=False) + '\n'
+            } for t in TrackRecord.query.all()], ensure_ascii=False) + ',\n'
+
+            yield '"personal_records": ' + json.dumps([{
+                'driver_name': r.driver_name, 'laptime_ms': r.laptime_ms,
+                'car_name': r.car_name, 'session_id': r.session_id,
+                'controller_id': r.controller_id,
+                'created_at': r.created_at.isoformat() if r.created_at else None,
+                'updated_at': r.updated_at.isoformat() if r.updated_at else None,
+            } for r in PersonalRecord.query.all()], ensure_ascii=False) + '\n'
 
             yield '}'
 
@@ -1209,11 +1251,114 @@ def api_restore():
                 ))
             counts['track_records'] = len(data['track_records'])
 
+        if data.get('personal_records'):
+            for r in data['personal_records']:
+                existing = PersonalRecord.query.filter_by(
+                    driver_name=r.get('driver_name')).first()
+                if existing:
+                    if r.get('laptime_ms') and r['laptime_ms'] < existing.laptime_ms:
+                        existing.laptime_ms = r['laptime_ms']
+                        existing.car_name = r.get('car_name')
+                        existing.updated_at = datetime.utcnow()
+                else:
+                    db.session.add(PersonalRecord(
+                        driver_name=r.get('driver_name'),
+                        laptime_ms=r.get('laptime_ms'),
+                        car_name=r.get('car_name'),
+                        session_id=r.get('session_id'),
+                        controller_id=r.get('controller_id'),
+                        created_at=datetime.fromisoformat(r['created_at']) if r.get('created_at') else None,
+                        updated_at=datetime.fromisoformat(r['updated_at']) if r.get('updated_at') else None,
+                    ))
+            counts['personal_records'] = len(data['personal_records'])
+
         db.session.commit()
         return jsonify({'status': 'ok', 'imported': counts})
     except Exception as e:
         db.session.rollback()
         log.error(f"restore: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/personal-records')
+def api_personal_records():
+    """Persoenliche Rekorde aller Fahrer."""
+    try:
+        records = PersonalRecord.query.order_by(
+            PersonalRecord.laptime_ms.asc()).all()
+        return jsonify([{
+            'driver_name': r.driver_name,
+            'laptime_ms': r.laptime_ms,
+            'laptime_formatted': fmt_ms(r.laptime_ms),
+            'car_name': r.car_name,
+            'session_id': r.session_id,
+            'created_at': r.created_at.isoformat() if r.created_at else None,
+            'updated_at': r.updated_at.isoformat() if r.updated_at else None,
+        } for r in records])
+    except Exception as e:
+        log.error(f"personal-records: {e}")
+        return jsonify([])
+
+
+@app.route('/api/session-compare')
+def api_session_compare():
+    """Vergleich zweier Sessions."""
+    try:
+        s1 = request.args.get('session1', '')
+        s2 = request.args.get('session2', '')
+        if not s1 or not s2:
+            return jsonify({'error': 'Zwei Sessions angeben'}), 400
+
+        result = {}
+        for sid in [s1, s2]:
+            laps = Lap.query.filter(
+                Lap.session_id == sid, Lap.laptime_ms > 0
+            ).all()
+
+            drivers = {}
+            for l in laps:
+                name = l.driver_name or f"Fahrer {l.controller_id}"
+                if name not in drivers:
+                    drivers[name] = {'times': [], 'laps': 0}
+                drivers[name]['times'].append(l.laptime_ms)
+                drivers[name]['laps'] += 1
+
+            driver_stats = []
+            for name, d in drivers.items():
+                driver_stats.append({
+                    'driver_name': name,
+                    'total_laps': d['laps'],
+                    'best_time': min(d['times']),
+                    'best_time_formatted': fmt_ms(min(d['times'])),
+                    'avg_time': round(sum(d['times']) / len(d['times'])),
+                    'avg_time_formatted': fmt_ms(
+                        round(sum(d['times']) / len(d['times']))),
+                })
+            driver_stats.sort(key=lambda x: x['best_time'])
+
+            # Session-Metadaten
+            meta = db.session.query(
+                Lap.session_type,
+                func.min(Lap.created_at).label('start'),
+                func.max(Lap.created_at).label('end'),
+                func.count(Lap.id).label('total'),
+            ).filter(Lap.session_id == sid).first()
+
+            penalties = Penalty.query.filter(Penalty.session_id == sid).count()
+
+            result[sid] = {
+                'session_id': sid,
+                'session_type': meta.session_type if meta else '',
+                'start_time': meta.start.isoformat() if meta and meta.start else None,
+                'end_time': meta.end.isoformat() if meta and meta.end else None,
+                'total_laps': meta.total if meta else 0,
+                'penalties': penalties,
+                'drivers': driver_stats,
+            }
+
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"session-compare: {e}")
         return jsonify({'error': str(e)}), 500
 
 

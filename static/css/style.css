@@ -516,6 +516,33 @@ footer {
     font-size: 2.25rem;
 }
 
+/* Lap Delta Colors */
+.delta-faster {
+    color: var(--sr-success);
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+}
+
+.delta-slower {
+    color: var(--sr-danger);
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+}
+
+/* Drag & Drop */
+.controller-card[draggable="true"] {
+    cursor: grab;
+}
+
+.controller-card[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.controller-card.drag-over {
+    outline: 2px dashed var(--sr-accent);
+    outline-offset: 2px;
+}
+
 /* Head-to-Head Cards */
 .h2h-card {
     border: 2px solid var(--sr-border);
