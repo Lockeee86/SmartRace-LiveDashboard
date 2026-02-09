@@ -4,9 +4,11 @@ __pycache__
 *.pyc
 *.pyo
 .env
+.env.example
 *.db
 *.sqlite3
 .vscode
 .idea
 *.md
 instance/
+.pytest_cache

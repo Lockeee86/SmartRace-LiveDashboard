@@ -145,10 +145,9 @@ async function loadSessions() {
             const sel = document.getElementById(id);
             sel.innerHTML = '<option value="">Session waehlen...</option>';
             sessions.forEach(s => {
-                const date = s.start_time ? new Date(s.start_time).toLocaleDateString('de-DE') : '';
                 const opt = document.createElement('option');
                 opt.value = s.session_id;
-                opt.textContent = `${s.session_type || 'Training'} - ${date} - ${s.total_laps} Runden`;
+                opt.textContent = `${s.display_name || s.session_id} (${s.total_laps} Runden)`;
                 sel.appendChild(opt);
             });
         });

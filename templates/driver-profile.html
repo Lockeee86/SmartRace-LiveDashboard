@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+
+{% block title %}{{ driver_name }} - SmartRace Live{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="session-selector d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">
+        <a href="{{ url_for('page_stats') }}" class="text-muted text-decoration-none me-2"><i class="fas fa-arrow-left"></i></a>
+        <i class="fas fa-user me-2"></i><span id="profileName">{{ driver_name }}</span>
+    </h5>
+</div>
+
+<!-- Loading -->
+<div id="loadingState" class="text-center py-5 text-muted">
+    <i class="fas fa-spinner fa-spin fa-2x mb-3 d-block"></i>
+    Lade Fahrerprofil...
+</div>
+
+<!-- Profil Content (hidden until loaded) -->
+<div id="profileContent" class="d-none">
+
+    <!-- Stat Cards -->
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card stat-card fastest">
+                <div class="card-body py-3 text-center">
+                    <div class="stat-label mb-1"><i class="fas fa-bolt me-1"></i> Bestzeit</div>
+                    <div class="stat-value" id="prBestTime">--:--.---</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card stat-card record">
+                <div class="card-body py-3 text-center">
+                    <div class="stat-label mb-1"><i class="fas fa-bullseye me-1"></i> Konsistenz</div>
+                    <div class="stat-value" id="prConsistency">--</div>
+                    <div class="small mt-1 text-muted" id="prStddev"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card stat-card stats">
+                <div class="card-body py-3 text-center">
+                    <div class="stat-label mb-1"><i class="fas fa-trophy me-1"></i> Siege / Podien</div>
+                    <div class="stat-value"><span id="prWins">0</span><span class="text-muted fs-6"> / </span><span id="prPodiums">0</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card" style="background: linear-gradient(135deg, #2d1f1f, #1a1212); border-left: 4px solid #e67e22;">
+                <div class="card-body py-3 text-center">
+                    <div class="stat-label mb-1"><i class="fas fa-road me-1"></i> Runden / Sessions</div>
+                    <div class="stat-value"><span id="prLaps">0</span><span class="text-muted fs-6"> / </span><span id="prSessions">0</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Cards -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header border-0 bg-transparent py-2">
+                    <h6 class="mb-0"><i class="fas fa-medal me-2 text-warning"></i>Persoenlicher Rekord</h6>
+                </div>
+                <div class="card-body text-center">
+                    <div class="fw-bold font-mono fs-3" id="prRecordTime">--:--.---</div>
+                    <div class="text-muted small mt-1" id="prRecordCar">--</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header border-0 bg-transparent py-2">
+                    <h6 class="mb-0"><i class="fas fa-car me-2 text-info"></i>Lieblings-Auto</h6>
+                </div>
+                <div class="card-body text-center">
+                    <div class="fw-bold fs-4" id="prFavCar">--</div>
+                    <div class="text-muted small mt-1" id="prFavCarLaps">-- Runden</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header border-0 bg-transparent py-2">
+                    <h6 class="mb-0"><i class="fas fa-chart-bar me-2 text-primary"></i>Zeiten</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="small text-muted">Durchschnitt</div>
+                            <div class="fw-bold font-mono" id="prAvgTime">--:--.---</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-muted">Strafen</div>
+                            <div class="fw-bold" id="prPenalties">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trend Chart -->
+    <div class="card mb-3">
+        <div class="card-header border-0 bg-transparent py-2">
+            <h6 class="mb-0"><i class="fas fa-chart-line me-2 text-success"></i>Rundenzeiten-Trend</h6>
+        </div>
+        <div class="card-body pt-0">
+            <canvas id="trendChart" height="280"></canvas>
+        </div>
+    </div>
+
+    <!-- Auto-Verteilung + Session-Historie -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header border-0 bg-transparent py-2">
+                    <h6 class="mb-0"><i class="fas fa-car-side me-2 text-warning"></i>Auto-Verteilung</h6>
+                </div>
+                <div class="card-body pt-0">
+                    <canvas id="carPieChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header border-0 bg-transparent py-2">
+                    <h6 class="mb-0"><i class="fas fa-history me-2 text-info"></i>Session-Historie</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Session</th>
+                                    <th class="text-center">Runden</th>
+                                    <th class="text-center">Bestzeit</th>
+                                    <th class="text-center">Schnitt</th>
+                                    <th class="text-center">Konsistenz</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sessionHistoryBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Nicht gefunden -->
+<div id="notFoundState" class="d-none text-center py-5 text-muted">
+    <i class="fas fa-user-slash fa-3x mb-3 d-block"></i>
+    <h5>Fahrer nicht gefunden</h5>
+    <a href="{{ url_for('page_stats') }}" class="btn btn-outline-primary mt-2">Zurueck zu Statistiken</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CHART_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#e67e22', '#9b59b6', '#1abc9c', '#e84393'];
+let trendChart = null;
+let carPieChart = null;
+
+async function loadProfile() {
+    const name = '{{ driver_name }}';
+    try {
+        const res = await fetch('/api/driver-profile?name=' + encodeURIComponent(name));
+        if (!res.ok) {
+            document.getElementById('loadingState').classList.add('d-none');
+            document.getElementById('notFoundState').classList.remove('d-none');
+            return;
+        }
+        const data = await res.json();
+        if (data.error) {
+            document.getElementById('loadingState').classList.add('d-none');
+            document.getElementById('notFoundState').classList.remove('d-none');
+            return;
+        }
+        renderProfile(data);
+    } catch (e) {
+        console.error('Profil-Fehler:', e);
+        document.getElementById('loadingState').classList.add('d-none');
+        document.getElementById('notFoundState').classList.remove('d-none');
+    }
+}
+
+function renderProfile(d) {
+    document.getElementById('loadingState').classList.add('d-none');
+    document.getElementById('profileContent').classList.remove('d-none');
+
+    // Stat Cards
+    document.getElementById('prBestTime').textContent = d.best_time_formatted || '--';
+    document.getElementById('prConsistency').textContent = d.consistency_score + '%';
+    document.getElementById('prStddev').textContent = d.stddev_ms > 0 ? ('\u00b1' + formatTime(d.stddev_ms)) : '';
+    document.getElementById('prWins').textContent = d.wins;
+    document.getElementById('prPodiums').textContent = d.podiums;
+    document.getElementById('prLaps').textContent = d.total_laps;
+    document.getElementById('prSessions').textContent = d.total_sessions;
+
+    // Detail Cards
+    if (d.personal_record) {
+        document.getElementById('prRecordTime').textContent = d.personal_record.laptime_formatted;
+        document.getElementById('prRecordCar').textContent = d.personal_record.car_name || '--';
+    }
+    document.getElementById('prFavCar').textContent = d.favorite_car || '--';
+    document.getElementById('prFavCarLaps').textContent = (d.favorite_car_laps || 0) + ' Runden';
+    document.getElementById('prAvgTime').textContent = d.avg_time_formatted || '--';
+    document.getElementById('prPenalties').textContent = d.penalties;
+
+    // Trend Chart
+    renderTrendChart(d.recent_laps, d.best_time, d.avg_time);
+
+    // Car Pie Chart
+    renderCarPie(d.cars);
+
+    // Session History
+    renderSessionHistory(d.session_history);
+}
+
+function renderTrendChart(laps, bestTime, avgTime) {
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    if (trendChart) trendChart.destroy();
+
+    const data = laps.map((l, i) => ({ x: i + 1, y: l.time / 1000 }));
+    const bestLine = bestTime ? bestTime / 1000 : null;
+    const avgLine = avgTime ? avgTime / 1000 : null;
+
+    const datasets = [{
+        label: 'Rundenzeit',
+        data: data,
+        borderColor: '#3498db',
+        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+    }];
+
+    if (bestLine) {
+        datasets.push({
+            label: 'Bestzeit',
+            data: data.map(p => ({ x: p.x, y: bestLine })),
+            borderColor: '#22c55e',
+            borderDash: [5, 5],
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false,
+        });
+    }
+    if (avgLine) {
+        datasets.push({
+            label: 'Durchschnitt',
+            data: data.map(p => ({ x: p.x, y: avgLine })),
+            borderColor: '#eab308',
+            borderDash: [3, 3],
+            borderWidth: 1,
+            pointRadius: 0,
+            fill: false,
+        });
+    }
+
+    trendChart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#8b8fa3' } },
+                tooltip: {
+                    callbacks: {
+                        title: ctx => 'Runde ' + ctx[0].parsed.x,
+                        label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(3) + 's',
+                    },
+                },
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: 'Runde', color: '#8b8fa3' },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#8b8fa3' },
+                },
+                y: {
+                    title: { display: true, text: 'Zeit (s)', color: '#8b8fa3' },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#8b8fa3' },
+                    beginAtZero: false,
+                },
+            },
+        },
+    });
+}
+
+function renderCarPie(cars) {
+    if (!cars || cars.length === 0) return;
+    const ctx = document.getElementById('carPieChart').getContext('2d');
+    if (carPieChart) carPieChart.destroy();
+
+    carPieChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: cars.map(c => c.name),
+            datasets: [{
+                data: cars.map(c => c.laps),
+                backgroundColor: cars.map((_, i) => CHART_COLORS[i % CHART_COLORS.length] + 'cc'),
+                borderColor: cars.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+                borderWidth: 2,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: '#8b8fa3', padding: 10, font: { size: 11 } },
+                },
+            },
+        },
+    });
+}
+
+function renderSessionHistory(sessions) {
+    const tbody = document.getElementById('sessionHistoryBody');
+    if (!sessions || sessions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Keine Sessions</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = sessions.map(s => {
+        const avgMs = s.avg_time || 0;
+        const stddevMs = s.stddev_ms || 0;
+        let conScore = 0;
+        if (avgMs > 0 && stddevMs > 0) {
+            conScore = ((1 - stddevMs / avgMs) * 100).toFixed(1);
+        }
+        const conCls = conScore > 90 ? 'bg-success' : conScore > 80 ? 'bg-warning' : 'bg-danger';
+
+        return `<tr>
+            <td class="small">${s.display_name}</td>
+            <td class="text-center">${s.laps}</td>
+            <td class="text-center font-mono fw-bold">${s.best_time_formatted}</td>
+            <td class="text-center font-mono">${s.avg_time_formatted}</td>
+            <td class="text-center">
+                <div class="d-flex align-items-center justify-content-center gap-2">
+                    <div class="progress" style="width: 60px; height: 5px;">
+                        <div class="progress-bar ${conCls}" style="width: ${conScore}%"></div>
+                    </div>
+                    <small>${conScore}%</small>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+document.addEventListener('DOMContentLoaded', loadProfile);
+</script>
+{% endblock %}

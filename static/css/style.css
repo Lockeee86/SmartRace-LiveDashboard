@@ -418,15 +418,6 @@ body {
 }
 
 /* Animations */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.fade-in {
-    animation: fadeIn 0.3s ease-out;
-}
-
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
@@ -550,18 +541,185 @@ footer {
 }
 
 /* Responsive */
+@media (max-width: 1200px) {
+    .controller-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 @media (max-width: 768px) {
     .controller-grid {
         grid-template-columns: 1fr;
+        gap: 0.75rem;
     }
 
     .stat-card .stat-value {
         font-size: 1.25rem;
     }
+
+    /* Navbar: kompaktere Items */
+    .navbar-brand {
+        font-size: 1rem;
+    }
+
+    .nav-link {
+        padding: 0.6rem 0.75rem !important;
+        font-size: 0.85rem;
+    }
+
+    /* Groessere Touch-Targets */
+    .btn-sm {
+        min-height: 38px;
+        min-width: 38px;
+        padding: 0.4rem 0.6rem;
+    }
+
+    .form-select-sm, .form-control-sm {
+        min-height: 38px;
+        font-size: 0.9rem;
+    }
+
+    /* Session-Selector: Stacked auf Mobil */
+    .session-selector {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.5rem;
+    }
+
+    .session-selector .d-flex {
+        width: 100%;
+    }
+
+    .session-selector select {
+        min-width: 0 !important;
+        width: 100%;
+    }
+
+    /* Filter-Sektion: Stacked */
+    .filter-section .row {
+        gap: 0.5rem;
+    }
+
+    .filter-section .col-md-2 {
+        flex: 0 0 48%;
+        max-width: 48%;
+    }
+
+    /* Stat-Cards: 2-spaltig */
+    .stat-card .card-body {
+        padding: 0.65rem;
+    }
+
+    .stat-card .stat-label {
+        font-size: 0.7rem;
+    }
+
+    /* Container weniger Padding */
+    .container-fluid {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+    }
+
+    main.container-fluid {
+        padding-top: 0.75rem !important;
+        padding-bottom: 0.75rem !important;
+    }
+
+    /* Tabellen: kompakter */
+    .table {
+        font-size: 0.8rem;
+    }
+
+    .table thead th {
+        font-size: 0.65rem;
+        padding: 0.4rem 0.5rem;
+    }
+
+    .table tbody td {
+        padding: 0.35rem 0.5rem;
+    }
+
+    /* Sektoren auf Mobil ausblenden */
+    .table th:nth-child(n+7):nth-child(-n+9),
+    .table td:nth-child(n+7):nth-child(-n+9) {
+        display: none;
+    }
+
+    /* Controller Card kompakter */
+    .controller-card {
+        padding: 0.75rem;
+    }
+
+    .controller-card .driver-name {
+        font-size: 0.9rem;
+    }
+
+    .controller-card .best-time {
+        font-size: 0.85rem;
+    }
+
+    /* Kein Hover-Effekt auf Touch */
+    .card:hover {
+        transform: none;
+    }
+
+    /* Leaderboard: Auto-Spalte ausblenden */
+    .leaderboard-row td:nth-child(3),
+    .leaderboard-row th:nth-child(3) {
+        display: none;
+    }
+
+    /* Footer kompakter */
+    footer {
+        font-size: 0.7rem;
+        padding: 0.5rem 0 !important;
+    }
+
+    /* H2H VS-Spalte kleiner */
+    .display-6 {
+        font-size: 1.5rem !important;
+    }
+
+    /* Charts: niedrigere Hoehe */
+    canvas {
+        max-height: 220px !important;
+    }
 }
 
-@media (max-width: 1200px) {
+/* Kleine Smartphones */
+@media (max-width: 480px) {
     .controller-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr;
+    }
+
+    .stat-card .stat-value {
+        font-size: 1.1rem;
+    }
+
+    /* Stat Cards: weniger Spalten */
+    .stat-card .row .col-3 {
+        flex: 0 0 50%;
+        max-width: 50%;
+        margin-bottom: 0.25rem;
+    }
+
+    .session-selector h5 {
+        font-size: 1rem;
+    }
+
+    /* Navbar: Icons only auf sehr kleinen Screens */
+    .nav-link .me-1 {
+        margin-right: 0 !important;
+    }
+
+    /* Race-Status Badge verstecken */
+    .race-status-badge {
+        display: none;
+    }
+
+    /* Connection Badge kleiner */
+    #connectionBadge {
+        font-size: 0.6rem;
+        padding: 0.2rem 0.4rem;
     }
 }
