@@ -221,6 +221,11 @@ socket.on('new_data', () => {
     loadCarStats();
 });
 
+socket.on('track_record', () => {
+    loadDriverStats();
+    loadCarStats();
+});
+
 // Fallback
 setInterval(() => { loadDriverStats(); loadCarStats(); }, 30000);
 </script>

@@ -370,8 +370,16 @@ document.getElementById('analyticsSession').addEventListener('change', function(
     loadAnalytics();
 });
 
-document.getElementById('analyticsRefresh').addEventListener('click', () => {
-    Promise.all([loadAnalytics(), loadCarStats()]);
+document.getElementById('analyticsRefresh').addEventListener('click', async function() {
+    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    this.disabled = true;
+    try {
+        await Promise.all([loadAnalytics(), loadCarStats()]);
+    } catch (e) {
+        showToast('Fehler beim Aktualisieren', 'danger');
+    }
+    this.innerHTML = '<i class="fas fa-sync-alt"></i>';
+    this.disabled = false;
 });
 
 // WebSocket: Live-Updates
