@@ -9,6 +9,7 @@ import os
 import csv
 import io
 import re
+import math
 import logging
 
 # =============================================================================
@@ -131,6 +132,14 @@ class PersonalRecord(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class SessionName(db.Model):
+    __tablename__ = 'sr_session_names'
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.String(100), unique=True, index=True)
+    display_name = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 # =============================================================================
 # DB Init  (robust: erst versuchen, bei Fehler alles bereinigen)
 # =============================================================================
@@ -186,6 +195,31 @@ def fmt_ms(ms):
         return None
     s = ms / 1000
     return f"{int(s // 60)}:{s % 60:06.3f}"
+
+
+def _calc_stddev(times):
+    """Standardabweichung einer Liste von Zeiten berechnen."""
+    if len(times) < 2:
+        return 0
+    avg = sum(times) / len(times)
+    variance = sum((t - avg) ** 2 for t in times) / len(times)
+    return math.sqrt(variance)
+
+
+def _session_display_name(session_id, session_type=None):
+    """Lesbaren Session-Namen generieren oder gespeicherten zurueckgeben."""
+    sn = SessionName.query.filter_by(session_id=session_id).first()
+    if sn:
+        return sn.display_name
+    # Auto-generieren aus session_id Format "session_YYYYMMDD_HHMMSS"
+    try:
+        parts = session_id.replace('session_', '')
+        dt = datetime.strptime(parts, '%Y%m%d_%H%M%S')
+        date_str = dt.strftime('%d.%m.%Y %H:%M')
+        type_label = session_type or 'Training'
+        return f"{type_label} - {date_str}"
+    except Exception:
+        return session_id
 
 
 # Events die eine NEUE Session starten (neues Rennen / Training)
@@ -252,6 +286,10 @@ def page_results():
 @app.route('/session-compare')
 def page_session_compare():
     return render_template('session-compare.html')
+
+@app.route('/driver/<name>')
+def page_driver_profile(name):
+    return render_template('driver-profile.html', driver_name=name)
 
 
 # =============================================================================
@@ -559,6 +597,7 @@ def api_sessions():
         return jsonify([{
             'session_id': r.session_id,
             'session_type': r.session_type,
+            'display_name': _session_display_name(r.session_id, r.session_type),
             'total_laps': r.total_laps,
             'drivers': r.drivers,
             'start_time': r.start_time.isoformat() if r.start_time else None,
@@ -760,10 +799,28 @@ def api_driver_stats():
         ).group_by(Penalty.driver_name).all()
         penalty_map = {r.driver_name: r.cnt for r in penalty_rows}
 
+        # Konsistenz-Score: Stddev pro Fahrer berechnen
+        consistency_map = {}
+        for r in lap_rows:
+            times = [l.laptime_ms for l in Lap.query.filter(
+                Lap.driver_name == r.driver_name,
+                Lap.laptime_ms > 0,
+            ).with_entities(Lap.laptime_ms).all()]
+            stddev = _calc_stddev(times)
+            avg_val = sum(times) / len(times) if times else 0
+            if avg_val > 0 and len(times) >= 2:
+                consistency_map[r.driver_name] = {
+                    'score': round((1 - stddev / avg_val) * 100, 1),
+                    'stddev_ms': round(stddev),
+                }
+            else:
+                consistency_map[r.driver_name] = {'score': 0, 'stddev_ms': 0}
+
         drivers = []
         for r in lap_rows:
             rs = result_stats.get(r.driver_name, {'wins': 0, 'podiums': 0})
             avg = round(r.avg_time) if r.avg_time else 0
+            cons = consistency_map.get(r.driver_name, {'score': 0, 'stddev_ms': 0})
             drivers.append({
                 'driver_name': r.driver_name,
                 'total_laps': r.total_laps,
@@ -775,6 +832,8 @@ def api_driver_stats():
                 'wins': rs['wins'],
                 'podiums': rs['podiums'],
                 'penalties': penalty_map.get(r.driver_name, 0),
+                'consistency_score': cons['score'],
+                'stddev_ms': cons['stddev_ms'],
             })
 
         return jsonify(sorted(drivers, key=lambda d: d['best_time'] or 999999))
@@ -1163,7 +1222,12 @@ def api_backup():
                 'controller_id': r.controller_id,
                 'created_at': r.created_at.isoformat() if r.created_at else None,
                 'updated_at': r.updated_at.isoformat() if r.updated_at else None,
-            } for r in PersonalRecord.query.all()], ensure_ascii=False) + '\n'
+            } for r in PersonalRecord.query.all()], ensure_ascii=False) + ',\n'
+
+            yield '"session_names": ' + json.dumps([{
+                'session_id': s.session_id, 'display_name': s.display_name,
+                'created_at': s.created_at.isoformat() if s.created_at else None,
+            } for s in SessionName.query.all()], ensure_ascii=False) + '\n'
 
             yield '}'
 
@@ -1272,6 +1336,18 @@ def api_restore():
                     ))
             counts['personal_records'] = len(data['personal_records'])
 
+        if data.get('session_names'):
+            for s in data['session_names']:
+                existing = SessionName.query.filter_by(
+                    session_id=s.get('session_id')).first()
+                if not existing:
+                    db.session.add(SessionName(
+                        session_id=s.get('session_id'),
+                        display_name=s.get('display_name'),
+                        created_at=datetime.fromisoformat(s['created_at']) if s.get('created_at') else None,
+                    ))
+            counts['session_names'] = len(data['session_names'])
+
         db.session.commit()
         return jsonify({'status': 'ok', 'imported': counts})
     except Exception as e:
@@ -1359,6 +1435,131 @@ def api_session_compare():
         return jsonify(result)
     except Exception as e:
         log.error(f"session-compare: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/driver-profile')
+def api_driver_profile():
+    """Detailliertes Fahrerprofil mit Statistiken, Trend, Rekorden."""
+    try:
+        name = request.args.get('name', '')
+        if not name:
+            return jsonify({'error': 'Fahrername angeben'}), 400
+
+        laps = Lap.query.filter(
+            Lap.driver_name == name,
+            Lap.laptime_ms > 0,
+        ).order_by(Lap.created_at.asc()).all()
+
+        if not laps:
+            return jsonify({'error': 'Fahrer nicht gefunden'}), 404
+
+        times = [l.laptime_ms for l in laps]
+        sessions = list(set(l.session_id for l in laps))
+
+        # Meistgefahrenes Auto
+        cars = {}
+        for l in laps:
+            cars[l.car_name] = cars.get(l.car_name, 0) + 1
+        favorite_car = max(cars, key=cars.get) if cars else ''
+
+        # Siege / Podien
+        wins = RaceResult.query.filter(
+            RaceResult.driver_name == name,
+            RaceResult.position == 1,
+            RaceResult.retired == False,
+            RaceResult.disqualified == False,
+        ).count()
+        podiums = RaceResult.query.filter(
+            RaceResult.driver_name == name,
+            RaceResult.position.between(1, 3),
+            RaceResult.retired == False,
+            RaceResult.disqualified == False,
+        ).count()
+        penalties = Penalty.query.filter(Penalty.driver_name == name).count()
+
+        # Persoenlicher Rekord
+        pr = PersonalRecord.query.filter_by(driver_name=name).first()
+
+        # Konsistenz
+        stddev = _calc_stddev(times)
+        avg = sum(times) / len(times) if times else 0
+        consistency_pct = round((1 - stddev / avg) * 100, 1) if avg > 0 and len(times) >= 2 else 0
+
+        # Letzte 100 Runden fuer Trend-Chart
+        recent_laps = [{
+            'lap': l.lap_number,
+            'time': l.laptime_ms,
+            'session': l.session_id,
+            'car': l.car_name,
+        } for l in laps[-100:]]
+
+        # Session-Historie
+        session_stats = []
+        for sid in sorted(sessions, key=lambda s: s, reverse=True)[:20]:
+            s_laps = [l for l in laps if l.session_id == sid]
+            s_times = [l.laptime_ms for l in s_laps]
+            session_stats.append({
+                'session_id': sid,
+                'display_name': _session_display_name(sid),
+                'laps': len(s_laps),
+                'best_time': min(s_times),
+                'best_time_formatted': fmt_ms(min(s_times)),
+                'avg_time': round(sum(s_times) / len(s_times)),
+                'avg_time_formatted': fmt_ms(round(sum(s_times) / len(s_times))),
+                'stddev_ms': round(_calc_stddev(s_times)),
+            })
+
+        return jsonify({
+            'driver_name': name,
+            'total_laps': len(times),
+            'total_sessions': len(sessions),
+            'best_time': min(times),
+            'best_time_formatted': fmt_ms(min(times)),
+            'avg_time': round(avg),
+            'avg_time_formatted': fmt_ms(round(avg)),
+            'wins': wins,
+            'podiums': podiums,
+            'penalties': penalties,
+            'favorite_car': favorite_car,
+            'favorite_car_laps': cars.get(favorite_car, 0),
+            'consistency_score': consistency_pct,
+            'stddev_ms': round(stddev),
+            'personal_record': {
+                'laptime_ms': pr.laptime_ms,
+                'laptime_formatted': fmt_ms(pr.laptime_ms),
+                'car_name': pr.car_name,
+            } if pr else None,
+            'recent_laps': recent_laps,
+            'session_history': session_stats,
+            'cars': [{'name': k, 'laps': v} for k, v in sorted(
+                cars.items(), key=lambda x: -x[1])],
+        })
+    except Exception as e:
+        log.error(f"driver-profile: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/session-name', methods=['PUT'])
+def api_session_name():
+    """Session umbenennen."""
+    try:
+        data = request.get_json(silent=True) or {}
+        sid = data.get('session_id', '')
+        name = data.get('display_name', '').strip()
+        if not sid or not name:
+            return jsonify({'error': 'session_id und display_name angeben'}), 400
+
+        sn = SessionName.query.filter_by(session_id=sid).first()
+        if sn:
+            sn.display_name = name
+        else:
+            db.session.add(SessionName(session_id=sid, display_name=name))
+        db.session.commit()
+        return jsonify({'status': 'ok', 'session_id': sid, 'display_name': name})
+    except Exception as e:
+        db.session.rollback()
+        log.error(f"session-name: {e}")
         return jsonify({'error': str(e)}), 500
 
 

@@ -20,45 +20,45 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
+                <ul class="navbar-nav ms-auto flex-row flex-wrap justify-content-center gap-1">
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'page_dashboard' %}active{% endif %}" href="{{ url_for('page_dashboard') }}">
-                            <i class="fas fa-gauge-high me-1"></i> Dashboard
+                        <a class="nav-link {% if request.endpoint == 'page_dashboard' %}active{% endif %}" href="{{ url_for('page_dashboard') }}" title="Dashboard">
+                            <i class="fas fa-gauge-high me-1"></i><span class="d-none d-xl-inline">Dashboard</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'page_leaderboard' %}active{% endif %}" href="{{ url_for('page_leaderboard') }}">
-                            <i class="fas fa-trophy me-1"></i> Leaderboard
+                        <a class="nav-link {% if request.endpoint == 'page_leaderboard' %}active{% endif %}" href="{{ url_for('page_leaderboard') }}" title="Leaderboard">
+                            <i class="fas fa-trophy me-1"></i><span class="d-none d-xl-inline">Leaderboard</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'page_analytics' %}active{% endif %}" href="{{ url_for('page_analytics') }}">
-                            <i class="fas fa-chart-line me-1"></i> Analytics
+                        <a class="nav-link {% if request.endpoint == 'page_analytics' %}active{% endif %}" href="{{ url_for('page_analytics') }}" title="Analytics">
+                            <i class="fas fa-chart-line me-1"></i><span class="d-none d-xl-inline">Analytics</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'page_database' %}active{% endif %}" href="{{ url_for('page_database') }}">
-                            <i class="fas fa-database me-1"></i> Datenbank
+                        <a class="nav-link {% if request.endpoint == 'page_database' %}active{% endif %}" href="{{ url_for('page_database') }}" title="Datenbank">
+                            <i class="fas fa-database me-1"></i><span class="d-none d-xl-inline">Datenbank</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'page_stats' %}active{% endif %}" href="{{ url_for('page_stats') }}">
-                            <i class="fas fa-chart-column me-1"></i> Statistiken
+                        <a class="nav-link {% if request.endpoint == 'page_stats' or request.endpoint == 'page_driver_profile' %}active{% endif %}" href="{{ url_for('page_stats') }}" title="Statistiken">
+                            <i class="fas fa-chart-column me-1"></i><span class="d-none d-xl-inline">Statistiken</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'page_head_to_head' %}active{% endif %}" href="{{ url_for('page_head_to_head') }}">
-                            <i class="fas fa-people-arrows me-1"></i> H2H
+                        <a class="nav-link {% if request.endpoint == 'page_head_to_head' %}active{% endif %}" href="{{ url_for('page_head_to_head') }}" title="Head-to-Head">
+                            <i class="fas fa-people-arrows me-1"></i><span class="d-none d-xl-inline">H2H</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'page_results' %}active{% endif %}" href="{{ url_for('page_results') }}">
-                            <i class="fas fa-flag-checkered me-1"></i> Ergebnis
+                        <a class="nav-link {% if request.endpoint == 'page_results' %}active{% endif %}" href="{{ url_for('page_results') }}" title="Ergebnis">
+                            <i class="fas fa-flag-checkered me-1"></i><span class="d-none d-xl-inline">Ergebnis</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'page_session_compare' %}active{% endif %}" href="{{ url_for('page_session_compare') }}">
-                            <i class="fas fa-columns me-1"></i> Vergleich
+                        <a class="nav-link {% if request.endpoint == 'page_session_compare' %}active{% endif %}" href="{{ url_for('page_session_compare') }}" title="Vergleich">
+                            <i class="fas fa-columns me-1"></i><span class="d-none d-xl-inline">Vergleich</span>
                         </a>
                     </li>
                 </ul>

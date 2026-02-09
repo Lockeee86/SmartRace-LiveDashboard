@@ -49,6 +49,9 @@
                 <button class="btn btn-sm btn-success" onclick="exportCSV()" style="flex: 1;">
                     <i class="fas fa-download me-1"></i>CSV
                 </button>
+                <button class="btn btn-sm btn-outline-info" onclick="renameSession()" title="Session umbenennen">
+                    <i class="fas fa-pen"></i>
+                </button>
                 <button class="btn btn-sm btn-primary" onclick="downloadBackup()" title="JSON Backup">
                     <i class="fas fa-archive"></i>
                 </button>
@@ -143,10 +146,9 @@ async function loadSessions() {
         const sel = document.getElementById('sessionSelect');
         sel.innerHTML = '<option value="all">Alle Sessions</option>';
         sessions.forEach(s => {
-            const date = s.start_time ? new Date(s.start_time).toLocaleDateString('de-DE') : '';
             const opt = document.createElement('option');
             opt.value = s.session_id;
-            opt.textContent = `${s.session_type || 'Training'} - ${date} - ${s.total_laps} Runden`;
+            opt.textContent = `${s.display_name || s.session_id} (${s.total_laps} Runden)`;
             sel.appendChild(opt);
         });
         sel.value = currentSessionFilter;
@@ -424,6 +426,34 @@ async function restoreBackup(input) {
         showStatus('Fehler beim Lesen der Datei: ' + e.message, 'danger');
     }
     input.value = '';
+}
+
+// Session umbenennen
+async function renameSession() {
+    const sid = document.getElementById('sessionSelect').value;
+    if (!sid || sid === 'all') {
+        showToast('Bitte zuerst eine Session auswaehlen', 'warning');
+        return;
+    }
+    const currentName = document.getElementById('sessionSelect').selectedOptions[0].textContent;
+    const newName = prompt('Neuen Namen fuer die Session eingeben:', currentName.replace(/ \(\d+ Runden\)$/, ''));
+    if (!newName || !newName.trim()) return;
+
+    try {
+        const res = await fetch('/api/session-name', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sid, display_name: newName.trim() }),
+        });
+        if (res.ok) {
+            showToast('Session umbenannt', 'success');
+            await loadSessions();
+        } else {
+            showToast('Umbenennung fehlgeschlagen', 'danger');
+        }
+    } catch (e) {
+        showToast('Fehler: ' + e.message, 'danger');
+    }
 }
 
 // Keyboard Shortcuts

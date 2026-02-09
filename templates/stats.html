@@ -69,13 +69,14 @@
                         <th class="text-center">Runden</th>
                         <th class="text-center">Beste Zeit</th>
                         <th class="text-center">Durchschnitt</th>
+                        <th class="text-center">Konsistenz</th>
                         <th class="text-center">Siege</th>
                         <th class="text-center">Podien</th>
                         <th class="text-center">Strafen</th>
                     </tr>
                 </thead>
                 <tbody id="driverStatsBody">
-                    <tr><td colspan="9" class="text-center text-muted py-4">Lade Daten...</td></tr>
+                    <tr><td colspan="10" class="text-center text-muted py-4">Lade Daten...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -155,7 +156,7 @@ function renderDriverStats(drivers) {
     // Tabelle
     const tbody = document.getElementById('driverStatsBody');
     if (drivers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Keine Fahrerdaten vorhanden</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">Keine Fahrerdaten vorhanden</td></tr>';
         return;
     }
 
@@ -163,14 +164,24 @@ function renderDriverStats(drivers) {
         const winsHtml = d.wins > 0 ? `<span class="text-warning fw-bold">${d.wins}</span>` : '<span class="text-muted">0</span>';
         const podiumsHtml = d.podiums > 0 ? `<span class="text-info fw-bold">${d.podiums}</span>` : '<span class="text-muted">0</span>';
         const penaltiesHtml = d.penalties > 0 ? `<span class="text-danger fw-bold">${d.penalties}</span>` : '<span class="text-muted">0</span>';
+        const conScore = d.consistency_score || 0;
+        const conCls = conScore > 90 ? 'bg-success' : conScore > 80 ? 'bg-warning' : 'bg-danger';
 
         return `<tr>
             <td class="text-muted">${i + 1}</td>
-            <td class="fw-bold">${d.driver_name}</td>
+            <td class="fw-bold"><a href="/driver/${encodeURIComponent(d.driver_name)}" class="text-decoration-none" style="color: inherit;">${d.driver_name} <i class="fas fa-external-link-alt ms-1" style="font-size: 0.6rem; opacity: 0.5;"></i></a></td>
             <td class="text-center">${d.total_sessions}</td>
             <td class="text-center">${d.total_laps}</td>
             <td class="text-center font-mono fw-bold">${d.best_time_formatted}</td>
             <td class="text-center font-mono">${d.avg_time_formatted}</td>
+            <td class="text-center">
+                <div class="d-flex align-items-center justify-content-center gap-2">
+                    <div class="progress" style="width: 60px; height: 5px;">
+                        <div class="progress-bar ${conCls}" style="width: ${conScore}%"></div>
+                    </div>
+                    <small>${conScore}%</small>
+                </div>
+            </td>
             <td class="text-center">${winsHtml}</td>
             <td class="text-center">${podiumsHtml}</td>
             <td class="text-center">${penaltiesHtml}</td>
