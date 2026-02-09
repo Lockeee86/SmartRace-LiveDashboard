@@ -211,12 +211,28 @@ def _session_display_name(session_id, session_type=None):
     sn = SessionName.query.filter_by(session_id=session_id).first()
     if sn:
         return sn.display_name
+    # Typ ermitteln: uebergebener Wert, oder aus RaceStatus/Laps der Session
+    type_label = session_type
+    if not type_label:
+        rs = RaceStatus.query.filter_by(session_id=session_id).order_by(
+            RaceStatus.id.desc()).first()
+        if rs and rs.race_type:
+            type_label = rs.race_type
+    if not type_label:
+        lap = Lap.query.filter(
+            Lap.session_id == session_id,
+            Lap.session_type.isnot(None),
+            Lap.session_type != '',
+            Lap.session_type != 'Training',
+        ).first()
+        if lap:
+            type_label = lap.session_type
+    type_label = type_label or 'Training'
     # Auto-generieren aus session_id Format "session_YYYYMMDD_HHMMSS"
     try:
         parts = session_id.replace('session_', '')
         dt = datetime.strptime(parts, '%Y%m%d_%H%M%S')
         date_str = dt.strftime('%d.%m.%Y %H:%M')
-        type_label = session_type or 'Training'
         return f"{type_label} - {date_str}"
     except Exception:
         return session_id
@@ -244,10 +260,21 @@ def _get_session_id(etype):
 
 
 def _get_current_race_type():
-    """Aktuellen Renntyp aus letztem Status-Event ermitteln."""
+    """Aktuellen Renntyp aus letztem Status-Event oder Race-Result ermitteln."""
     rs = RaceStatus.query.order_by(RaceStatus.id.desc()).first()
     if rs and rs.race_type:
         return rs.race_type
+    # Fallback: letztes race_result Event in raw_json pruefen
+    evt = Event.query.filter_by(event_type='ui.race_result').order_by(
+        Event.id.desc()).first()
+    if evt and evt.raw_json:
+        try:
+            ed = json.loads(evt.raw_json).get('event_data', {})
+            rt = ed.get('type') or ed.get('race_type') or ''
+            if rt:
+                return rt
+        except Exception:
+            pass
     return 'Training'
 
 
@@ -340,11 +367,19 @@ def receive_smartrace():
         })
 
         if etype == 'ui.status_change':
+            race_type_ws = _get_current_race_type()
             socketio.emit('race_status', {
                 'session_id': sid,
                 'status': ed.get('status') or ed.get('new_status') or 'unknown',
-                'race_type': (ed.get('type') or ed.get('race_type')
-                              or ed.get('mode') or ''),
+                'race_type': race_type_ws if race_type_ws != 'Training' else '',
+            })
+
+        if etype == 'ui.race_result':
+            result_type = (ed.get('type') or ed.get('race_type') or '')
+            socketio.emit('race_status', {
+                'session_id': sid,
+                'status': 'ended',
+                'race_type': result_type,
             })
 
         if etype == 'ui.penalty':
@@ -423,6 +458,21 @@ def _save_lap(sid, ed):
 
 
 def _save_result(sid, ed):
+    # Race-Type aus dem Result-Event extrahieren und in RaceStatus speichern
+    race_type = (ed.get('type') or ed.get('race_type') or '').strip()
+    if race_type:
+        rs = RaceStatus.query.filter_by(session_id=sid).order_by(
+            RaceStatus.id.desc()).first()
+        if rs:
+            rs.race_type = race_type
+        else:
+            db.session.add(RaceStatus(
+                session_id=sid, status='ended', race_type=race_type,
+            ))
+        # Auch bestehende Laps dieser Session aktualisieren
+        Lap.query.filter_by(session_id=sid).update(
+            {'session_type': race_type}, synchronize_session=False)
+
     for pos, r in (ed.get('result') or {}).items():
         db.session.add(RaceResult(
             session_id=sid,
