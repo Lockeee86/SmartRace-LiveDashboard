@@ -239,13 +239,13 @@ def _session_display_name(session_id, session_type=None):
 
 
 # Events die eine NEUE Session starten (neues Rennen / Training)
-_NEW_SESSION_EVENTS = {'ui.reset', 'ui.status_change'}
+_NEW_SESSION_EVENTS = {'ui.reset', 'event.change_status'}
 
 
 def _get_session_id(etype):
     """Session-ID ermitteln.
 
-    Neue Session bei ui.reset / ui.status_change.
+    Neue Session bei ui.reset / event.change_status.
     Alle anderen Events (lap_update, penalty, car_removed, race_result)
     gehoeren zur aktuellen Session.
     """
@@ -264,8 +264,8 @@ def _get_current_race_type():
     rs = RaceStatus.query.order_by(RaceStatus.id.desc()).first()
     if rs and rs.race_type:
         return rs.race_type
-    # Fallback: letztes race_result Event in raw_json pruefen
-    evt = Event.query.filter_by(event_type='ui.race_result').order_by(
+    # Fallback: letztes event.end Event in raw_json pruefen
+    evt = Event.query.filter_by(event_type='event.end').order_by(
         Event.id.desc()).first()
     if evt and evt.raw_json:
         try:
@@ -351,9 +351,9 @@ def receive_smartrace():
 
         if etype == 'ui.lap_update':
             _save_lap(sid, ed)
-        elif etype == 'ui.race_result':
+        elif etype == 'event.end':
             _save_result(sid, ed)
-        elif etype == 'ui.status_change':
+        elif etype == 'event.change_status':
             _save_status(sid, ed)
         elif etype == 'ui.penalty':
             _save_penalty(sid, ed)
@@ -369,15 +369,15 @@ def receive_smartrace():
             'session_id': sid,
         })
 
-        if etype == 'ui.status_change':
+        if etype == 'event.change_status':
             race_type_ws = _get_current_race_type()
             socketio.emit('race_status', {
                 'session_id': sid,
-                'status': ed.get('status') or ed.get('new_status') or 'unknown',
+                'status': ed.get('new') or ed.get('status') or 'unknown',
                 'race_type': race_type_ws if race_type_ws != 'Training' else '',
             })
 
-        if etype == 'ui.race_result':
+        if etype == 'event.end':
             result_type = (ed.get('type') or ed.get('race_type') or '')
             socketio.emit('race_status', {
                 'session_id': sid,
@@ -531,7 +531,8 @@ def _save_result(sid, ed):
 
 
 def _save_status(sid, ed):
-    status = (ed.get('status') or ed.get('new_status')
+    # SmartRace sendet: {"new": "running", "old": "starting"}
+    status = (ed.get('new') or ed.get('status') or ed.get('new_status')
               or ed.get('state') or 'unknown')
     race_type = (ed.get('type') or ed.get('race_type')
                  or ed.get('mode') or ed.get('session_type') or '')
