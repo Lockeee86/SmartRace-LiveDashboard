@@ -1,9 +1,9 @@
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO
 from flask_cors import CORS
-from sqlalchemy import func, text
-from datetime import datetime
+from sqlalchemy import func, text, Index
+from datetime import datetime, timedelta
 import json
 import os
 import csv
@@ -22,6 +22,12 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv(
     'DATABASE_URL', 'sqlite:///smartrace.db'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': 5,
+    'max_overflow': 10,
+    'pool_recycle': 300,
+    'pool_pre_ping': True,
+}
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'sr-dashboard-secret')
 
 db = SQLAlchemy(app)
@@ -44,6 +50,12 @@ class Event(db.Model):
 
 class Lap(db.Model):
     __tablename__ = 'sr_laps'
+    __table_args__ = (
+        Index('ix_sr_laps_session_controller', 'session_id', 'controller_id'),
+        Index('ix_sr_laps_driver_name', 'driver_name'),
+        Index('ix_sr_laps_car_name', 'car_name'),
+        Index('ix_sr_laps_session_created', 'session_id', 'created_at'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.String(100), index=True)
     session_type = db.Column(db.String(50))
@@ -420,6 +432,16 @@ def api_live_data():
         sid = request.args.get('session_id')
         if sid and sid != 'all':
             q = q.filter(Lap.session_id == sid)
+        else:
+            # Ohne explizite Session: nur letzte Session laden (Performance)
+            latest_event = db.session.query(Event.session_id).order_by(
+                Event.id.desc()).first()
+            if latest_event and latest_event.session_id:
+                q = q.filter(Lap.session_id == latest_event.session_id)
+            else:
+                # Fallback: letzte 2 Stunden
+                cutoff = datetime.utcnow() - timedelta(hours=2)
+                q = q.filter(Lap.created_at >= cutoff)
 
         laps = q.order_by(Lap.created_at.desc()).all()
         if not laps:
@@ -575,35 +597,49 @@ def api_laps():
 
 @app.route('/api/analytics')
 def api_analytics():
-    """Aggregierte Daten fuer Charts."""
+    """Aggregierte Daten fuer Charts (SQL-Aggregation)."""
     try:
-        q = Lap.query
         sid = request.args.get('session_id')
+
+        # 1. Aggregierte Stats per SQL (schnell, auch bei 500K+ Rows)
+        q = db.session.query(
+            Lap.driver_name,
+            func.count(Lap.id).label('total_laps'),
+            func.min(Lap.laptime_ms).label('best_time'),
+            func.avg(Lap.laptime_ms).label('avg_time'),
+        ).filter(Lap.laptime_ms > 0, Lap.driver_name.isnot(None))
+
         if sid and sid != 'all':
             q = q.filter(Lap.session_id == sid)
 
-        stats = {}
-        for lap in q.all():
-            name = lap.driver_name or f"Fahrer {lap.controller_id}"
-            if name not in stats:
-                stats[name] = {'laps': [], 'best': None, 'count': 0}
+        agg = {r.driver_name: {
+            'total_laps': r.total_laps,
+            'best_time': r.best_time or 0,
+            'avg_time': round(r.avg_time) if r.avg_time else 0,
+        } for r in q.group_by(Lap.driver_name).all()}
 
-            if lap.laptime_ms and lap.laptime_ms > 0:
-                stats[name]['laps'].append(lap.laptime_ms)
-                stats[name]['count'] += 1
-                b = stats[name]['best']
-                if b is None or lap.laptime_ms < b:
-                    stats[name]['best'] = lap.laptime_ms
+        # 2. Letzte 50 Rundenzeiten pro Fahrer (fuer Chart)
+        result = {}
+        for name, s in agg.items():
+            lap_q = Lap.query.filter(
+                Lap.driver_name == name,
+                Lap.laptime_ms > 0,
+            )
+            if sid and sid != 'all':
+                lap_q = lap_q.filter(Lap.session_id == sid)
 
-        return jsonify({
-            name: {
-                'avg_time': round(sum(s['laps']) / len(s['laps'])),
-                'best_time': s['best'] or 0,
-                'total_laps': s['count'],
-                'laps': s['laps'][:50],
+            recent = lap_q.order_by(Lap.created_at.desc()).limit(50).all()
+            # Umkehren fuer chronologische Reihenfolge
+            laps_list = [l.laptime_ms for l in reversed(recent)]
+
+            result[name] = {
+                'avg_time': s['avg_time'],
+                'best_time': s['best_time'],
+                'total_laps': s['total_laps'],
+                'laps': laps_list,
             }
-            for name, s in stats.items() if s['laps']
-        })
+
+        return jsonify(result)
     except Exception as e:
         log.error(f"analytics: {e}")
         return jsonify({})
@@ -927,41 +963,53 @@ def api_head_to_head():
         if not d1 or not d2:
             return jsonify({'error': 'Zwei Fahrer angeben'}), 400
 
+        # Beide Fahrer in einem Query laden (statt N+1)
+        q = Lap.query.filter(
+            Lap.driver_name.in_([d1, d2]),
+            Lap.laptime_ms > 0,
+        )
+        if sid and sid != 'all':
+            q = q.filter(Lap.session_id == sid)
+
+        all_laps = q.order_by(Lap.lap_number.asc()).all()
+
+        # Nach Fahrer gruppieren
+        laps_by_driver = {d1: [], d2: []}
+        for lap in all_laps:
+            if lap.driver_name in laps_by_driver:
+                laps_by_driver[lap.driver_name].append(lap)
+
+        # Bestzeiten pro Fahrer pro Session (fuer Siege)
+        bests = {}  # {(driver, session): best_time}
+        for lap in all_laps:
+            key = (lap.driver_name, lap.session_id)
+            if key not in bests or lap.laptime_ms < bests[key]:
+                bests[key] = lap.laptime_ms
+
+        # Penalties fuer beide Fahrer in einem Query
+        penalty_counts = {}
+        for row in db.session.query(
+            Penalty.driver_name,
+            func.count(Penalty.id).label('cnt'),
+        ).filter(
+            Penalty.driver_name.in_([d1, d2])
+        ).group_by(Penalty.driver_name).all():
+            penalty_counts[row.driver_name] = row.cnt
+
         result = {}
         for name in [d1, d2]:
-            q = Lap.query.filter(
-                Lap.driver_name == name,
-                Lap.laptime_ms > 0,
-            )
-            if sid and sid != 'all':
-                q = q.filter(Lap.session_id == sid)
-
-            laps = q.order_by(Lap.lap_number.asc()).all()
-            times = [l.laptime_ms for l in laps if l.laptime_ms and l.laptime_ms > 0]
-
-            # Siege gegeneinander (gleiche Session)
-            wins = 0
+            laps = laps_by_driver[name]
+            times = [l.laptime_ms for l in laps]
             sessions = set(l.session_id for l in laps)
+
+            # Siege: Sessions wo dieser Fahrer schneller war
+            opp = d2 if name == d1 else d1
+            wins = 0
             for s in sessions:
-                my_best = min(
-                    (l.laptime_ms for l in laps
-                     if l.session_id == s and l.laptime_ms and l.laptime_ms > 0),
-                    default=None,
-                )
-                opp_name = d2 if name == d1 else d1
-                opp_best_q = Lap.query.filter(
-                    Lap.driver_name == opp_name,
-                    Lap.session_id == s,
-                    Lap.laptime_ms > 0,
-                )
-                opp_best = min(
-                    (l.laptime_ms for l in opp_best_q.all()),
-                    default=None,
-                )
+                my_best = bests.get((name, s))
+                opp_best = bests.get((opp, s))
                 if my_best and opp_best and my_best < opp_best:
                     wins += 1
-
-            penalty_cnt = Penalty.query.filter(Penalty.driver_name == name).count()
 
             result[name] = {
                 'driver_name': name,
@@ -972,7 +1020,7 @@ def api_head_to_head():
                 'avg_time_formatted': fmt_ms(round(sum(times) / len(times))) if times else '--',
                 'total_sessions': len(sessions),
                 'wins': wins,
-                'penalties': penalty_cnt,
+                'penalties': penalty_counts.get(name, 0),
                 'lap_times': [
                     {
                         'lap': l.lap_number,
@@ -992,72 +1040,93 @@ def api_head_to_head():
 
 @app.route('/api/backup')
 def api_backup():
-    """Komplettes Datenbank-Backup als JSON."""
+    """Komplettes Datenbank-Backup als JSON (Streaming fuer grosse Datenmengen)."""
     try:
-        backup = {
-            'version': 1,
-            'created_at': datetime.utcnow().isoformat(),
-            'laps': [],
-            'events': [],
-            'results': [],
-            'penalties': [],
-            'race_status': [],
-            'track_records': [],
-        }
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        batch_size = 500  # Rows pro Batch um RAM zu schonen
 
-        for l in Lap.query.all():
-            backup['laps'].append({
-                'session_id': l.session_id, 'session_type': l.session_type,
-                'controller_id': l.controller_id, 'driver_name': l.driver_name,
-                'car_name': l.car_name, 'lap_number': l.lap_number,
-                'laptime_ms': l.laptime_ms, 'laptime_display': l.laptime_display,
-                'sector_1': l.sector_1, 'sector_2': l.sector_2, 'sector_3': l.sector_3,
-                'car_color': l.car_color, 'controller_color': l.controller_color,
-                'is_personal_best': l.is_personal_best,
-                'created_at': l.created_at.isoformat() if l.created_at else None,
-            })
+        def generate():
+            yield '{\n"version": 1,\n'
+            yield f'"created_at": "{datetime.utcnow().isoformat()}",\n'
 
-        for e in Event.query.all():
-            backup['events'].append({
-                'session_id': e.session_id, 'event_type': e.event_type,
-                'raw_json': e.raw_json,
-                'created_at': e.created_at.isoformat() if e.created_at else None,
-            })
+            # Laps (groesste Tabelle - in Batches streamen)
+            yield '"laps": [\n'
+            first = True
+            offset = 0
+            while True:
+                batch = Lap.query.order_by(Lap.id).offset(offset).limit(batch_size).all()
+                if not batch:
+                    break
+                for l in batch:
+                    row = json.dumps({
+                        'session_id': l.session_id, 'session_type': l.session_type,
+                        'controller_id': l.controller_id, 'driver_name': l.driver_name,
+                        'car_name': l.car_name, 'lap_number': l.lap_number,
+                        'laptime_ms': l.laptime_ms, 'laptime_display': l.laptime_display,
+                        'sector_1': l.sector_1, 'sector_2': l.sector_2,
+                        'sector_3': l.sector_3, 'car_color': l.car_color,
+                        'controller_color': l.controller_color,
+                        'is_personal_best': l.is_personal_best,
+                        'created_at': l.created_at.isoformat() if l.created_at else None,
+                    }, ensure_ascii=False)
+                    yield ('  ' if first else ',\n  ') + row
+                    first = False
+                offset += batch_size
+                db.session.expire_all()  # RAM freigeben
+            yield '\n],\n'
 
-        for r in RaceResult.query.all():
-            backup['results'].append({
+            # Events (auch gross - in Batches)
+            yield '"events": [\n'
+            first = True
+            offset = 0
+            while True:
+                batch = Event.query.order_by(Event.id).offset(offset).limit(batch_size).all()
+                if not batch:
+                    break
+                for e in batch:
+                    row = json.dumps({
+                        'session_id': e.session_id, 'event_type': e.event_type,
+                        'raw_json': e.raw_json,
+                        'created_at': e.created_at.isoformat() if e.created_at else None,
+                    }, ensure_ascii=False)
+                    yield ('  ' if first else ',\n  ') + row
+                    first = False
+                offset += batch_size
+                db.session.expire_all()
+            yield '\n],\n'
+
+            # Kleinere Tabellen direkt
+            yield '"results": ' + json.dumps([{
                 'session_id': r.session_id, 'position': r.position,
                 'controller_id': r.controller_id, 'driver_name': r.driver_name,
                 'total_laps': r.total_laps, 'best_laptime_ms': r.best_laptime_ms,
                 'gap': r.gap, 'disqualified': r.disqualified, 'retired': r.retired,
                 'created_at': r.created_at.isoformat() if r.created_at else None,
-            })
+            } for r in RaceResult.query.all()], ensure_ascii=False) + ',\n'
 
-        for p in Penalty.query.all():
-            backup['penalties'].append({
+            yield '"penalties": ' + json.dumps([{
                 'session_id': p.session_id, 'controller_id': p.controller_id,
                 'driver_name': p.driver_name, 'penalty_type': p.penalty_type,
                 'created_at': p.created_at.isoformat() if p.created_at else None,
-            })
+            } for p in Penalty.query.all()], ensure_ascii=False) + ',\n'
 
-        for s in RaceStatus.query.all():
-            backup['race_status'].append({
+            yield '"race_status": ' + json.dumps([{
                 'session_id': s.session_id, 'status': s.status,
                 'race_type': s.race_type,
                 'updated_at': s.updated_at.isoformat() if s.updated_at else None,
-            })
+            } for s in RaceStatus.query.all()], ensure_ascii=False) + ',\n'
 
-        for t in TrackRecord.query.all():
-            backup['track_records'].append({
+            yield '"track_records": ' + json.dumps([{
                 'laptime_ms': t.laptime_ms, 'driver_name': t.driver_name,
                 'car_name': t.car_name, 'session_id': t.session_id,
                 'controller_id': t.controller_id,
                 'created_at': t.created_at.isoformat() if t.created_at else None,
-            })
+            } for t in TrackRecord.query.all()], ensure_ascii=False) + '\n'
 
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            yield '}'
+
         return Response(
-            json.dumps(backup, ensure_ascii=False, indent=2),
+            stream_with_context(generate()),
             mimetype='application/json',
             headers={'Content-Disposition': f'attachment; filename=smartrace_backup_{ts}.json'},
         )
@@ -1146,6 +1215,54 @@ def api_restore():
         db.session.rollback()
         log.error(f"restore: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/cleanup', methods=['POST'])
+def api_cleanup():
+    """Alte Events bereinigen. Behaelt nur Events der letzten X Tage."""
+    try:
+        days = int(request.args.get('days', 90))
+        cutoff = datetime.utcnow() - timedelta(days=days)
+
+        # Nur sr_events bereinigen (raw JSON, groesste Tabelle)
+        deleted = Event.query.filter(Event.created_at < cutoff).delete()
+        db.session.commit()
+
+        return jsonify({
+            'status': 'ok',
+            'deleted_events': deleted,
+            'cutoff_date': cutoff.isoformat(),
+        })
+    except Exception as e:
+        db.session.rollback()
+        log.error(f"cleanup: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/db-stats')
+def api_db_stats():
+    """Datenbank-Statistiken fuer Monitoring."""
+    try:
+        stats = {
+            'laps': Lap.query.count(),
+            'events': Event.query.count(),
+            'results': RaceResult.query.count(),
+            'penalties': Penalty.query.count(),
+            'track_records': TrackRecord.query.count(),
+            'sessions': db.session.query(
+                func.count(func.distinct(Lap.session_id))).scalar(),
+        }
+
+        # Aeltester und neuester Eintrag
+        oldest = Lap.query.order_by(Lap.created_at.asc()).first()
+        newest = Lap.query.order_by(Lap.created_at.desc()).first()
+        stats['oldest_lap'] = oldest.created_at.isoformat() if oldest and oldest.created_at else None
+        stats['newest_lap'] = newest.created_at.isoformat() if newest and newest.created_at else None
+
+        return jsonify(stats)
+    except Exception as e:
+        log.error(f"db-stats: {e}")
+        return jsonify({})
 
 
 @app.route('/api/laps/count')
