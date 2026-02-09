@@ -346,6 +346,9 @@ def receive_smartrace():
             session_id=sid, event_type=etype, raw_json=json.dumps(data),
         ))
 
+        # Race-Type aus JEDEM Event extrahieren wenn vorhanden
+        _extract_race_type(sid, ed)
+
         if etype == 'ui.lap_update':
             _save_lap(sid, ed)
         elif etype == 'ui.race_result':
@@ -395,6 +398,46 @@ def receive_smartrace():
         db.session.rollback()
         log.error(f"SmartRace-Fehler: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+def _extract_race_type(sid, ed):
+    """Race-Type aus beliebigem Event extrahieren und speichern.
+
+    SmartRace kann den Typ in verschiedenen Feldern senden.
+    Wir durchsuchen alle bekannten Felder in event_data.
+    """
+    # Alle moeglichen Feldnamen fuer den Race-Type durchprobieren
+    race_type = ''
+    for field in ('type', 'race_type', 'mode', 'session_type', 'event_type_name'):
+        val = ed.get(field, '')
+        if val and isinstance(val, str) and val.lower() in (
+            'race', 'qualifying', 'practice', 'free_practice',
+            'rennen', 'qualifikation', 'training',
+        ):
+            race_type = val
+            break
+
+    if not race_type:
+        return
+
+    # In RaceStatus speichern/aktualisieren
+    rs = RaceStatus.query.filter_by(session_id=sid).order_by(
+        RaceStatus.id.desc()).first()
+    if rs:
+        if not rs.race_type or rs.race_type == 'Training':
+            rs.race_type = race_type
+    else:
+        db.session.add(RaceStatus(
+            session_id=sid, status='unknown', race_type=race_type,
+        ))
+    # Laps dieser Session aktualisieren
+    Lap.query.filter(
+        Lap.session_id == sid,
+        db.or_(Lap.session_type.is_(None), Lap.session_type == '',
+               Lap.session_type == 'Training'),
+    ).update({'session_type': race_type}, synchronize_session=False)
+
+    log.info(f"Race-Type erkannt: {race_type} fuer Session {sid}")
 
 
 def _save_lap(sid, ed):
@@ -1632,6 +1675,37 @@ def api_cleanup():
     except Exception as e:
         db.session.rollback()
         log.error(f"cleanup: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/debug/events')
+def api_debug_events():
+    """Letzte rohe Events anzeigen - zum Debuggen der SmartRace-Daten."""
+    try:
+        limit = min(int(request.args.get('limit', 20)), 100)
+        etype = request.args.get('type', '')
+        q = Event.query.order_by(Event.id.desc())
+        if etype:
+            q = q.filter(Event.event_type == etype)
+        events = q.limit(limit).all()
+        result = []
+        for e in events:
+            raw = {}
+            try:
+                raw = json.loads(e.raw_json) if e.raw_json else {}
+            except Exception:
+                raw = {'_raw': e.raw_json}
+            result.append({
+                'id': e.id,
+                'session_id': e.session_id,
+                'event_type': e.event_type,
+                'timestamp': e.timestamp.isoformat() if e.timestamp else None,
+                'event_data': raw.get('event_data', {}),
+                'raw_keys': list(raw.keys()),
+            })
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"debug-events: {e}")
         return jsonify({'error': str(e)}), 500
 
 
