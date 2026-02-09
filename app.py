@@ -704,7 +704,7 @@ def api_sessions():
 
 @app.route('/api/laps')
 def api_laps():
-    """Rundenzeiten mit Filtern."""
+    """Rundenzeiten mit Filtern und Pagination."""
     try:
         q = Lap.query
 
@@ -737,29 +737,71 @@ def api_laps():
             except ValueError:
                 pass
 
-        laps = q.order_by(Lap.created_at.desc()).limit(2000).all()
+        # Sortierung
+        sort_col = request.args.get('sort', 'created_at')
+        sort_dir = request.args.get('dir', 'desc')
+        sort_map = {
+            'session_id': Lap.session_id,
+            'session_type': Lap.session_type,
+            'driver_name': Lap.driver_name,
+            'car_name': Lap.car_name,
+            'lap': Lap.lap_number,
+            'laptime_raw': Lap.laptime_ms,
+            'timestamp': Lap.created_at,
+            'created_at': Lap.created_at,
+        }
+        col = sort_map.get(sort_col, Lap.created_at)
+        q = q.order_by(col.asc() if sort_dir == 'asc' else col.desc())
 
-        return jsonify([{
-            'id': l.id,
-            'session_id': l.session_id,
-            'session_type': l.session_type,
-            'controller_id': l.controller_id,
-            'driver_name': l.driver_name,
-            'car_name': l.car_name,
-            'lap': l.lap_number,
-            'laptime_raw': l.laptime_ms,
-            'laptime_formatted': l.laptime_display or fmt_ms(l.laptime_ms) or '--:--.---',
-            'sector_1': l.sector_1,
-            'sector_2': l.sector_2,
-            'sector_3': l.sector_3,
-            'car_color': l.car_color,
-            'controller_color': l.controller_color,
-            'is_pb': l.is_personal_best,
-            'timestamp': l.created_at.isoformat() if l.created_at else None,
-        } for l in laps])
+        # Pagination
+        page = max(1, int(request.args.get('page', 1)))
+        per_page = min(200, max(10, int(request.args.get('per_page', 50))))
+        total = q.count()
+        laps = q.offset((page - 1) * per_page).limit(per_page).all()
+
+        return jsonify({
+            'data': [{
+                'id': l.id,
+                'session_id': l.session_id,
+                'session_type': l.session_type,
+                'controller_id': l.controller_id,
+                'driver_name': l.driver_name,
+                'car_name': l.car_name,
+                'lap': l.lap_number,
+                'laptime_raw': l.laptime_ms,
+                'laptime_formatted': l.laptime_display or fmt_ms(l.laptime_ms) or '--:--.---',
+                'sector_1': l.sector_1,
+                'sector_2': l.sector_2,
+                'sector_3': l.sector_3,
+                'car_color': l.car_color,
+                'controller_color': l.controller_color,
+                'is_pb': l.is_personal_best,
+                'timestamp': l.created_at.isoformat() if l.created_at else None,
+            } for l in laps],
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'pages': max(1, (total + per_page - 1) // per_page),
+        })
     except Exception as e:
         log.error(f"laps: {e}")
-        return jsonify([])
+        return jsonify({'data': [], 'total': 0, 'page': 1, 'per_page': 50, 'pages': 1})
+
+
+@app.route('/api/laps/<int:lap_id>', methods=['DELETE'])
+def api_delete_lap(lap_id):
+    """Einzelne Runde loeschen."""
+    try:
+        lap = Lap.query.get(lap_id)
+        if not lap:
+            return jsonify({'error': 'Runde nicht gefunden'}), 404
+        db.session.delete(lap)
+        db.session.commit()
+        return jsonify({'status': 'ok', 'deleted_id': lap_id})
+    except Exception as e:
+        db.session.rollback()
+        log.error(f"delete-lap: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/analytics')
