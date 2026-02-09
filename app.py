@@ -1699,7 +1699,7 @@ def api_debug_events():
                 'id': e.id,
                 'session_id': e.session_id,
                 'event_type': e.event_type,
-                'timestamp': e.timestamp.isoformat() if e.timestamp else None,
+                'timestamp': e.created_at.isoformat() if e.created_at else None,
                 'event_data': raw.get('event_data', {}),
                 'raw_keys': list(raw.keys()),
             })
