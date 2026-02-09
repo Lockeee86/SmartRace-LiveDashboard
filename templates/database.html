@@ -40,14 +40,21 @@
             <input type="date" id="dateTo" class="form-control form-control-sm">
         </div>
         <div class="col-md-2">
-            <button class="btn btn-sm btn-outline-secondary w-100" onclick="clearFilters()">
-                <i class="fas fa-times me-1"></i>Filter Reset
-            </button>
+            <label class="form-label small text-muted mb-1">Pro Seite</label>
+            <select id="perPageSelect" class="form-select form-select-sm">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+            </select>
         </div>
         <div class="col-md-2">
             <div class="btn-group w-100">
-                <button class="btn btn-sm btn-success" onclick="exportCSV()" style="flex: 1;">
-                    <i class="fas fa-download me-1"></i>CSV
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearFilters()" title="Filter Reset" style="flex: 1;">
+                    <i class="fas fa-times me-1"></i>Reset
+                </button>
+                <button class="btn btn-sm btn-success" onclick="exportCSV()" title="CSV Export">
+                    <i class="fas fa-download"></i>
                 </button>
                 <button class="btn btn-sm btn-outline-info" onclick="renameSession()" title="Session umbenennen">
                     <i class="fas fa-pen"></i>
@@ -115,18 +122,46 @@
                         <th class="sortable" data-col="driver_name">Fahrer <i class="fas fa-sort sort-icon"></i></th>
                         <th class="sortable" data-col="car_name">Auto <i class="fas fa-sort sort-icon"></i></th>
                         <th class="sortable text-center" data-col="lap">Runde <i class="fas fa-sort sort-icon"></i></th>
-                        <th class="sortable text-center" data-col="laptime_formatted">Rundenzeit <i class="fas fa-sort sort-icon"></i></th>
-                        <th class="text-center">S1</th>
-                        <th class="text-center">S2</th>
-                        <th class="text-center">S3</th>
+                        <th class="sortable text-center" data-col="laptime_raw">Rundenzeit <i class="fas fa-sort sort-icon"></i></th>
+                        <th class="text-center">Delta</th>
+                        <th class="text-center d-none d-lg-table-cell">S1</th>
+                        <th class="text-center d-none d-lg-table-cell">S2</th>
+                        <th class="text-center d-none d-lg-table-cell">S3</th>
                         <th class="sortable text-center" data-col="timestamp">Zeitstempel <i class="fas fa-sort sort-icon"></i></th>
                         <th class="text-center" style="width: 40px;">PB</th>
+                        <th class="text-center" style="width: 40px;"></th>
                     </tr>
                 </thead>
                 <tbody id="dataBody">
-                    <tr><td colspan="11" class="text-center text-muted py-4">Lade Daten...</td></tr>
+                    <tr><td colspan="13" class="text-center text-muted py-4">Lade Daten...</td></tr>
                 </tbody>
             </table>
+        </div>
+    </div>
+    <!-- Pagination -->
+    <div class="card-footer d-flex justify-content-between align-items-center py-2">
+        <div class="small text-muted" id="paginationInfo">--</div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0" id="paginationNav"></ul>
+        </nav>
+    </div>
+</div>
+
+<!-- Delete Confirm Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title"><i class="fas fa-trash-alt text-danger me-2"></i>Runde loeschen</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="deleteModalBody">
+                Diese Runde wirklich loeschen?
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-sm btn-danger" id="deleteConfirmBtn">Loeschen</button>
+            </div>
         </div>
     </div>
 </div>
@@ -134,9 +169,12 @@
 
 {% block scripts %}
 <script>
-let allData = [];
-let currentSort = { col: null, dir: null };
+let currentPage = 1;
+let totalPages = 1;
+let perPage = 50;
+let currentSort = { col: 'created_at', dir: 'desc' };
 let currentSessionFilter = 'all';
+let bestTimes = {}; // {driver_name+session_id: best_time_ms}
 
 async function loadSessions() {
     try {
@@ -188,37 +226,53 @@ async function loadFilters() {
     }
 }
 
+function buildParams() {
+    const params = new URLSearchParams();
+    currentSessionFilter = document.getElementById('sessionSelect').value;
+    if (currentSessionFilter !== 'all') params.append('session_id', currentSessionFilter);
+    const driver = document.getElementById('driverFilter').value;
+    if (driver) params.append('driver', driver);
+    const car = document.getElementById('carFilter').value;
+    if (car) params.append('car', car);
+    const dateFrom = document.getElementById('dateFrom').value;
+    if (dateFrom) params.append('date_from', dateFrom);
+    const dateTo = document.getElementById('dateTo').value;
+    if (dateTo) params.append('date_to', dateTo);
+    return params;
+}
+
 async function loadData() {
     try {
-        const params = new URLSearchParams();
-        currentSessionFilter = document.getElementById('sessionSelect').value;
-        if (currentSessionFilter !== 'all') params.append('session_id', currentSessionFilter);
-
-        const driver = document.getElementById('driverFilter').value;
-        if (driver) params.append('driver', driver);
-
-        const car = document.getElementById('carFilter').value;
-        if (car) params.append('car', car);
-
-        const dateFrom = document.getElementById('dateFrom').value;
-        if (dateFrom) params.append('date_from', dateFrom);
-
-        const dateTo = document.getElementById('dateTo').value;
-        if (dateTo) params.append('date_to', dateTo);
+        const params = buildParams();
+        perPage = parseInt(document.getElementById('perPageSelect').value);
+        params.append('page', currentPage);
+        params.append('per_page', perPage);
+        params.append('sort', currentSort.col);
+        params.append('dir', currentSort.dir);
 
         const res = await fetch('/api/laps?' + params);
         if (!res.ok) return;
-        allData = await res.json();
+        const result = await res.json();
 
-        let displayData = allData;
-        if (currentSort.col) {
-            displayData = sortData(allData, currentSort.col, currentSort.dir);
-        }
+        const data = result.data || [];
+        totalPages = result.pages || 1;
+        currentPage = result.page || 1;
 
-        renderTable(displayData);
-        document.getElementById('statFiltered').textContent = displayData.length;
+        // Beste Zeiten pro Fahrer+Session berechnen fuer Delta
+        bestTimes = {};
+        data.forEach(lap => {
+            if (!lap.laptime_raw || lap.laptime_raw <= 0) return;
+            const key = (lap.driver_name || '') + '|' + (lap.session_id || '');
+            if (!bestTimes[key] || lap.laptime_raw < bestTimes[key]) {
+                bestTimes[key] = lap.laptime_raw;
+            }
+        });
 
-        // Total separat (nur Count, nicht alle Daten)
+        renderTable(data);
+        renderPagination();
+        document.getElementById('statFiltered').textContent = result.total || 0;
+
+        // Total separat
         const totalRes = await fetch('/api/laps/count');
         if (totalRes.ok) {
             const totalData = await totalRes.json();
@@ -234,7 +288,7 @@ function renderTable(data) {
     const tbody = document.getElementById('dataBody');
 
     if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4"><i class="fas fa-search me-2"></i>Keine Daten gefunden</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" class="text-center text-muted py-4"><i class="fas fa-search me-2"></i>Keine Daten gefunden</td></tr>';
         return;
     }
 
@@ -252,6 +306,27 @@ function renderTable(data) {
             hour: '2-digit', minute: '2-digit', second: '2-digit'
         }) : '--';
 
+        // Delta berechnen
+        let deltaHtml = '<span class="text-muted">--</span>';
+        if (lap.laptime_raw && lap.laptime_raw > 0) {
+            const key = (lap.driver_name || '') + '|' + (lap.session_id || '');
+            const best = bestTimes[key];
+            if (best && best > 0) {
+                const diff = lap.laptime_raw - best;
+                if (diff === 0) {
+                    deltaHtml = '<span class="text-success fw-bold">Best</span>';
+                } else {
+                    const sign = '+';
+                    const sec = (diff / 1000).toFixed(3);
+                    let cls = 'text-muted';
+                    if (diff < 500) cls = 'text-success';
+                    else if (diff < 1500) cls = 'text-warning';
+                    else cls = 'text-danger';
+                    deltaHtml = `<span class="${cls}">${sign}${sec}s</span>`;
+                }
+            }
+        }
+
         return `<tr class="${rowClass}">
             <td><span class="badge ${typeBadge} small">${lap.session_id || '--'}</span></td>
             <td class="small">${lap.session_type || '--'}</td>
@@ -259,36 +334,118 @@ function renderTable(data) {
             <td class="small text-muted">${lap.car_name || '--'}</td>
             <td class="text-center">${lap.lap || '--'}</td>
             <td class="text-center font-mono fw-bold">${lap.laptime_formatted || '--'}</td>
-            <td class="text-center font-mono small">${lap.sector_1 || '--'}</td>
-            <td class="text-center font-mono small">${lap.sector_2 || '--'}</td>
-            <td class="text-center font-mono small">${lap.sector_3 || '--'}</td>
+            <td class="text-center font-mono small">${deltaHtml}</td>
+            <td class="text-center font-mono small d-none d-lg-table-cell">${lap.sector_1 || '--'}</td>
+            <td class="text-center font-mono small d-none d-lg-table-cell">${lap.sector_2 || '--'}</td>
+            <td class="text-center font-mono small d-none d-lg-table-cell">${lap.sector_3 || '--'}</td>
             <td class="text-center small">${ts}</td>
             <td class="text-center">${lap.is_pb ? '<i class="fas fa-trophy text-warning"></i>' : ''}</td>
+            <td class="text-center">
+                <button class="btn btn-link btn-sm text-danger p-0 opacity-50 delete-lap-btn"
+                        data-id="${lap.id}" data-driver="${lap.driver_name || ''}"
+                        data-lap="${lap.lap || ''}" data-time="${lap.laptime_formatted || ''}"
+                        title="Runde loeschen"><i class="fas fa-trash-alt fa-sm"></i></button>
+            </td>
         </tr>`;
     }).join('');
-}
 
-function sortData(data, col, dir) {
-    return [...data].sort((a, b) => {
-        let va = a[col], vb = b[col];
-        if (col === 'timestamp') {
-            va = va ? new Date(va) : new Date(0);
-            vb = vb ? new Date(vb) : new Date(0);
-        } else if (col === 'lap') {
-            va = parseInt(va) || 0;
-            vb = parseInt(vb) || 0;
-        } else if (col === 'laptime_formatted') {
-            va = a.laptime_raw || 999999;
-            vb = b.laptime_raw || 999999;
-        } else {
-            va = (va || '').toString().toLowerCase();
-            vb = (vb || '').toString().toLowerCase();
-        }
-        if (va < vb) return dir === 'asc' ? -1 : 1;
-        if (va > vb) return dir === 'asc' ? 1 : -1;
-        return 0;
+    // Delete-Buttons binden
+    tbody.querySelectorAll('.delete-lap-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.dataset.id;
+            const driver = btn.dataset.driver;
+            const lap = btn.dataset.lap;
+            const time = btn.dataset.time;
+            confirmDeleteLap(id, driver, lap, time);
+        });
     });
 }
+
+function renderPagination() {
+    const info = document.getElementById('paginationInfo');
+    const nav = document.getElementById('paginationNav');
+
+    const from = ((currentPage - 1) * perPage) + 1;
+    const to = Math.min(currentPage * perPage, parseInt(document.getElementById('statFiltered').textContent) || 0);
+    const total = document.getElementById('statFiltered').textContent;
+    info.textContent = `${from}-${to} von ${total}`;
+
+    let html = '';
+
+    // Zurueck
+    html += `<li class="page-item ${currentPage <= 1 ? 'disabled' : ''}">
+        <a class="page-link" href="#" data-page="${currentPage - 1}">&laquo;</a></li>`;
+
+    // Seitenzahlen (max 7 sichtbar)
+    const maxVisible = 7;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage < maxVisible - 1) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    if (startPage > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>`;
+        if (startPage > 2) html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+            <a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        html += `<li class="page-item"><a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a></li>`;
+    }
+
+    // Vor
+    html += `<li class="page-item ${currentPage >= totalPages ? 'disabled' : ''}">
+        <a class="page-link" href="#" data-page="${currentPage + 1}">&raquo;</a></li>`;
+
+    nav.innerHTML = html;
+
+    // Click Handler
+    nav.querySelectorAll('a[data-page]').forEach(a => {
+        a.addEventListener('click', e => {
+            e.preventDefault();
+            const p = parseInt(a.dataset.page);
+            if (p >= 1 && p <= totalPages && p !== currentPage) {
+                currentPage = p;
+                loadData();
+            }
+        });
+    });
+}
+
+// Delete Lap
+let deleteTargetId = null;
+const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+
+function confirmDeleteLap(id, driver, lap, time) {
+    deleteTargetId = id;
+    document.getElementById('deleteModalBody').innerHTML =
+        `Runde <strong>${lap}</strong> von <strong>${driver}</strong> (${time}) wirklich loeschen?`;
+    deleteModal.show();
+}
+
+document.getElementById('deleteConfirmBtn').addEventListener('click', async () => {
+    if (!deleteTargetId) return;
+    try {
+        const res = await fetch(`/api/laps/${deleteTargetId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+            showStatus('Runde geloescht', 'success');
+            deleteModal.hide();
+            loadData();
+        } else {
+            showStatus('Fehler: ' + (data.error || 'Unbekannt'), 'danger');
+        }
+    } catch (e) {
+        showStatus('Fehler: ' + e.message, 'danger');
+    }
+    deleteTargetId = null;
+});
 
 function setupSorting() {
     document.querySelectorAll('.sortable').forEach(th => {
@@ -299,23 +456,16 @@ function setupSorting() {
             document.querySelectorAll('.sortable').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
             th.classList.add('sort-' + dir);
             currentSort = { col, dir };
-            renderTable(sortData(allData, col, dir));
+            currentPage = 1;
+            loadData();
         });
     });
 }
 
 function exportCSV() {
-    const params = new URLSearchParams();
+    const params = buildParams();
     const session = document.getElementById('sessionSelect').value;
-    if (session !== 'all') params.append('event', session);
-    const driver = document.getElementById('driverFilter').value;
-    if (driver) params.append('driver', driver);
-    const car = document.getElementById('carFilter').value;
-    if (car) params.append('car', car);
-    const dateFrom = document.getElementById('dateFrom').value;
-    if (dateFrom) params.append('date_from', dateFrom);
-    const dateTo = document.getElementById('dateTo').value;
-    if (dateTo) params.append('date_to', dateTo);
+    if (session !== 'all') params.set('event', session);
 
     const link = document.createElement('a');
     link.href = '/api/export/csv?' + params;
@@ -333,7 +483,8 @@ function clearFilters() {
     document.getElementById('dateFrom').value = '';
     document.getElementById('dateTo').value = '';
     currentSessionFilter = 'all';
-    currentSort = { col: null, dir: null };
+    currentSort = { col: 'created_at', dir: 'desc' };
+    currentPage = 1;
     document.querySelectorAll('.sortable').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
     loadData();
 }
@@ -356,11 +507,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupSorting();
 });
 
-document.getElementById('sessionSelect').addEventListener('change', () => { loadFilters(); loadData(); });
-document.getElementById('driverFilter').addEventListener('change', loadData);
-document.getElementById('carFilter').addEventListener('change', loadData);
-document.getElementById('dateFrom').addEventListener('change', loadData);
-document.getElementById('dateTo').addEventListener('change', loadData);
+document.getElementById('sessionSelect').addEventListener('change', () => {
+    currentPage = 1;
+    loadFilters();
+    loadData();
+});
+document.getElementById('driverFilter').addEventListener('change', () => { currentPage = 1; loadData(); });
+document.getElementById('carFilter').addEventListener('change', () => { currentPage = 1; loadData(); });
+document.getElementById('dateFrom').addEventListener('change', () => { currentPage = 1; loadData(); });
+document.getElementById('dateTo').addEventListener('change', () => { currentPage = 1; loadData(); });
+document.getElementById('perPageSelect').addEventListener('change', () => { currentPage = 1; loadData(); });
 
 document.getElementById('refreshBtn').addEventListener('click', async function() {
     this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -432,7 +588,7 @@ async function restoreBackup(input) {
 async function renameSession() {
     const sid = document.getElementById('sessionSelect').value;
     if (!sid || sid === 'all') {
-        showToast('Bitte zuerst eine Session auswaehlen', 'warning');
+        showStatus('Bitte zuerst eine Session auswaehlen', 'warning');
         return;
     }
     const currentName = document.getElementById('sessionSelect').selectedOptions[0].textContent;
@@ -446,13 +602,13 @@ async function renameSession() {
             body: JSON.stringify({ session_id: sid, display_name: newName.trim() }),
         });
         if (res.ok) {
-            showToast('Session umbenannt', 'success');
+            showStatus('Session umbenannt', 'success');
             await loadSessions();
         } else {
-            showToast('Umbenennung fehlgeschlagen', 'danger');
+            showStatus('Umbenennung fehlgeschlagen', 'danger');
         }
     } catch (e) {
-        showToast('Fehler: ' + e.message, 'danger');
+        showStatus('Fehler: ' + e.message, 'danger');
     }
 }
 
@@ -460,6 +616,8 @@ async function renameSession() {
 document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'e') { e.preventDefault(); exportCSV(); }
     if (e.key === 'Escape') clearFilters();
+    if (e.key === 'ArrowLeft' && currentPage > 1) { currentPage--; loadData(); }
+    if (e.key === 'ArrowRight' && currentPage < totalPages) { currentPage++; loadData(); }
 });
 </script>
 {% endblock %}
