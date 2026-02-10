@@ -558,36 +558,39 @@ footer {
 .ticker-display {
     position: relative;
     height: 100%;
+    overflow: hidden;
 }
 
-.ticker-slide {
-    position: relative;
-    width: 100%;
-    height: 100%;
-}
-
-.ticker-line {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    padding: 0 1rem;
-    font-size: 0.95rem;
+.ticker-strip {
     white-space: nowrap;
+    gap: 0;
+    padding: 0 0.25rem;
+}
+
+.ticker-entry {
+    display: inline-flex;
+    align-items: center;
     gap: 0.4rem;
-    transition: transform 0.4s ease, opacity 0.4s ease;
+    padding: 0.3rem 0.75rem;
+    margin: 0 1px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    border-right: 1px solid var(--sr-border);
+    flex-shrink: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
-.ticker-line-enter {
-    transform: translateY(100%);
+.ticker-entry:last-child {
+    border-right: none;
+}
+
+.ticker-entry-new {
     opacity: 0;
+    transform: translateX(-20px);
 }
 
-.ticker-line-exit {
-    animation: tickerSlideOut 0.4s ease forwards;
+.ticker-entry-out {
+    animation: tickerFadeOut 0.3s ease forwards;
 }
 
 .ticker-dot {
@@ -598,10 +601,10 @@ footer {
     flex-shrink: 0;
 }
 
-@keyframes tickerSlideOut {
+@keyframes tickerFadeOut {
     to {
-        transform: translateY(-100%);
         opacity: 0;
+        transform: translateX(10px);
     }
 }
 

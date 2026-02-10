@@ -63,9 +63,8 @@
         <div class="ticker-label px-3 d-flex align-items-center h-100">
             <i class="fas fa-broadcast-tower me-1 pulse"></i><span class="d-none d-sm-inline">LIVE</span>
         </div>
-        <div class="ticker-display flex-grow-1 position-relative overflow-hidden h-100">
-            <div class="ticker-slide" id="tickerContent">
-                <span class="ticker-item text-muted">Warte auf Events...</span>
+        <div class="ticker-display flex-grow-1 overflow-hidden h-100" id="tickerViewport">
+            <div class="ticker-strip d-flex align-items-center h-100" id="tickerStrip">
             </div>
         </div>
     </div>
@@ -324,17 +323,21 @@ function updateLeaderboard() {
 }
 
 // ---- Live Ticker ----
-let currentTickerHtml = '';
+const TICKER_HISTORY = 30;
+let tickerQueue = []; // gespeicherte HTML-Strings (neueste zuerst)
 
 async function loadTickerFeed() {
     try {
-        const res = await fetch('/api/live-feed?limit=1');
+        const res = await fetch('/api/live-feed?limit=20');
         if (!res.ok) return;
         const items = await res.json();
-        if (items.length > 0) {
-            const html = formatTickerItem(items[0]);
-            if (html) showTickerItem(html);
+        // Aelteste zuerst einfuegen damit neueste am Ende (=links) landen
+        tickerQueue = [];
+        for (let i = items.length - 1; i >= 0; i--) {
+            const html = formatTickerItem(items[i]);
+            if (html) tickerQueue.push(html);
         }
+        rebuildTicker();
     } catch (e) {
         console.error('Ticker-Fehler:', e);
     }
@@ -344,59 +347,101 @@ function formatTickerItem(item) {
     if (item.type === 'lap') {
         const color = item.color || '#888';
         const time = item.laptime_formatted || formatTime(item.laptime_ms);
-        const pb = item.is_pb ? ' <i class="fas fa-trophy text-warning ms-2"></i> PB!' : '';
-        return `<span class="ticker-dot" style="background:${color}"></span><strong style="color:${color}">${item.driver_name}</strong> <span class="text-muted mx-1">Runde ${item.lap_number || '?'}</span> <span class="font-mono fw-bold">${time}</span>${pb}`;
+        const pb = item.is_pb ? ' <i class="fas fa-trophy text-warning ms-1"></i>' : '';
+        return `<span class="ticker-dot" style="background:${color}"></span><strong style="color:${color}">${item.driver_name}</strong> <span class="text-muted">R${item.lap_number || '?'}</span> <span class="font-mono fw-bold">${time}</span>${pb}`;
     }
     if (item.type === 'penalty') {
-        return `<i class="fas fa-flag text-danger me-1"></i> <strong>${item.driver_name}</strong> <span class="text-danger">Strafe: ${item.penalty_type || 'Strafe'}</span>`;
+        return `<i class="fas fa-flag text-danger"></i> <strong>${item.driver_name}</strong> <span class="text-danger">${item.penalty_type || 'Strafe'}</span>`;
     }
     if (item.type === 'record') {
         const time = item.laptime_formatted || formatTime(item.laptime_ms);
-        return `<i class="fas fa-star text-warning me-1"></i> <strong class="text-warning">NEUER REKORD!</strong> ${item.driver_name} <span class="font-mono fw-bold">${time}</span>`;
+        return `<i class="fas fa-star text-warning"></i> <strong class="text-warning">REKORD</strong> ${item.driver_name} <span class="font-mono fw-bold">${time}</span>`;
     }
     if (item.type === 'status') {
         const rt = item.race_type ? ` (${item.race_type})` : '';
-        return `<i class="fas fa-flag-checkered me-1"></i> <strong>${item.status || '?'}</strong>${rt}`;
+        return `<i class="fas fa-flag-checkered"></i> <strong>${item.status || '?'}</strong>${rt}`;
     }
     if (item.type === 'dnf') {
-        return `<i class="fas fa-ban text-warning me-1"></i> <strong>${item.driver_name}</strong> <span class="text-warning">ausgeschieden</span>`;
+        return `<i class="fas fa-ban text-warning"></i> <strong>${item.driver_name}</strong> <span class="text-warning">DNF</span>`;
     }
     if (item.type === 'dq') {
-        return `<i class="fas fa-times-circle text-danger me-1"></i> <strong>${item.driver_name}</strong> <span class="text-danger">disqualifiziert</span>`;
+        return `<i class="fas fa-times-circle text-danger"></i> <strong>${item.driver_name}</strong> <span class="text-danger">DQ</span>`;
     }
     return null;
 }
 
-function showTickerItem(html) {
-    if (html === currentTickerHtml) return;
-    currentTickerHtml = html;
+function rebuildTicker() {
+    const strip = document.getElementById('tickerStrip');
+    const viewport = document.getElementById('tickerViewport');
+    strip.innerHTML = '';
 
-    const container = document.getElementById('tickerContent');
-    // Neues Element unten einfuegen
-    const newEl = document.createElement('div');
-    newEl.className = 'ticker-line ticker-line-enter';
-    newEl.innerHTML = html;
-    container.appendChild(newEl);
-
-    // Altes Element nach oben animieren
-    const oldEl = container.querySelector('.ticker-line:not(.ticker-line-enter)');
-    if (oldEl) {
-        oldEl.classList.add('ticker-line-exit');
-        oldEl.addEventListener('animationend', () => oldEl.remove(), { once: true });
+    if (tickerQueue.length === 0) {
+        strip.innerHTML = '<span class="ticker-entry text-muted">Warte auf Events...</span>';
+        return;
     }
 
-    // Enter-Klasse nach Frame entfernen (triggert Animation)
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            newEl.classList.remove('ticker-line-enter');
-        });
-    });
+    const vpWidth = viewport.offsetWidth;
+    let usedWidth = 0;
+
+    // Neueste zuerst (von hinten im Array) einfuegen
+    for (let i = tickerQueue.length - 1; i >= 0; i--) {
+        const el = document.createElement('div');
+        el.className = 'ticker-entry';
+        el.innerHTML = tickerQueue[i];
+        strip.appendChild(el);
+
+        // Breite messen
+        const w = el.offsetWidth;
+        usedWidth += w;
+        if (usedWidth > vpWidth) {
+            el.remove();
+            break;
+        }
+    }
 }
 
 function addTickerEvent(item) {
     const html = formatTickerItem(item);
-    if (html) showTickerItem(html);
+    if (!html) return;
+    tickerQueue.push(html);
+    if (tickerQueue.length > TICKER_HISTORY) tickerQueue.shift();
+
+    // Neues Element links mit Slide-Animation einfuegen
+    const strip = document.getElementById('tickerStrip');
+    const viewport = document.getElementById('tickerViewport');
+    const newEl = document.createElement('div');
+    newEl.className = 'ticker-entry ticker-entry-new';
+    newEl.innerHTML = html;
+    strip.insertBefore(newEl, strip.firstChild);
+
+    // Animation triggern
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            newEl.classList.remove('ticker-entry-new');
+        });
+    });
+
+    // Ueberlauf rechts entfernen
+    trimTicker();
 }
+
+function trimTicker() {
+    const strip = document.getElementById('tickerStrip');
+    const viewport = document.getElementById('tickerViewport');
+    const vpWidth = viewport.offsetWidth;
+
+    while (strip.scrollWidth > vpWidth && strip.children.length > 1) {
+        const last = strip.lastElementChild;
+        last.classList.add('ticker-entry-out');
+        last.addEventListener('animationend', () => last.remove(), { once: true });
+        // Fallback falls Animation nicht feuert
+        setTimeout(() => { if (last.parentNode) last.remove(); }, 500);
+        break; // nur eins pro Durchlauf, Rest beim naechsten Event
+    }
+}
+
+// Bei Fenstergroessenaenderung neu berechnen
+window.addEventListener('resize', () => rebuildTicker());
 
 // Start
 loadTrackRecord();
