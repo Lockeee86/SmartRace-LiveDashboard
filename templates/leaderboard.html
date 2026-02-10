@@ -87,9 +87,18 @@
     </div>
 </div>
 
-<!-- Controller Status Leiste -->
-<div class="row g-2 mt-3" id="controllerStatusBar">
-    <!-- Wird per JavaScript gefuellt -->
+<!-- Live Ticker -->
+<div class="card mt-3 ticker-card">
+    <div class="card-body p-0 d-flex align-items-center overflow-hidden" style="height: 42px;">
+        <div class="ticker-label px-3 d-flex align-items-center h-100">
+            <i class="fas fa-broadcast-tower me-1 pulse"></i><span class="d-none d-sm-inline">LIVE</span>
+        </div>
+        <div class="ticker-track flex-grow-1 position-relative overflow-hidden h-100">
+            <div class="ticker-content d-flex align-items-center h-100" id="tickerContent">
+                <span class="ticker-item text-muted">Warte auf Events...</span>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -311,40 +320,96 @@ function updateLeaderboard() {
         </tr>`;
     }).join('');
 
-    renderStatusBar(drivers);
 }
 
-function renderStatusBar(drivers) {
-    const bar = document.getElementById('controllerStatusBar');
-    bar.innerHTML = ['1','2','3','4','5','6'].map(cid => {
-        const d = drivers.find(x => x.cid === parseInt(cid));
-        const color = d ? d.color : getControllerColor(cid);
-        const active = !!d;
-        let statusIcon = '';
-        if (d && d.disqualified) statusIcon = '<span class="badge bg-danger ms-1">DQ</span>';
-        else if (d && d.retired) statusIcon = '<span class="badge bg-warning text-dark ms-1">DNF</span>';
-        else if (d && d.penalties > 0) statusIcon = `<span class="badge bg-danger ms-1">${d.penalties}P</span>`;
+// ---- Live Ticker ----
+let tickerItems = [];
+const TICKER_MAX = 30;
 
-        return `<div class="col-md-2 col-4">
-            <div class="card" style="border-left: 4px solid ${color}; opacity: ${active ? 1 : 0.4}">
-                <div class="card-body py-2 px-3 text-center">
-                    <div class="small text-muted">Controller ${cid}</div>
-                    <div class="fw-bold small" style="color: ${active ? color : 'inherit'}">${d ? d.name : '--'}${statusIcon}</div>
-                    <div class="font-mono small">${d ? formatTime(d.lastTime) : '--:--.---'}</div>
-                </div>
-            </div>
-        </div>`;
-    }).join('');
+async function loadTickerFeed() {
+    try {
+        const res = await fetch('/api/live-feed?limit=20');
+        if (!res.ok) return;
+        const items = await res.json();
+        tickerItems = items.map(formatTickerItem).filter(Boolean);
+        renderTicker();
+    } catch (e) {
+        console.error('Ticker-Fehler:', e);
+    }
+}
+
+function formatTickerItem(item) {
+    if (item.type === 'lap') {
+        const color = item.color || '#888';
+        const time = item.laptime_formatted || formatTime(item.laptime_ms);
+        const pb = item.is_pb ? ' <i class="fas fa-trophy text-warning fa-xs"></i>' : '';
+        return `<span class="ticker-item"><span class="ticker-dot" style="background:${color}"></span><strong style="color:${color}">${item.driver_name}</strong> R${item.lap_number || '?'}: <span class="font-mono">${time}</span>${pb}</span>`;
+    }
+    if (item.type === 'penalty') {
+        return `<span class="ticker-item ticker-penalty"><i class="fas fa-flag text-danger fa-xs"></i> <strong>${item.driver_name}</strong> Strafe: ${item.penalty_type || 'Strafe'}</span>`;
+    }
+    if (item.type === 'record') {
+        const time = item.laptime_formatted || formatTime(item.laptime_ms);
+        return `<span class="ticker-item ticker-record"><i class="fas fa-star text-warning fa-xs"></i> NEUER REKORD: <strong>${item.driver_name}</strong> ${time}</span>`;
+    }
+    if (item.type === 'status') {
+        const rt = item.race_type ? ` (${item.race_type})` : '';
+        return `<span class="ticker-item ticker-status"><i class="fas fa-flag-checkered fa-xs"></i> ${item.status || '?'}${rt}</span>`;
+    }
+    if (item.type === 'dnf') {
+        return `<span class="ticker-item ticker-penalty"><i class="fas fa-ban text-warning fa-xs"></i> <strong>${item.driver_name}</strong> ausgeschieden</span>`;
+    }
+    if (item.type === 'dq') {
+        return `<span class="ticker-item ticker-penalty"><i class="fas fa-times-circle text-danger fa-xs"></i> <strong>${item.driver_name}</strong> disqualifiziert</span>`;
+    }
+    return null;
+}
+
+function renderTicker() {
+    const track = document.getElementById('tickerContent');
+    if (tickerItems.length === 0) {
+        track.innerHTML = '<span class="ticker-item text-muted">Warte auf Events...</span>';
+        track.style.animation = 'none';
+        return;
+    }
+    // Doppelt fuer nahtlosen Loop
+    const html = tickerItems.join('<span class="ticker-sep">|</span>');
+    track.innerHTML = html + '<span class="ticker-sep">|</span>' + html;
+    // Scrolldauer anpassen an Inhalt
+    const duration = Math.max(20, tickerItems.length * 4);
+    track.style.animation = `tickerScroll ${duration}s linear infinite`;
+}
+
+function addTickerEvent(item) {
+    const formatted = formatTickerItem(item);
+    if (!formatted) return;
+    tickerItems.unshift(formatted);
+    if (tickerItems.length > TICKER_MAX) tickerItems.pop();
+    renderTicker();
 }
 
 // Start
 loadTrackRecord();
 fetchLeaderboard();
+loadTickerFeed();
 document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
 
+// Ticker pausieren bei Hover
+const tickerTrack = document.querySelector('.ticker-track');
+if (tickerTrack) {
+    tickerTrack.addEventListener('mouseenter', () => {
+        document.getElementById('tickerContent').style.animationPlayState = 'paused';
+    });
+    tickerTrack.addEventListener('mouseleave', () => {
+        document.getElementById('tickerContent').style.animationPlayState = 'running';
+    });
+}
+
 // WebSocket: Live-Updates statt Polling
-socket.on('new_data', () => {
+socket.on('new_data', (data) => {
     fetchLeaderboard();
+    // Ticker nach kurzer Verzoegerung aktualisieren (Events muessen erst in DB sein)
+    setTimeout(loadTickerFeed, 500);
 });
 
 socket.on('track_record', (data) => {
@@ -352,6 +417,32 @@ socket.on('track_record', (data) => {
         lbTrackRecord = { time: data.laptime_ms, driver: data.driver_name };
         document.getElementById('lb-recordTime').textContent = data.laptime_formatted;
         document.getElementById('lb-recordDriver').textContent = `${data.driver_name} (${data.car_name || '--'})`;
+        addTickerEvent({
+            type: 'record',
+            driver_name: data.driver_name,
+            laptime_ms: data.laptime_ms,
+            laptime_formatted: data.laptime_formatted,
+        });
+    }
+});
+
+socket.on('penalty', (data) => {
+    if (data) {
+        addTickerEvent({
+            type: 'penalty',
+            driver_name: data.driver_name || 'Unbekannt',
+            penalty_type: 'Strafe',
+        });
+    }
+});
+
+socket.on('race_status', (data) => {
+    if (data) {
+        addTickerEvent({
+            type: 'status',
+            status: data.status || 'unknown',
+            race_type: data.race_type || '',
+        });
     }
 });
 
