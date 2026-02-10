@@ -57,6 +57,20 @@
     </div>
 </div>
 
+<!-- Live Ticker -->
+<div class="card mb-3 ticker-card">
+    <div class="card-body p-0 d-flex align-items-center overflow-hidden" style="height: 52px;">
+        <div class="ticker-label px-3 d-flex align-items-center h-100">
+            <i class="fas fa-broadcast-tower me-1 pulse"></i><span class="d-none d-sm-inline">LIVE</span>
+        </div>
+        <div class="ticker-display flex-grow-1 position-relative overflow-hidden h-100">
+            <div class="ticker-slide" id="tickerContent">
+                <span class="ticker-item text-muted">Warte auf Events...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Leaderboard Tabelle -->
 <div class="card">
     <div class="card-body p-0">
@@ -87,19 +101,6 @@
     </div>
 </div>
 
-<!-- Live Ticker -->
-<div class="card mt-3 ticker-card">
-    <div class="card-body p-0 d-flex align-items-center overflow-hidden" style="height: 42px;">
-        <div class="ticker-label px-3 d-flex align-items-center h-100">
-            <i class="fas fa-broadcast-tower me-1 pulse"></i><span class="d-none d-sm-inline">LIVE</span>
-        </div>
-        <div class="ticker-track flex-grow-1 position-relative overflow-hidden h-100">
-            <div class="ticker-content d-flex align-items-center h-100" id="tickerContent">
-                <span class="ticker-item text-muted">Warte auf Events...</span>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
@@ -323,16 +324,17 @@ function updateLeaderboard() {
 }
 
 // ---- Live Ticker ----
-let tickerItems = [];
-const TICKER_MAX = 30;
+let currentTickerHtml = '';
 
 async function loadTickerFeed() {
     try {
-        const res = await fetch('/api/live-feed?limit=20');
+        const res = await fetch('/api/live-feed?limit=1');
         if (!res.ok) return;
         const items = await res.json();
-        tickerItems = items.map(formatTickerItem).filter(Boolean);
-        renderTicker();
+        if (items.length > 0) {
+            const html = formatTickerItem(items[0]);
+            if (html) showTickerItem(html);
+        }
     } catch (e) {
         console.error('Ticker-Fehler:', e);
     }
@@ -342,50 +344,58 @@ function formatTickerItem(item) {
     if (item.type === 'lap') {
         const color = item.color || '#888';
         const time = item.laptime_formatted || formatTime(item.laptime_ms);
-        const pb = item.is_pb ? ' <i class="fas fa-trophy text-warning fa-xs"></i>' : '';
-        return `<span class="ticker-item"><span class="ticker-dot" style="background:${color}"></span><strong style="color:${color}">${item.driver_name}</strong> R${item.lap_number || '?'}: <span class="font-mono">${time}</span>${pb}</span>`;
+        const pb = item.is_pb ? ' <i class="fas fa-trophy text-warning ms-2"></i> PB!' : '';
+        return `<span class="ticker-dot" style="background:${color}"></span><strong style="color:${color}">${item.driver_name}</strong> <span class="text-muted mx-1">Runde ${item.lap_number || '?'}</span> <span class="font-mono fw-bold">${time}</span>${pb}`;
     }
     if (item.type === 'penalty') {
-        return `<span class="ticker-item ticker-penalty"><i class="fas fa-flag text-danger fa-xs"></i> <strong>${item.driver_name}</strong> Strafe: ${item.penalty_type || 'Strafe'}</span>`;
+        return `<i class="fas fa-flag text-danger me-1"></i> <strong>${item.driver_name}</strong> <span class="text-danger">Strafe: ${item.penalty_type || 'Strafe'}</span>`;
     }
     if (item.type === 'record') {
         const time = item.laptime_formatted || formatTime(item.laptime_ms);
-        return `<span class="ticker-item ticker-record"><i class="fas fa-star text-warning fa-xs"></i> NEUER REKORD: <strong>${item.driver_name}</strong> ${time}</span>`;
+        return `<i class="fas fa-star text-warning me-1"></i> <strong class="text-warning">NEUER REKORD!</strong> ${item.driver_name} <span class="font-mono fw-bold">${time}</span>`;
     }
     if (item.type === 'status') {
         const rt = item.race_type ? ` (${item.race_type})` : '';
-        return `<span class="ticker-item ticker-status"><i class="fas fa-flag-checkered fa-xs"></i> ${item.status || '?'}${rt}</span>`;
+        return `<i class="fas fa-flag-checkered me-1"></i> <strong>${item.status || '?'}</strong>${rt}`;
     }
     if (item.type === 'dnf') {
-        return `<span class="ticker-item ticker-penalty"><i class="fas fa-ban text-warning fa-xs"></i> <strong>${item.driver_name}</strong> ausgeschieden</span>`;
+        return `<i class="fas fa-ban text-warning me-1"></i> <strong>${item.driver_name}</strong> <span class="text-warning">ausgeschieden</span>`;
     }
     if (item.type === 'dq') {
-        return `<span class="ticker-item ticker-penalty"><i class="fas fa-times-circle text-danger fa-xs"></i> <strong>${item.driver_name}</strong> disqualifiziert</span>`;
+        return `<i class="fas fa-times-circle text-danger me-1"></i> <strong>${item.driver_name}</strong> <span class="text-danger">disqualifiziert</span>`;
     }
     return null;
 }
 
-function renderTicker() {
-    const track = document.getElementById('tickerContent');
-    if (tickerItems.length === 0) {
-        track.innerHTML = '<span class="ticker-item text-muted">Warte auf Events...</span>';
-        track.style.animation = 'none';
-        return;
+function showTickerItem(html) {
+    if (html === currentTickerHtml) return;
+    currentTickerHtml = html;
+
+    const container = document.getElementById('tickerContent');
+    // Neues Element unten einfuegen
+    const newEl = document.createElement('div');
+    newEl.className = 'ticker-line ticker-line-enter';
+    newEl.innerHTML = html;
+    container.appendChild(newEl);
+
+    // Altes Element nach oben animieren
+    const oldEl = container.querySelector('.ticker-line:not(.ticker-line-enter)');
+    if (oldEl) {
+        oldEl.classList.add('ticker-line-exit');
+        oldEl.addEventListener('animationend', () => oldEl.remove(), { once: true });
     }
-    // Doppelt fuer nahtlosen Loop
-    const html = tickerItems.join('<span class="ticker-sep">|</span>');
-    track.innerHTML = html + '<span class="ticker-sep">|</span>' + html;
-    // Scrolldauer anpassen an Inhalt
-    const duration = Math.max(20, tickerItems.length * 4);
-    track.style.animation = `tickerScroll ${duration}s linear infinite`;
+
+    // Enter-Klasse nach Frame entfernen (triggert Animation)
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            newEl.classList.remove('ticker-line-enter');
+        });
+    });
 }
 
 function addTickerEvent(item) {
-    const formatted = formatTickerItem(item);
-    if (!formatted) return;
-    tickerItems.unshift(formatted);
-    if (tickerItems.length > TICKER_MAX) tickerItems.pop();
-    renderTicker();
+    const html = formatTickerItem(item);
+    if (html) showTickerItem(html);
 }
 
 // Start
@@ -393,17 +403,6 @@ loadTrackRecord();
 fetchLeaderboard();
 loadTickerFeed();
 document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
-
-// Ticker pausieren bei Hover
-const tickerTrack = document.querySelector('.ticker-track');
-if (tickerTrack) {
-    tickerTrack.addEventListener('mouseenter', () => {
-        document.getElementById('tickerContent').style.animationPlayState = 'paused';
-    });
-    tickerTrack.addEventListener('mouseleave', () => {
-        document.getElementById('tickerContent').style.animationPlayState = 'running';
-    });
-}
 
 // WebSocket: Live-Updates statt Polling
 socket.on('new_data', (data) => {
