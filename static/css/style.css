@@ -324,6 +324,28 @@ body {
     color: var(--sr-muted);
 }
 
+/* Controller Filter Dropdown */
+.ctrl-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+#controllerFilterDropdown .dropdown-item {
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+#controllerFilterDropdown .dropdown-item:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+#controllerFilterDropdown .form-check-input {
+    cursor: pointer;
+}
+
 /* Controller Badge */
 .controller-badge {
     display: inline-block;

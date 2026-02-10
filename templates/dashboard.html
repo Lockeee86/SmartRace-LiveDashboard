@@ -11,6 +11,57 @@
             <option value="current">Aktuelle Session (Live)</option>
             <option value="all">Alle Sessions</option>
         </select>
+        <!-- Controller Filter Dropdown -->
+        <div class="dropdown" id="controllerFilterDropdown">
+            <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Controller filtern">
+                <i class="fas fa-gamepad me-1"></i><span id="controllerFilterLabel">Alle</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width: 200px;">
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0" id="ctrlAll" checked>
+                        <span class="fw-bold">Alle Controller</span>
+                    </label>
+                </li>
+                <li><hr class="dropdown-divider my-1"></li>
+                <li class="ctrl-option" data-cid="1">
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 ctrl-cb" value="1" checked>
+                        <span class="ctrl-dot" style="background:#e74c3c"></span>Controller 1
+                    </label>
+                </li>
+                <li class="ctrl-option" data-cid="2">
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 ctrl-cb" value="2" checked>
+                        <span class="ctrl-dot" style="background:#3498db"></span>Controller 2
+                    </label>
+                </li>
+                <li class="ctrl-option" data-cid="3">
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 ctrl-cb" value="3" checked>
+                        <span class="ctrl-dot" style="background:#2ecc71"></span>Controller 3
+                    </label>
+                </li>
+                <li class="ctrl-option" data-cid="4">
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 ctrl-cb" value="4" checked>
+                        <span class="ctrl-dot" style="background:#f1c40f"></span>Controller 4
+                    </label>
+                </li>
+                <li class="ctrl-option" data-cid="5">
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 ctrl-cb" value="5" checked>
+                        <span class="ctrl-dot" style="background:#9b59b6"></span>Controller 5
+                    </label>
+                </li>
+                <li class="ctrl-option" data-cid="6">
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 ctrl-cb" value="6" checked>
+                        <span class="ctrl-dot" style="background:#e67e22"></span>Controller 6
+                    </label>
+                </li>
+            </ul>
+        </div>
         <button id="refreshBtn" class="btn btn-sm btn-outline-primary" title="Aktualisieren">
             <i class="fas fa-sync-alt"></i>
         </button>
@@ -92,6 +143,7 @@
 let dashboardData = {};
 let trackRecord = null;
 let currentSession = 'current';
+let visibleControllers = new Set(['1','2','3','4','5','6']);
 
 // Streckenrekord aus DB laden
 async function loadTrackRecord() {
@@ -215,6 +267,7 @@ async function updateDashboard() {
         dashboardData = await res.json();
         renderStats();
         renderControllers();
+        updateControllerNames();
     } catch (e) {
         console.error('Dashboard-Update fehlgeschlagen:', e);
     }
@@ -300,7 +353,9 @@ function renderControllers() {
     const grid = document.getElementById('controllerGrid');
     const controllerIds = Object.keys(dashboardData).sort((a,b) => parseInt(a) - parseInt(b));
     const allIds = ['1','2','3','4','5','6'];
-    const idsToShow = [...new Set([...allIds, ...controllerIds])].sort((a,b) => parseInt(a) - parseInt(b));
+    const idsToShow = [...new Set([...allIds, ...controllerIds])]
+        .filter(cid => visibleControllers.has(cid))
+        .sort((a,b) => parseInt(a) - parseInt(b));
 
     // Gespeicherte Reihenfolge anwenden
     const savedOrder = JSON.parse(localStorage.getItem('sr-card-order') || '[]');
@@ -461,6 +516,79 @@ document.getElementById('controllerGrid').addEventListener('drop', (e) => {
     localStorage.setItem('sr-card-order', JSON.stringify(order));
     document.querySelectorAll('.controller-card').forEach(c => c.classList.remove('drag-over'));
 });
+
+// ---- Controller Filter ----
+function getVisibleControllers() {
+    const cbs = document.querySelectorAll('.ctrl-cb');
+    const active = new Set();
+    cbs.forEach(cb => { if (cb.checked) active.add(cb.value); });
+    return active;
+}
+
+function updateFilterLabel() {
+    const label = document.getElementById('controllerFilterLabel');
+    if (visibleControllers.size === 6) {
+        label.textContent = 'Alle';
+    } else if (visibleControllers.size === 0) {
+        label.textContent = 'Keine';
+    } else {
+        label.textContent = [...visibleControllers].sort().map(c => 'C' + c).join(', ');
+    }
+}
+
+function updateControllerNames() {
+    // Farbpunkte und Namen aus Live-Daten aktualisieren
+    document.querySelectorAll('.ctrl-option').forEach(li => {
+        const cid = li.dataset.cid;
+        const cd = dashboardData[cid];
+        const dot = li.querySelector('.ctrl-dot');
+        const labelEl = li.querySelector('label');
+        if (cd) {
+            const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
+            if (dot) dot.style.background = color;
+            const name = cd.name || 'Fahrer ' + cid;
+            const textNode = labelEl.childNodes[labelEl.childNodes.length - 1];
+            textNode.textContent = name + ' (C' + cid + ')';
+        }
+    });
+}
+
+// "Alle" Checkbox
+document.getElementById('ctrlAll').addEventListener('change', function() {
+    const cbs = document.querySelectorAll('.ctrl-cb');
+    cbs.forEach(cb => cb.checked = this.checked);
+    visibleControllers = this.checked ? new Set(['1','2','3','4','5','6']) : new Set();
+    updateFilterLabel();
+    localStorage.setItem('sr-ctrl-filter', JSON.stringify([...visibleControllers]));
+    renderControllers();
+});
+
+// Einzelne Checkboxen
+document.querySelectorAll('.ctrl-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+        visibleControllers = getVisibleControllers();
+        document.getElementById('ctrlAll').checked = visibleControllers.size === 6;
+        updateFilterLabel();
+        localStorage.setItem('sr-ctrl-filter', JSON.stringify([...visibleControllers]));
+        renderControllers();
+    });
+});
+
+// Gespeicherten Filter laden
+(function loadSavedFilter() {
+    const saved = localStorage.getItem('sr-ctrl-filter');
+    if (saved) {
+        try {
+            const arr = JSON.parse(saved);
+            visibleControllers = new Set(arr);
+            document.querySelectorAll('.ctrl-cb').forEach(cb => {
+                cb.checked = visibleControllers.has(cb.value);
+            });
+            document.getElementById('ctrlAll').checked = visibleControllers.size === 6;
+            updateFilterLabel();
+        } catch (e) {}
+    }
+})();
 
 // Event-Listener
 document.addEventListener('DOMContentLoaded', async () => {
