@@ -239,13 +239,13 @@ def _session_display_name(session_id, session_type=None):
 
 
 # Events die eine NEUE Session starten (neues Rennen / Training)
-_NEW_SESSION_EVENTS = {'ui.reset', 'event.change_status'}
+_NEW_SESSION_EVENTS = {'ui.reset', 'event.change_status', 'event.start'}
 
 
 def _get_session_id(etype):
     """Session-ID ermitteln.
 
-    Neue Session bei ui.reset / event.change_status.
+    Neue Session bei ui.reset / event.change_status / event.start.
     Alle anderen Events (lap_update, penalty, car_removed, race_result)
     gehoeren zur aktuellen Session.
     """
@@ -264,17 +264,18 @@ def _get_current_race_type():
     rs = RaceStatus.query.order_by(RaceStatus.id.desc()).first()
     if rs and rs.race_type:
         return rs.race_type
-    # Fallback: letztes event.end Event in raw_json pruefen
-    evt = Event.query.filter_by(event_type='event.end').order_by(
-        Event.id.desc()).first()
-    if evt and evt.raw_json:
-        try:
-            ed = json.loads(evt.raw_json).get('event_data', {})
-            rt = ed.get('type') or ed.get('race_type') or ''
-            if rt:
-                return rt
-        except Exception:
-            pass
+    # Fallback: letztes event.start oder event.end in raw_json pruefen
+    for evt_type in ('event.start', 'event.end'):
+        evt = Event.query.filter_by(event_type=evt_type).order_by(
+            Event.id.desc()).first()
+        if evt and evt.raw_json:
+            try:
+                ed = json.loads(evt.raw_json).get('event_data', {})
+                rt = ed.get('type') or ed.get('race_type') or ''
+                if rt:
+                    return rt
+            except Exception:
+                pass
     return 'Training'
 
 
@@ -351,6 +352,8 @@ def receive_smartrace():
 
         if etype == 'ui.lap_update':
             _save_lap(sid, ed)
+        elif etype == 'event.start':
+            _save_start(sid, ed)
         elif etype == 'event.end':
             _save_result(sid, ed)
         elif etype == 'event.change_status':
@@ -368,6 +371,18 @@ def receive_smartrace():
             'event_type': etype,
             'session_id': sid,
         })
+
+        if etype == 'event.start':
+            race_type_start = ed.get('type') or ''
+            laps_total = ed.get('laps') or ''
+            duration_total = ed.get('duration') or ''
+            socketio.emit('race_status', {
+                'session_id': sid,
+                'status': 'starting',
+                'race_type': race_type_start,
+                'laps': laps_total,
+                'duration': duration_total,
+            })
 
         if etype == 'event.change_status':
             race_type_ws = _get_current_race_type()
@@ -438,6 +453,35 @@ def _extract_race_type(sid, ed):
     ).update({'session_type': race_type}, synchronize_session=False)
 
     log.info(f"Race-Type erkannt: {race_type} fuer Session {sid}")
+
+
+def _save_start(sid, ed):
+    """event.start verarbeiten.
+
+    SmartRace sendet:
+      Rundenrennen: {"type": "race", "laps": "50"}
+      Zeitrennen:   {"type": "race", "duration": "600"}
+      Qualifying:   {"type": "qualifying", "laps": "10"}
+    """
+    race_type = (ed.get('type') or '').strip()
+    if not race_type:
+        race_type = 'race'
+
+    db.session.add(RaceStatus(
+        session_id=sid,
+        status='starting',
+        race_type=race_type,
+    ))
+
+    # Bestehende Laps dieser Session aktualisieren (falls vorhanden)
+    Lap.query.filter(
+        Lap.session_id == sid,
+        db.or_(Lap.session_type.is_(None), Lap.session_type == '',
+               Lap.session_type == 'Training'),
+    ).update({'session_type': race_type}, synchronize_session=False)
+
+    log.info(f"event.start: type={race_type}, laps={ed.get('laps')}, "
+             f"duration={ed.get('duration')}, session={sid}")
 
 
 def _save_lap(sid, ed):
