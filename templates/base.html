@@ -66,6 +66,10 @@
                 <span class="badge race-status-badge bg-secondary ms-3" id="raceStatusBadge" title="Rennstatus">
                     <i class="fas fa-hourglass me-1"></i> <span id="raceStatusText">Warte...</span>
                 </span>
+                <!-- Vollbild -->
+                <button class="btn btn-sm btn-outline-light ms-2" id="fullscreenBtn" title="Vollbild (F11)">
+                    <i class="fas fa-expand"></i>
+                </button>
                 <!-- Verbindungsstatus -->
                 <span class="badge bg-warning ms-2" id="connectionBadge">
                     <i class="fas fa-circle me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Verbinde...
@@ -219,6 +223,40 @@
             if (data) updateRaceStatusBadge(data.status, data.race_type);
         })
         .catch(() => {});
+
+    // =========================================================================
+    // Fullscreen (global, alle Seiten)
+    // =========================================================================
+    function toggleFullscreen() {
+        const main = document.querySelector('main');
+        if (!document.fullscreenElement) {
+            (main.requestFullscreen || main.webkitRequestFullscreen || main.msRequestFullscreen).call(main);
+        } else {
+            (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen).call(document);
+        }
+    }
+
+    document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+
+    document.addEventListener('fullscreenchange', () => {
+        const btn = document.getElementById('fullscreenBtn');
+        const main = document.querySelector('main');
+        if (document.fullscreenElement) {
+            btn.innerHTML = '<i class="fas fa-compress"></i>';
+            main.classList.add('fullscreen-mode');
+        } else {
+            btn.innerHTML = '<i class="fas fa-expand"></i>';
+            main.classList.remove('fullscreen-mode');
+        }
+    });
+
+    // F11 abfangen fuer unseren Fullscreen statt Browser-Fullscreen
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'F11') {
+            e.preventDefault();
+            toggleFullscreen();
+        }
+    });
     </script>
 
     {% block scripts %}{% endblock %}
