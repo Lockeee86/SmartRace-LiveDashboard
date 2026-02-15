@@ -665,12 +665,13 @@ socket.on('penalty', () => {
 function applyLayout() {
     const grid = document.getElementById('controllerGrid');
     const icon = document.getElementById('layoutIcon');
+    if (!grid) return;
     if (dashLayout === 'list') {
         grid.style.gridTemplateColumns = '1fr';
-        icon.className = 'fas fa-th-large';
+        if (icon) icon.className = 'fas fa-th-large';
     } else {
         grid.style.gridTemplateColumns = '';
-        icon.className = 'fas fa-list';
+        if (icon) icon.className = 'fas fa-list';
     }
 }
 

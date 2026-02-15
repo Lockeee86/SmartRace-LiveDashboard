@@ -146,6 +146,18 @@ class SessionName(db.Model):
 # DB Init  (robust: erst versuchen, bei Fehler alles bereinigen)
 # =============================================================================
 
+def _add_column_if_missing(table, column, col_type):
+    """Fuegt eine Spalte hinzu, falls sie noch nicht existiert."""
+    try:
+        db.session.execute(text(
+            f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
+        ))
+        db.session.commit()
+        log.info(f"Spalte {table}.{column} hinzugefuegt.")
+    except Exception:
+        db.session.rollback()
+
+
 def init_db():
     try:
         db.create_all()
@@ -169,6 +181,10 @@ def init_db():
             db.session.rollback()
         db.create_all()
         log.info("DB nach Bereinigung neu erstellt.")
+
+    # Auto-Migration: fehlende Spalten hinzufuegen
+    _add_column_if_missing('sr_race_result', 'pitstops', 'INTEGER DEFAULT 0')
+    _add_column_if_missing('sr_penalty', 'penalty_seconds', 'INTEGER DEFAULT 0')
 
 
 with app.app_context():
@@ -777,17 +793,24 @@ def api_live_data():
         # DNF/DQ Status + Pitstops pruefen
         dnf_dq = {}
         pitstop_counts = {}
-        result_q = RaceResult.query
-        if sid and sid != 'all':
-            result_q = result_q.filter(RaceResult.session_id == sid)
-        for r in result_q.all():
-            if r.pitstops:
-                pitstop_counts[r.controller_id] = r.pitstops
-            if r.retired or r.disqualified:
-                dnf_dq[r.controller_id] = {
-                    'retired': r.retired,
-                    'disqualified': r.disqualified,
-                }
+        try:
+            result_q = RaceResult.query
+            if sid and sid != 'all':
+                result_q = result_q.filter(RaceResult.session_id == sid)
+            for r in result_q.all():
+                try:
+                    if r.pitstops:
+                        pitstop_counts[r.controller_id] = r.pitstops
+                except Exception:
+                    pass
+                if r.retired or r.disqualified:
+                    dnf_dq[r.controller_id] = {
+                        'retired': r.retired,
+                        'disqualified': r.disqualified,
+                    }
+        except Exception as e:
+            log.warning(f"RaceResult query failed: {e}")
+            db.session.rollback()
 
         ctrls = {}
         for lap in laps:
