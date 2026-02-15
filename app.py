@@ -1326,15 +1326,23 @@ def api_live_feed():
             })
 
         # Letzte Penalties
-        for p in Penalty.query.order_by(Penalty.created_at.desc()).limit(10).all():
-            items.append({
-                'type': 'penalty',
-                'timestamp': p.created_at.isoformat() if p.created_at else None,
-                'controller_id': p.controller_id,
-                'driver_name': p.driver_name,
-                'penalty_type': p.penalty_type,
-                'penalty_seconds': p.penalty_seconds or 0,
-            })
+        try:
+            for p in Penalty.query.order_by(Penalty.created_at.desc()).limit(10).all():
+                entry = {
+                    'type': 'penalty',
+                    'timestamp': p.created_at.isoformat() if p.created_at else None,
+                    'controller_id': p.controller_id,
+                    'driver_name': p.driver_name,
+                    'penalty_type': p.penalty_type,
+                }
+                try:
+                    entry['penalty_seconds'] = p.penalty_seconds or 0
+                except Exception:
+                    entry['penalty_seconds'] = 0
+                items.append(entry)
+        except Exception as e:
+            log.warning(f"live-feed penalties: {e}")
+            db.session.rollback()
 
         # Letzte Statusaenderungen
         for s in RaceStatus.query.order_by(RaceStatus.updated_at.desc()).limit(5).all():
@@ -1346,15 +1354,19 @@ def api_live_feed():
             })
 
         # DNF/DQ
-        for r in RaceResult.query.filter(
-            (RaceResult.retired == True) | (RaceResult.disqualified == True)
-        ).order_by(RaceResult.created_at.desc()).limit(5).all():
-            items.append({
-                'type': 'dnf' if r.retired else 'dq',
-                'timestamp': r.created_at.isoformat() if r.created_at else None,
-                'controller_id': r.controller_id,
-                'driver_name': r.driver_name,
-            })
+        try:
+            for r in RaceResult.query.filter(
+                (RaceResult.retired == True) | (RaceResult.disqualified == True)
+            ).order_by(RaceResult.created_at.desc()).limit(5).all():
+                items.append({
+                    'type': 'dnf' if r.retired else 'dq',
+                    'timestamp': r.created_at.isoformat() if r.created_at else None,
+                    'controller_id': r.controller_id,
+                    'driver_name': r.driver_name,
+                })
+        except Exception as e:
+            log.warning(f"live-feed dnf/dq: {e}")
+            db.session.rollback()
 
         # Streckenrekorde
         for tr in TrackRecord.query.order_by(TrackRecord.created_at.desc()).limit(5).all():
