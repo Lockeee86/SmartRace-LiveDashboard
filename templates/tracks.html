@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Strecken - SmartRace Live{% endblock %}
+
+{% block styles %}
+<style>
+.track-card {
+    border-left: 4px solid var(--sr-accent);
+    transition: border-color 0.3s;
+}
+.track-card:hover {
+    border-left-color: var(--sr-success);
+}
+.track-stat {
+    text-align: center;
+    padding: 0.5rem;
+}
+.track-stat .value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+}
+.track-stat .label {
+    font-size: 0.7rem;
+    color: var(--sr-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.record-table .position-col {
+    width: 40px;
+}
+.pb-row {
+    border-left: 3px solid transparent;
+    transition: border-left-color 0.2s;
+}
+.pb-row:hover {
+    border-left-color: var(--sr-warning);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="session-selector d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-road me-2"></i>Strecken & Rekorde</h5>
+</div>
+
+<!-- Strecken-Karten -->
+<div class="row g-3 mb-4" id="trackCards">
+    <div class="text-center text-muted py-4">Lade Strecken...</div>
+</div>
+
+<!-- Rekorde -->
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header border-0 bg-transparent">
+                <h6 class="mb-0"><i class="fas fa-trophy text-warning me-2"></i>Streckenrekorde (Top 10)</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th class="text-center position-col">#</th>
+                                <th>Fahrer</th>
+                                <th>Auto</th>
+                                <th class="text-center">Zeit</th>
+                                <th class="text-center d-none d-md-table-cell">Datum</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recordsBody">
+                            <tr><td colspan="5" class="text-center text-muted py-3">Lade...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header border-0 bg-transparent">
+                <h6 class="mb-0"><i class="fas fa-user-clock me-2"></i>Persoenliche Bestzeiten</h6>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th class="text-center position-col">#</th>
+                                <th>Fahrer</th>
+                                <th>Auto</th>
+                                <th class="text-center">Bestzeit</th>
+                                <th class="text-center d-none d-md-table-cell">Datum</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pbBody">
+                            <tr><td colspan="5" class="text-center text-muted py-3">Lade...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadTracks() {
+    try {
+        const res = await fetch('/api/tracks');
+        if (!res.ok) return;
+        const data = await res.json();
+        renderTracks(data.tracks || []);
+        renderRecords(data.records || []);
+        renderPBs(data.personal_records || []);
+    } catch (e) {
+        console.error('Strecken-Fehler:', e);
+    }
+}
+
+function renderTracks(tracks) {
+    const container = document.getElementById('trackCards');
+    if (tracks.length === 0) {
+        container.innerHTML = `<div class="col-12">
+            <div class="card text-center py-4">
+                <div class="text-muted">
+                    <i class="fas fa-road fa-2x mb-2"></i>
+                    <div>Noch keine Strecken registriert</div>
+                    <div class="small mt-1">Strecken werden automatisch gespeichert wenn SmartRace eine Strecke aktiviert</div>
+                </div>
+            </div>
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = tracks.map(t => {
+        const lengthDisplay = t.length ? `${t.length}m` : '--';
+        const pitstopDisplay = t.pitstop_delta ? `${t.pitstop_delta}s` : '--';
+        const lastUsed = t.last_used ? new Date(t.last_used).toLocaleDateString('de-DE', {
+            day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        }) : '--';
+
+        return `<div class="col-md-6 col-lg-4">
+            <div class="card track-card h-100">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3"><i class="fas fa-road me-2 text-muted"></i>${t.name}</h6>
+                    <div class="row g-2">
+                        <div class="col-4 track-stat">
+                            <div class="value">${lengthDisplay}</div>
+                            <div class="label">Laenge</div>
+                        </div>
+                        <div class="col-4 track-stat">
+                            <div class="value">${pitstopDisplay}</div>
+                            <div class="label">Pitstop Δ</div>
+                        </div>
+                        <div class="col-4 track-stat">
+                            <div class="value" style="font-size:0.8rem">${lastUsed}</div>
+                            <div class="label">Zuletzt</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderRecords(records) {
+    const tbody = document.getElementById('recordsBody');
+    if (records.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Keine Rekorde</td></tr>';
+        return;
+    }
+    tbody.innerHTML = records.map((r, i) => {
+        const pos = i + 1;
+        const posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : 'other';
+        const date = r.date ? new Date(r.date).toLocaleDateString('de-DE') : '--';
+        return `<tr class="pb-row">
+            <td class="text-center"><span class="position-badge ${posClass}" style="width:26px;height:26px;font-size:0.7rem">${pos}</span></td>
+            <td class="fw-bold">${r.driver_name}</td>
+            <td class="text-muted">${r.car_name || '--'}</td>
+            <td class="text-center font-mono fw-bold">${r.laptime_formatted}</td>
+            <td class="text-center text-muted d-none d-md-table-cell">${date}</td>
+        </tr>`;
+    }).join('');
+}
+
+function renderPBs(pbs) {
+    const tbody = document.getElementById('pbBody');
+    if (pbs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Keine Bestzeiten</td></tr>';
+        return;
+    }
+    tbody.innerHTML = pbs.map((p, i) => {
+        const pos = i + 1;
+        const posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : 'other';
+        const date = p.date ? new Date(p.date).toLocaleDateString('de-DE') : '--';
+        return `<tr class="pb-row">
+            <td class="text-center"><span class="position-badge ${posClass}" style="width:26px;height:26px;font-size:0.7rem">${pos}</span></td>
+            <td class="fw-bold">${p.driver_name}</td>
+            <td class="text-muted">${p.car_name || '--'}</td>
+            <td class="text-center font-mono fw-bold">${p.laptime_formatted}</td>
+            <td class="text-center text-muted d-none d-md-table-cell">${date}</td>
+        </tr>`;
+    }).join('');
+}
+
+document.addEventListener('DOMContentLoaded', loadTracks);
+
+// Live-Update bei neuem Rekord
+socket.on('track_record', () => loadTracks());
+</script>
+{% endblock %}
