@@ -66,8 +66,16 @@
                 <span class="badge race-status-badge bg-secondary ms-3" id="raceStatusBadge" title="Rennstatus">
                     <i class="fas fa-hourglass me-1"></i> <span id="raceStatusText">Warte...</span>
                 </span>
+                <!-- Theme Toggle -->
+                <button class="btn btn-sm btn-outline-light ms-2" id="themeToggleBtn" title="Hell/Dunkel umschalten">
+                    <i class="fas fa-sun" id="themeIcon"></i>
+                </button>
+                <!-- Sound Toggle -->
+                <button class="btn btn-sm btn-outline-light ms-1" id="soundToggleBtn" title="Ton an/aus">
+                    <i class="fas fa-volume-xmark" id="soundIcon"></i>
+                </button>
                 <!-- Vollbild -->
-                <button class="btn btn-sm btn-outline-light ms-2" id="fullscreenBtn" title="Vollbild (F11)">
+                <button class="btn btn-sm btn-outline-light ms-1" id="fullscreenBtn" title="Vollbild (F11)">
                     <i class="fas fa-expand"></i>
                 </button>
                 <!-- Verbindungsstatus -->
@@ -77,6 +85,28 @@
             </div>
         </div>
     </nav>
+
+    <!-- VSC Banner -->
+    <div class="vsc-banner d-none" id="vscBanner">
+        <i class="fas fa-shield-halved me-2"></i>VIRTUAL SAFETY CAR<i class="fas fa-shield-halved ms-2"></i>
+    </div>
+
+    <!-- Race-Info-Bar -->
+    <div class="race-info-bar d-none" id="raceInfoBar">
+        <div class="container-fluid px-4 d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-3">
+                <span id="raceInfoType"><i class="fas fa-flag-checkered me-1"></i>--</span>
+                <span id="raceInfoTarget" class="text-muted">--</span>
+                <span id="raceInfoTrack" class="text-muted d-none"><i class="fas fa-road me-1"></i><span id="trackNameDisplay">--</span></span>
+            </div>
+            <div class="race-progress-container flex-grow-1 mx-3 d-none" id="raceProgressContainer">
+                <div class="race-progress-bar">
+                    <div class="race-progress-fill" id="raceProgressFill" style="width: 0%"></div>
+                </div>
+                <span class="race-progress-text" id="raceProgressText">--</span>
+            </div>
+        </div>
+    </div>
 
     <!-- Toast-Container fuer Benachrichtigungen -->
     <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toastContainer"></div>
@@ -88,8 +118,8 @@
 
     <!-- Footer -->
     <footer class="border-top mt-4 py-3 text-center text-muted small">
-        <div class="container-fluid">
-            SmartRace Live Dashboard &middot; Carrera Digital Datenschnittstelle
+        <div class="container-fluid d-flex justify-content-center align-items-center gap-3">
+            <span>SmartRace Live Dashboard &middot; Carrera Digital</span>
         </div>
     </footer>
 
@@ -196,11 +226,15 @@
         }
     });
 
-    // VSC-Benachrichtigung
+    // VSC-Banner global
     socket.on('vsc', (data) => {
+        const banner = document.getElementById('vscBanner');
         if (data.active) {
+            banner.classList.remove('d-none');
             showToast('<strong>Virtual Safety Car</strong> aktiviert', 'warning', 8000);
+            playSound('vsc');
         } else {
+            banner.classList.add('d-none');
             showToast('<strong>Virtual Safety Car</strong> zurueckgezogen', 'info', 5000);
         }
     });
@@ -208,6 +242,9 @@
     // Aktive Strecke
     socket.on('active_track', (data) => {
         if (data.name) {
+            const trackEl = document.getElementById('raceInfoTrack');
+            document.getElementById('trackNameDisplay').textContent = data.name;
+            trackEl.classList.remove('d-none');
             showToast(`<strong>Strecke:</strong> ${data.name}`, 'info', 5000);
         }
     });
@@ -238,18 +275,6 @@
         statusText.textContent = s.text + typeLabel;
         statusBadge.querySelector('i').className = 'fas ' + s.icon + ' me-1';
     }
-
-    socket.on('race_status', (data) => {
-        updateRaceStatusBadge(data.status, data.race_type);
-    });
-
-    // Rennstatus beim Laden holen
-    fetch('/api/race-status')
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-            if (data) updateRaceStatusBadge(data.status, data.race_type);
-        })
-        .catch(() => {});
 
     // =========================================================================
     // Fullscreen (global, alle Seiten)
@@ -283,6 +308,180 @@
             e.preventDefault();
             toggleFullscreen();
         }
+    });
+
+    // =========================================================================
+    // Race-Info-Bar (Renntyp, Rundenzahl/Dauer, Fortschritt)
+    // =========================================================================
+    let raceInfo = { type: '', laps: '', duration: '', status: '' };
+    let raceMaxLaps = 0;
+    let raceDuration = 0;
+
+    function updateRaceInfoBar(data) {
+        const bar = document.getElementById('raceInfoBar');
+        const typeEl = document.getElementById('raceInfoType');
+        const targetEl = document.getElementById('raceInfoTarget');
+        const progressContainer = document.getElementById('raceProgressContainer');
+
+        if (data.race_type) raceInfo.type = data.race_type;
+        if (data.laps) { raceInfo.laps = data.laps; raceMaxLaps = parseInt(data.laps) || 0; }
+        if (data.duration) { raceInfo.duration = data.duration; raceDuration = parseInt(data.duration) || 0; }
+        if (data.status) raceInfo.status = data.status;
+
+        if (!raceInfo.type || raceInfo.type === 'Training') {
+            bar.classList.add('d-none');
+            return;
+        }
+
+        bar.classList.remove('d-none');
+
+        const typeLabel = raceInfo.type === 'race' ? 'Rennen' : raceInfo.type === 'qualifying' ? 'Qualifying' : raceInfo.type;
+        typeEl.innerHTML = `<i class="fas fa-flag-checkered me-1"></i>${typeLabel}`;
+
+        if (raceMaxLaps > 0) {
+            targetEl.textContent = raceMaxLaps + ' Runden';
+            progressContainer.classList.remove('d-none');
+        } else if (raceDuration > 0) {
+            const mins = Math.floor(raceDuration / 60);
+            targetEl.textContent = mins + ' Minuten';
+            progressContainer.classList.remove('d-none');
+        } else {
+            targetEl.textContent = '';
+            progressContainer.classList.add('d-none');
+        }
+    }
+
+    function updateRaceProgress(currentLap) {
+        if (raceMaxLaps <= 0) return;
+        const pct = Math.min(100, Math.round((currentLap / raceMaxLaps) * 100));
+        document.getElementById('raceProgressFill').style.width = pct + '%';
+        document.getElementById('raceProgressText').textContent = `${currentLap}/${raceMaxLaps}`;
+    }
+
+    socket.on('race_status', (data) => {
+        updateRaceStatusBadge(data.status, data.race_type);
+        updateRaceInfoBar(data);
+
+        if (data.status === 'ended') {
+            playSound('finish');
+        }
+    });
+
+    // Beim Laden pruefen
+    fetch('/api/race-status')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+            if (data) {
+                updateRaceStatusBadge(data.status, data.race_type);
+                updateRaceInfoBar(data);
+            }
+        })
+        .catch(() => {});
+
+    // =========================================================================
+    // Dark/Light Theme Toggle
+    // =========================================================================
+    const themeBtn = document.getElementById('themeToggleBtn');
+    const themeIcon = document.getElementById('themeIcon');
+    let currentTheme = localStorage.getItem('sr-theme') || 'dark';
+
+    function applyTheme(theme) {
+        currentTheme = theme;
+        document.documentElement.setAttribute('data-bs-theme', theme);
+        if (theme === 'light') {
+            document.body.style.backgroundColor = '#f0f2f5';
+            document.body.style.color = '#1a1a2e';
+            themeIcon.className = 'fas fa-moon';
+        } else {
+            document.body.style.backgroundColor = '';
+            document.body.style.color = '';
+            themeIcon.className = 'fas fa-sun';
+        }
+        localStorage.setItem('sr-theme', theme);
+    }
+
+    themeBtn.addEventListener('click', () => {
+        applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+    });
+
+    applyTheme(currentTheme);
+
+    // =========================================================================
+    // Sound-Benachrichtigungen
+    // =========================================================================
+    let soundEnabled = localStorage.getItem('sr-sound') === 'true';
+    const soundIconEl = document.getElementById('soundIcon');
+
+    function updateSoundIcon() {
+        soundIconEl.className = soundEnabled ? 'fas fa-volume-high' : 'fas fa-volume-xmark';
+    }
+
+    document.getElementById('soundToggleBtn').addEventListener('click', () => {
+        soundEnabled = !soundEnabled;
+        localStorage.setItem('sr-sound', soundEnabled);
+        updateSoundIcon();
+        if (soundEnabled) showToast('Ton aktiviert', 'info', 2000);
+    });
+
+    updateSoundIcon();
+
+    // Web Audio API Toene
+    let audioCtx = null;
+    function getAudioCtx() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        return audioCtx;
+    }
+
+    function playSound(type) {
+        if (!soundEnabled) return;
+        try {
+            const ctx = getAudioCtx();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            gain.gain.value = 0.15;
+
+            if (type === 'record') {
+                // Aufsteigende Toene
+                osc.frequency.setValueAtTime(600, ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.2);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+                osc.start(); osc.stop(ctx.currentTime + 0.5);
+            } else if (type === 'penalty') {
+                // Kurzer Warnton
+                osc.type = 'square';
+                osc.frequency.value = 400;
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+                osc.start(); osc.stop(ctx.currentTime + 0.3);
+            } else if (type === 'finish') {
+                // Zielflagge: drei Toene
+                osc.frequency.setValueAtTime(800, ctx.currentTime);
+                osc.frequency.setValueAtTime(1000, ctx.currentTime + 0.15);
+                osc.frequency.setValueAtTime(1200, ctx.currentTime + 0.3);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+                osc.start(); osc.stop(ctx.currentTime + 0.6);
+            } else if (type === 'vsc') {
+                // Langsamer Warnton
+                osc.type = 'sawtooth';
+                osc.frequency.value = 300;
+                gain.gain.value = 0.1;
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+                osc.start(); osc.stop(ctx.currentTime + 0.8);
+            } else if (type === 'jumpstart') {
+                // Scharfer hoher Ton
+                osc.type = 'square';
+                osc.frequency.value = 800;
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+                osc.start(); osc.stop(ctx.currentTime + 0.5);
+            }
+        } catch (e) {}
+    }
+
+    // Sounds bei Events
+    socket.on('track_record', () => playSound('record'));
+    socket.on('penalty', (data) => {
+        if (data.penalty_seconds > 0) playSound('penalty');
     });
     </script>
 

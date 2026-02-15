@@ -62,6 +62,10 @@
                 </li>
             </ul>
         </div>
+        <!-- Layout Toggle -->
+        <button id="layoutToggleBtn" class="btn btn-sm btn-outline-light" title="Grid/Listen-Ansicht">
+            <i class="fas fa-th-large" id="layoutIcon"></i>
+        </button>
         <button id="refreshBtn" class="btn btn-sm btn-outline-primary" title="Aktualisieren">
             <i class="fas fa-sync-alt"></i>
         </button>
@@ -144,6 +148,8 @@ let dashboardData = {};
 let trackRecord = null;
 let currentSession = 'current';
 let visibleControllers = new Set(['1','2','3','4','5','6']);
+let fuelLevels = {}; // {controller_id: fuel_pct}
+let dashLayout = localStorage.getItem('sr-layout') || 'grid';
 
 // Streckenrekord aus DB laden
 async function loadTrackRecord() {
@@ -418,6 +424,17 @@ function renderControllers() {
             </div>`;
         }
 
+        // Fuel-Anzeige
+        let fuelHtml = '';
+        const fuel = fuelLevels[cid];
+        if (fuel !== undefined && fuel >= 0) {
+            const fuelColor = fuel > 50 ? 'var(--sr-success)' : fuel > 20 ? 'var(--sr-warning)' : 'var(--sr-danger)';
+            fuelHtml = `<div class="fuel-bar-container">
+                <div class="fuel-bar-fill" style="width: ${fuel}%; background: ${fuelColor}"></div>
+            </div>
+            <div class="fuel-label"><span><i class="fas fa-gas-pump"></i> Tank</span><span>${fuel}%</span></div>`;
+        }
+
         let tableRows = '';
         if (displayLaps.length > 0) {
             tableRows = displayLaps.map((l, idx) => {
@@ -462,6 +479,7 @@ function renderControllers() {
                     <div class="small text-muted mt-1">${laps.length} Runden</div>
                 </div>
             </div>
+            ${fuelHtml}
             <table class="table table-sm mb-0">
                 <thead><tr>
                     <th class="text-center">Runde</th>
@@ -472,6 +490,9 @@ function renderControllers() {
             </table>
         </div>`;
     }).join('');
+
+    // Layout anwenden
+    applyLayout();
 }
 
 // Drag & Drop fuer Controller-Cards
@@ -628,6 +649,59 @@ socket.on('track_record', (data) => {
 
 socket.on('penalty', () => {
     loadLiveFeed();
+});
+
+// ---- Layout Toggle ----
+function applyLayout() {
+    const grid = document.getElementById('controllerGrid');
+    const icon = document.getElementById('layoutIcon');
+    if (dashLayout === 'list') {
+        grid.style.gridTemplateColumns = '1fr';
+        icon.className = 'fas fa-th-large';
+    } else {
+        grid.style.gridTemplateColumns = '';
+        icon.className = 'fas fa-list';
+    }
+}
+
+document.getElementById('layoutToggleBtn').addEventListener('click', () => {
+    dashLayout = dashLayout === 'grid' ? 'list' : 'grid';
+    localStorage.setItem('sr-layout', dashLayout);
+    applyLayout();
+});
+
+// ---- Fuel Updates via WebSocket ----
+socket.on('fuel_update', (data) => {
+    if (data.controller_id !== undefined && data.fuel !== undefined) {
+        const cid = String(data.controller_id);
+        if (data.fuel < 0) {
+            delete fuelLevels[cid];
+        } else {
+            fuelLevels[cid] = data.fuel;
+        }
+        renderControllers();
+    }
+});
+
+// ---- Race Progress: update from live data ----
+socket.on('new_data', () => {
+    // Fortschritt aktualisieren: hoechste Rundenzahl aller Controller
+    if (typeof raceMaxLaps !== 'undefined' && raceMaxLaps > 0) {
+        let maxLap = 0;
+        Object.values(dashboardData).forEach(cd => {
+            if (cd.laps && cd.laps.length > maxLap) maxLap = cd.laps.length;
+        });
+        if (maxLap > 0 && typeof updateRaceProgress === 'function') {
+            updateRaceProgress(maxLap);
+        }
+    }
+});
+
+// Jumpstart Sound
+socket.on('race_status', (data) => {
+    if (data.status === 'jumpstart' && typeof playSound === 'function') {
+        playSound('jumpstart');
+    }
 });
 
 // Fallback: alle 10 Sekunden aktualisieren
