@@ -326,6 +326,14 @@ def page_results():
 def page_session_compare():
     return render_template('session-compare.html')
 
+@app.route('/live-timing')
+def page_live_timing():
+    return render_template('live-timing.html')
+
+@app.route('/race-control')
+def page_race_control():
+    return render_template('race-control.html')
+
 @app.route('/driver/<name>')
 def page_driver_profile(name):
     return render_template('driver-profile.html', driver_name=name)
@@ -766,18 +774,20 @@ def api_live_data():
         for p in penalty_q.all():
             penalty_counts[p.controller_id] = penalty_counts.get(p.controller_id, 0) + 1
 
-        # DNF/DQ Status pruefen
+        # DNF/DQ Status + Pitstops pruefen
         dnf_dq = {}
+        pitstop_counts = {}
         result_q = RaceResult.query
         if sid and sid != 'all':
             result_q = result_q.filter(RaceResult.session_id == sid)
-        for r in result_q.filter(
-            (RaceResult.retired == True) | (RaceResult.disqualified == True)
-        ).all():
-            dnf_dq[r.controller_id] = {
-                'retired': r.retired,
-                'disqualified': r.disqualified,
-            }
+        for r in result_q.all():
+            if r.pitstops:
+                pitstop_counts[r.controller_id] = r.pitstops
+            if r.retired or r.disqualified:
+                dnf_dq[r.controller_id] = {
+                    'retired': r.retired,
+                    'disqualified': r.disqualified,
+                }
 
         ctrls = {}
         for lap in laps:
@@ -790,6 +800,7 @@ def api_live_data():
                     'laps': [],
                     'best_time_raw': None,
                     'penalties': penalty_counts.get(cid, 0),
+                    'pitstops': pitstop_counts.get(cid, 0),
                     'retired': dnf_dq.get(cid, {}).get('retired', False),
                     'disqualified': dnf_dq.get(cid, {}).get('disqualified', False),
                 }

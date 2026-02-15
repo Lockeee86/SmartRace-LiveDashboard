@@ -52,8 +52,18 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'page_live_timing' %}active{% endif %}" href="{{ url_for('page_live_timing') }}" title="Live-Timing">
+                            <i class="fas fa-stopwatch me-1"></i><span class="d-none d-xl-inline">Timing</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'page_results' %}active{% endif %}" href="{{ url_for('page_results') }}" title="Ergebnis">
                             <i class="fas fa-flag-checkered me-1"></i><span class="d-none d-xl-inline">Ergebnis</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'page_race_control' %}active{% endif %}" href="{{ url_for('page_race_control') }}" title="Race Control">
+                            <i class="fas fa-tower-broadcast me-1"></i><span class="d-none d-xl-inline">Control</span>
                         </a>
                     </li>
                     <li class="nav-item">

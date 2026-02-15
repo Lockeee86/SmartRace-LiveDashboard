@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+
+{% block title %}Race Control - SmartRace Live{% endblock %}
+
+{% block styles %}
+<style>
+.rc-event {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--sr-border);
+    border-left: 3px solid transparent;
+    font-size: 0.8rem;
+    transition: opacity 0.3s;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+.rc-event:hover { background: rgba(255,255,255,0.03); }
+.rc-event.rc-status { border-left-color: var(--sr-accent); background: rgba(59,130,246,0.05); }
+.rc-event.rc-penalty { border-left-color: var(--sr-danger); background: rgba(239,68,68,0.05); }
+.rc-event.rc-record { border-left-color: var(--sr-warning); background: rgba(234,179,8,0.08); }
+.rc-event.rc-vsc { border-left-color: #eab308; background: rgba(234,179,8,0.12); }
+.rc-event.rc-finish { border-left-color: var(--sr-success); background: rgba(34,197,94,0.05); }
+.rc-event.rc-dnf { border-left-color: var(--sr-warning); }
+.rc-event.rc-dq { border-left-color: var(--sr-danger); }
+.rc-event.rc-fuel { border-left-color: #a855f7; }
+.rc-event.rc-lap { border-left-color: var(--sr-border); }
+.rc-timestamp {
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+    color: var(--sr-muted);
+    min-width: 65px;
+    flex-shrink: 0;
+    padding-top: 0.1rem;
+}
+.rc-icon {
+    width: 22px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.rc-message { flex-grow: 1; line-height: 1.4; }
+.rc-message strong { font-weight: 700; }
+.rc-detail { font-size: 0.7rem; color: var(--sr-muted); }
+.rc-filter-btn.active { background-color: var(--sr-accent); border-color: var(--sr-accent); color: #fff; }
+.rc-counter { font-size: 0.7rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="session-selector d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-tower-broadcast me-2"></i>Race Control</h5>
+    <div class="d-flex align-items-center gap-2">
+        <div class="btn-group btn-group-sm" id="rcFilters">
+            <button class="btn btn-outline-light rc-filter-btn active" data-filter="all" title="Alle">Alle</button>
+            <button class="btn btn-outline-light rc-filter-btn" data-filter="status" title="Status"><i class="fas fa-flag"></i></button>
+            <button class="btn btn-outline-light rc-filter-btn" data-filter="penalty" title="Strafen"><i class="fas fa-exclamation-triangle"></i></button>
+            <button class="btn btn-outline-light rc-filter-btn" data-filter="record" title="Rekorde"><i class="fas fa-star"></i></button>
+            <button class="btn btn-outline-light rc-filter-btn" data-filter="lap" title="Runden"><i class="fas fa-road"></i></button>
+        </div>
+        <span class="badge bg-secondary rc-counter" id="rcCounter">0 Events</span>
+        <button id="rcClear" class="btn btn-sm btn-outline-danger" title="Leeren"><i class="fas fa-trash"></i></button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0" style="max-height: calc(100vh - 220px); overflow-y: auto;" id="rcContainer">
+        <div class="text-center text-muted py-4">
+            <i class="fas fa-satellite-dish fa-2x mb-2"></i>
+            <div>Warte auf Race-Events...</div>
+            <div class="small mt-1">Events erscheinen hier in Echtzeit</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let rcEvents = [];
+let rcFilter = 'all';
+const MAX_EVENTS = 200;
+
+function addRcEvent(type, icon, iconColor, message, detail, color) {
+    const now = new Date();
+    const time = now.toLocaleTimeString('de-DE');
+    rcEvents.unshift({ type, icon, iconColor, message, detail, color, time, ts: now.getTime() });
+    if (rcEvents.length > MAX_EVENTS) rcEvents.pop();
+    renderRcEvents();
+}
+
+function renderRcEvents() {
+    const container = document.getElementById('rcContainer');
+    const filtered = rcFilter === 'all' ? rcEvents : rcEvents.filter(e => e.type === rcFilter);
+
+    document.getElementById('rcCounter').textContent = filtered.length + ' Events';
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div class="text-center text-muted py-4">
+            <i class="fas fa-satellite-dish fa-2x mb-2"></i>
+            <div>Keine Events${rcFilter !== 'all' ? ' fuer diesen Filter' : ''}</div>
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = filtered.map(e => `
+        <div class="rc-event rc-${e.type}" ${e.color ? `style="border-left-color: ${e.color}"` : ''}>
+            <span class="rc-timestamp">${e.time}</span>
+            <span class="rc-icon"><i class="fas ${e.icon}" style="color: ${e.iconColor}"></i></span>
+            <div class="rc-message">
+                ${e.message}
+                ${e.detail ? `<div class="rc-detail">${e.detail}</div>` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+// Filter-Buttons
+document.getElementById('rcFilters').addEventListener('click', (e) => {
+    const btn = e.target.closest('.rc-filter-btn');
+    if (!btn) return;
+    document.querySelectorAll('.rc-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    rcFilter = btn.dataset.filter;
+    renderRcEvents();
+});
+
+document.getElementById('rcClear').addEventListener('click', () => {
+    rcEvents = [];
+    renderRcEvents();
+});
+
+// ---- WebSocket Event Listeners ----
+
+// Neue Runde
+socket.on('new_data', () => {
+    // Runden werden beim naechsten Datenabruf nachgeladen
+});
+
+// Live-Feed fuer Runden-Events
+async function pollLiveFeed() {
+    try {
+        const res = await fetch('/api/live-feed?limit=5');
+        if (!res.ok) return;
+        const items = await res.json();
+        items.reverse().forEach(item => {
+            // Duplikat-Check (zeitbasiert)
+            const key = `${item.type}_${item.driver_name}_${item.lap_number || ''}_${item.timestamp || ''}`;
+            if (rcEvents.some(e => e._key === key)) return;
+
+            if (item.type === 'lap') {
+                const ev = {
+                    type: 'lap', icon: 'fa-road', iconColor: item.color || 'var(--sr-muted)',
+                    message: `<strong style="color:${item.color || '#999'}">${item.driver_name}</strong> Runde ${item.lap_number}`,
+                    detail: `${item.laptime_formatted}${item.is_pb ? ' (PB!)' : ''}`,
+                    color: item.color,
+                    time: item.timestamp ? new Date(item.timestamp).toLocaleTimeString('de-DE') : new Date().toLocaleTimeString('de-DE'),
+                    ts: Date.now(), _key: key
+                };
+                rcEvents.unshift(ev);
+            } else if (item.type === 'record') {
+                const ev = {
+                    type: 'record', icon: 'fa-star', iconColor: 'var(--sr-warning)',
+                    message: `<strong>NEUER REKORD!</strong> <strong style="color:${item.color || '#999'}">${item.driver_name}</strong>`,
+                    detail: item.laptime_formatted,
+                    color: null,
+                    time: item.timestamp ? new Date(item.timestamp).toLocaleTimeString('de-DE') : new Date().toLocaleTimeString('de-DE'),
+                    ts: Date.now(), _key: key
+                };
+                rcEvents.unshift(ev);
+            } else if (item.type === 'penalty') {
+                const ev = {
+                    type: 'penalty', icon: 'fa-exclamation-triangle', iconColor: 'var(--sr-danger)',
+                    message: `<strong style="color:${item.color || '#999'}">${item.driver_name}</strong> ${item.penalty_type || 'Strafe'}`,
+                    detail: null,
+                    color: null,
+                    time: item.timestamp ? new Date(item.timestamp).toLocaleTimeString('de-DE') : new Date().toLocaleTimeString('de-DE'),
+                    ts: Date.now(), _key: key
+                };
+                rcEvents.unshift(ev);
+            }
+        });
+        if (rcEvents.length > MAX_EVENTS) rcEvents.length = MAX_EVENTS;
+        renderRcEvents();
+    } catch (e) {}
+}
+
+// Status-Aenderungen
+socket.on('race_status', (data) => {
+    const s = RACE_STATUS_MAP[data.status] || RACE_STATUS_MAP['unknown'];
+    const raceType = data.race_type ? ` (${data.race_type})` : '';
+    addRcEvent('status', s.icon, 'var(--sr-accent)',
+        `<strong>Status:</strong> ${s.text}${raceType}`,
+        data.status === 'ended' ? 'Rennen beendet' : null
+    );
+    if (data.status === 'ended') {
+        addRcEvent('finish', 'fa-flag-checkered', 'var(--sr-success)',
+            '<strong>FINISH!</strong> Rennen beendet', null);
+    }
+});
+
+// Strafen
+socket.on('penalty', (data) => {
+    const name = data.driver_name || 'Fahrer ' + (data.controller_id || '?');
+    const secs = data.penalty_seconds || 0;
+    if (secs === 0) {
+        addRcEvent('penalty', 'fa-check-circle', 'var(--sr-success)',
+            `<strong>${name}</strong> Strafe abgesessen`, null, data.color);
+    } else {
+        addRcEvent('penalty', 'fa-exclamation-triangle', 'var(--sr-danger)',
+            `<strong>${name}</strong> <strong>${secs}s Strafe</strong>`, null, data.color);
+    }
+});
+
+// VSC
+socket.on('vsc', (data) => {
+    if (data.active) {
+        addRcEvent('vsc', 'fa-shield-halved', '#eab308',
+            '<strong>VIRTUAL SAFETY CAR</strong> aktiviert', null);
+    } else {
+        addRcEvent('vsc', 'fa-shield-halved', 'var(--sr-muted)',
+            '<strong>Virtual Safety Car</strong> zurueckgezogen', null);
+    }
+});
+
+// Streckenrekord
+socket.on('track_record', (data) => {
+    addRcEvent('record', 'fa-star', 'var(--sr-warning)',
+        `<strong>NEUER STRECKENREKORD!</strong> ${data.driver_name}`,
+        `${data.laptime_formatted} (${data.car_name || '--'})`);
+});
+
+// Aktive Strecke
+socket.on('active_track', (data) => {
+    if (data.name) {
+        addRcEvent('status', 'fa-road', 'var(--sr-accent)',
+            `<strong>Strecke:</strong> ${data.name}`,
+            data.length ? `Laenge: ${data.length}m` : null);
+    }
+});
+
+// Auto entfernt
+socket.on('car_removed', (data) => {
+    const name = data.driver_name || 'Controller ' + (data.controller_id || '?');
+    addRcEvent('dnf', 'fa-ban', 'var(--sr-warning)',
+        `<strong>${name}</strong> aus der Session entfernt`, null, data.color);
+});
+
+// Fuel-Warnung
+socket.on('fuel_update', (data) => {
+    if (data.fuel >= 0 && data.fuel <= 10) {
+        const name = data.driver_name || 'Controller ' + (data.controller_id || '?');
+        addRcEvent('fuel', 'fa-gas-pump', '#a855f7',
+            `<strong>${name}</strong> Tank kritisch: <strong>${data.fuel}%</strong>`, null, data.color);
+    }
+});
+
+// Initial: Live-Feed laden
+document.addEventListener('DOMContentLoaded', () => {
+    pollLiveFeed();
+});
+
+socket.on('new_data', () => {
+    pollLiveFeed();
+});
+</script>
+{% endblock %}

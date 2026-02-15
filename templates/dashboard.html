@@ -637,6 +637,16 @@ document.getElementById('refreshBtn').addEventListener('click', async () => {
 socket.on('new_data', () => {
     updateDashboard();
     loadLiveFeed();
+    // Fortschritt aktualisieren: hoechste Rundenzahl aller Controller
+    if (typeof raceMaxLaps !== 'undefined' && raceMaxLaps > 0) {
+        let maxLap = 0;
+        Object.values(dashboardData).forEach(cd => {
+            if (cd.laps && cd.laps.length > maxLap) maxLap = cd.laps.length;
+        });
+        if (maxLap > 0 && typeof updateRaceProgress === 'function') {
+            updateRaceProgress(maxLap);
+        }
+    }
 });
 
 socket.on('track_record', (data) => {
@@ -680,20 +690,6 @@ socket.on('fuel_update', (data) => {
             fuelLevels[cid] = data.fuel;
         }
         renderControllers();
-    }
-});
-
-// ---- Race Progress: update from live data ----
-socket.on('new_data', () => {
-    // Fortschritt aktualisieren: hoechste Rundenzahl aller Controller
-    if (typeof raceMaxLaps !== 'undefined' && raceMaxLaps > 0) {
-        let maxLap = 0;
-        Object.values(dashboardData).forEach(cd => {
-            if (cd.laps && cd.laps.length > maxLap) maxLap = cd.laps.length;
-        });
-        if (maxLap > 0 && typeof updateRaceProgress === 'function') {
-            updateRaceProgress(maxLap);
-        }
     }
 });
 
