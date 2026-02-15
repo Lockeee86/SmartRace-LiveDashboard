@@ -66,6 +66,39 @@
         <button id="layoutToggleBtn" class="btn btn-sm btn-outline-light" title="Grid/Listen-Ansicht">
             <i class="fas fa-th-large" id="layoutIcon"></i>
         </button>
+        <!-- Widget Visibility Toggle -->
+        <div class="dropdown" id="widgetToggleDropdown">
+            <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Widgets ein/ausblenden">
+                <i class="fas fa-eye"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width: 200px;">
+                <li class="small text-muted px-2 pb-1">Widgets anzeigen:</li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="fastest" checked>
+                        <i class="fas fa-bolt text-info"></i> Schnellste Runde
+                    </label>
+                </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="record" checked>
+                        <i class="fas fa-trophy text-success"></i> Streckenrekord
+                    </label>
+                </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="consistency" checked>
+                        <i class="fas fa-bullseye text-warning"></i> Konsistenz
+                    </label>
+                </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="stats" checked>
+                        <i class="fas fa-chart-bar" style="color: #9b59b6"></i> Session Stats
+                    </label>
+                </li>
+            </ul>
+        </div>
         <button id="refreshBtn" class="btn btn-sm btn-outline-primary" title="Aktualisieren">
             <i class="fas fa-sync-alt"></i>
         </button>
@@ -878,6 +911,37 @@ socket.on('fuel_update', (data) => {
         renderControllers();
     }
 });
+
+// ---- Widget Visibility ----
+function applyWidgetVisibility() {
+    const hidden = JSON.parse(localStorage.getItem('sr-hidden-widgets') || '[]');
+    document.querySelectorAll('.widget-col').forEach(col => {
+        const wid = col.dataset.widget;
+        if (hidden.includes(wid)) {
+            col.classList.add('d-none');
+        } else {
+            col.classList.remove('d-none');
+        }
+    });
+    // Checkboxen synchronisieren
+    document.querySelectorAll('.widget-vis-cb').forEach(cb => {
+        cb.checked = !hidden.includes(cb.value);
+    });
+}
+
+document.querySelectorAll('.widget-vis-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+        const hidden = [];
+        document.querySelectorAll('.widget-vis-cb').forEach(c => {
+            if (!c.checked) hidden.push(c.value);
+        });
+        localStorage.setItem('sr-hidden-widgets', JSON.stringify(hidden));
+        applyWidgetVisibility();
+    });
+});
+
+// Gespeicherte Sichtbarkeit laden
+applyWidgetVisibility();
 
 // ---- Widget Drag & Drop ----
 let draggedWidget = null;
