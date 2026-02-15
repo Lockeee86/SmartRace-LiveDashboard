@@ -47,6 +47,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'page_tracks' %}active{% endif %}" href="{{ url_for('page_tracks') }}" title="Strecken">
+                            <i class="fas fa-road me-1"></i><span class="d-none d-xl-inline">Strecken</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'page_head_to_head' %}active{% endif %}" href="{{ url_for('page_head_to_head') }}" title="Head-to-Head">
                             <i class="fas fa-people-arrows me-1"></i><span class="d-none d-xl-inline">H2H</span>
                         </a>
@@ -64,11 +69,6 @@
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'page_race_control' %}active{% endif %}" href="{{ url_for('page_race_control') }}" title="Race Control">
                             <i class="fas fa-tower-broadcast me-1"></i><span class="d-none d-xl-inline">Control</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'page_session_compare' %}active{% endif %}" href="{{ url_for('page_session_compare') }}" title="Vergleich">
-                            <i class="fas fa-columns me-1"></i><span class="d-none d-xl-inline">Vergleich</span>
                         </a>
                     </li>
                 </ul>
