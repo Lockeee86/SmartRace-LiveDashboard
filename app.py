@@ -85,6 +85,7 @@ class RaceResult(db.Model):
     total_laps = db.Column(db.Integer)
     best_laptime_ms = db.Column(db.Integer)
     gap = db.Column(db.String(50))
+    pitstops = db.Column(db.Integer, default=0)
     disqualified = db.Column(db.Boolean, default=False)
     retired = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -97,6 +98,7 @@ class Penalty(db.Model):
     controller_id = db.Column(db.String(10))
     driver_name = db.Column(db.String(100))
     penalty_type = db.Column(db.String(50))
+    penalty_seconds = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -242,13 +244,22 @@ def _session_display_name(session_id, session_type=None):
 _NEW_SESSION_EVENTS = {'ui.reset', 'event.change_status', 'event.start'}
 
 
-def _get_session_id(etype):
+def _get_session_id(etype, data=None):
     """Session-ID ermitteln.
 
+    Primaer: event_id aus SmartRace-Daten (wird bei event.start generiert
+    und an alle Folgeereignisse weitergereicht).
+    Fallback: Timestamp-basierte Session-ID.
+
     Neue Session bei ui.reset / event.change_status / event.start.
-    Alle anderen Events (lap_update, penalty, car_removed, race_result)
-    gehoeren zur aktuellen Session.
+    Alle anderen Events gehoeren zur aktuellen Session.
     """
+    # SmartRace event_id als primaere Session-Zuordnung
+    if data:
+        event_id = data.get('event_id') or (data.get('event_data') or {}).get('event_id')
+        if event_id:
+            return f"event_{event_id}"
+
     if etype in _NEW_SESSION_EVENTS:
         return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
@@ -341,7 +352,7 @@ def receive_smartrace():
         etype = data.get('event_type', 'unknown')
         ed = data.get('event_data') or {}
 
-        sid = _get_session_id(etype)
+        sid = _get_session_id(etype, data)
 
         db.session.add(Event(
             session_id=sid, event_type=etype, raw_json=json.dumps(data),
@@ -358,10 +369,14 @@ def receive_smartrace():
             _save_result(sid, ed)
         elif etype == 'event.change_status':
             _save_status(sid, ed)
-        elif etype == 'ui.penalty':
+        elif etype == 'race.penalty_update':
             _save_penalty(sid, ed)
-        elif etype == 'ui.car_removed':
+        elif etype == 'ui.remove_car_from_session':
             _save_car_removed(sid, ed)
+        elif etype == 'util.fuel_update':
+            _save_fuel_update(sid, ed)
+        elif etype == 'util.set_active_track':
+            _save_active_track(sid, ed)
 
         db.session.commit()
         log.info(f"Event: {etype} | Session: {sid}")
@@ -400,11 +415,42 @@ def receive_smartrace():
                 'race_type': result_type,
             })
 
-        if etype == 'ui.penalty':
+        if etype == 'race.penalty_update':
+            penalty_secs = ed.get('penalty', 0)
+            driver_name_p = (ed.get('driver_data') or {}).get('name', '')
             socketio.emit('penalty', {
                 'session_id': sid,
                 'controller_id': str(ed.get('controller_id', '')),
+                'driver_name': driver_name_p,
+                'penalty_seconds': penalty_secs,
+            })
+
+        if etype == 'ui.remove_car_from_session':
+            socketio.emit('car_removed', {
+                'session_id': sid,
+                'controller_id': str(ed.get('controller_id', '')),
+            })
+
+        if etype in ('race.vsc_deployed', 'race.vsc_retracted'):
+            vsc_active = etype == 'race.vsc_deployed'
+            socketio.emit('vsc', {
+                'session_id': sid,
+                'active': vsc_active,
+            })
+
+        if etype == 'util.fuel_update':
+            socketio.emit('fuel_update', {
+                'session_id': sid,
+                'controller_id': str(ed.get('controller_id', '')),
+                'fuel': ed.get('fuel', -1),
                 'driver_name': (ed.get('driver_data') or {}).get('name', ''),
+            })
+
+        if etype == 'util.set_active_track':
+            socketio.emit('active_track', {
+                'name': ed.get('name', ''),
+                'length': ed.get('length', ''),
+                'pitstop_delta': ed.get('pitstop_delta', ''),
             })
 
         return jsonify({'status': 'ok', 'event_type': etype})
@@ -560,15 +606,30 @@ def _save_result(sid, ed):
         Lap.query.filter_by(session_id=sid).update(
             {'session_type': race_type}, synchronize_session=False)
 
+    # Driver-Namen aus Laps aufloesen (event.end liefert nur driver_id,
+    # nicht driver_name)
+    driver_names = {}
+    for lap in Lap.query.filter_by(session_id=sid).all():
+        cid = str(lap.controller_id)
+        if cid not in driver_names and lap.driver_name:
+            driver_names[cid] = lap.driver_name
+
     for pos, r in (ed.get('result') or {}).items():
+        cid = str(r.get('controller_id', ''))
+        # Fahrername: aus Laps der Session aufloesen (primaer),
+        # Fallback auf driver_name falls doch vorhanden
+        driver_name = (driver_names.get(cid)
+                       or r.get('driver_name')
+                       or f"Fahrer {cid}")
         db.session.add(RaceResult(
             session_id=sid,
             position=int(pos),
-            controller_id=str(r.get('controller_id', '')),
-            driver_name=r.get('driver_name', ''),
+            controller_id=cid,
+            driver_name=driver_name,
             total_laps=r.get('laps', 0),
             best_laptime_ms=r.get('best_laptime'),
             gap=r.get('gap', ''),
+            pitstops=r.get('pitstops', 0),
             disqualified=bool(r.get('disqualified', False)),
             retired=bool(r.get('retired', False)),
         ))
@@ -589,31 +650,71 @@ def _save_status(sid, ed):
 
 
 def _save_penalty(sid, ed):
+    """race.penalty_update verarbeiten.
+
+    SmartRace sendet: {"controller_id": "2", "penalty": 10, driver_data: {...}}
+    penalty=0 bedeutet: Strafe abgesessen.
+    """
     cid = str(ed.get('controller_id', '0'))
     dd = ed.get('driver_data') or {}
-    penalty_type = (ed.get('type') or ed.get('penalty')
-                    or ed.get('penalty_type') or 'Strafe')
+    penalty_secs = ed.get('penalty', 0)
+    try:
+        penalty_secs = int(penalty_secs)
+    except (ValueError, TypeError):
+        penalty_secs = 0
+
+    if penalty_secs == 0:
+        penalty_type = 'Strafe abgesessen'
+    else:
+        penalty_type = f'{penalty_secs}s Strafe'
 
     db.session.add(Penalty(
         session_id=sid,
         controller_id=cid,
         driver_name=dd.get('name') or f"Fahrer {cid}",
         penalty_type=penalty_type,
+        penalty_seconds=penalty_secs,
     ))
 
 
 def _save_car_removed(sid, ed):
+    """ui.remove_car_from_session - Fahrzeug aus Session entfernt."""
     cid = str(ed.get('controller_id', '0'))
-    dd = ed.get('driver_data') or {}
+    # Fahrername aus Laps aufloesen (Event hat keine driver_data)
+    lap = Lap.query.filter_by(
+        session_id=sid, controller_id=cid
+    ).order_by(Lap.id.desc()).first()
+    driver_name = lap.driver_name if lap else f"Fahrer {cid}"
 
     db.session.add(RaceResult(
         session_id=sid,
         position=0,
         controller_id=cid,
-        driver_name=dd.get('name') or f"Fahrer {cid}",
+        driver_name=driver_name,
         total_laps=0,
         retired=True,
     ))
+
+
+def _save_fuel_update(sid, ed):
+    """util.fuel_update - Tankstand.
+
+    Wird nur geloggt/per WebSocket weitergegeben, nicht in DB gespeichert.
+    fuel=-1 bedeutet Tankfunktion deaktiviert.
+    """
+    cid = str(ed.get('controller_id', '0'))
+    fuel = ed.get('fuel', -1)
+    log.info(f"Fuel update: Controller {cid}, fuel={fuel}")
+
+
+def _save_active_track(sid, ed):
+    """util.set_active_track - Aktive Strecke.
+
+    Wird nur geloggt/per WebSocket weitergegeben.
+    """
+    name = ed.get('name', 'Unbekannt')
+    length = ed.get('length', '')
+    log.info(f"Aktive Strecke: {name} (Laenge: {length})")
 
 
 # =============================================================================
@@ -913,6 +1014,7 @@ def api_penalties():
             'controller_id': p.controller_id,
             'driver_name': p.driver_name,
             'penalty_type': p.penalty_type,
+            'penalty_seconds': p.penalty_seconds or 0,
             'timestamp': p.created_at.isoformat() if p.created_at else None,
         } for p in q.order_by(Penalty.created_at.desc()).all()])
     except Exception as e:
@@ -1185,6 +1287,7 @@ def api_live_feed():
                 'controller_id': p.controller_id,
                 'driver_name': p.driver_name,
                 'penalty_type': p.penalty_type,
+                'penalty_seconds': p.penalty_seconds or 0,
             })
 
         # Letzte Statusaenderungen
@@ -1373,13 +1476,15 @@ def api_backup():
                 'session_id': r.session_id, 'position': r.position,
                 'controller_id': r.controller_id, 'driver_name': r.driver_name,
                 'total_laps': r.total_laps, 'best_laptime_ms': r.best_laptime_ms,
-                'gap': r.gap, 'disqualified': r.disqualified, 'retired': r.retired,
+                'gap': r.gap, 'pitstops': r.pitstops,
+                'disqualified': r.disqualified, 'retired': r.retired,
                 'created_at': r.created_at.isoformat() if r.created_at else None,
             } for r in RaceResult.query.all()], ensure_ascii=False) + ',\n'
 
             yield '"penalties": ' + json.dumps([{
                 'session_id': p.session_id, 'controller_id': p.controller_id,
                 'driver_name': p.driver_name, 'penalty_type': p.penalty_type,
+                'penalty_seconds': p.penalty_seconds,
                 'created_at': p.created_at.isoformat() if p.created_at else None,
             } for p in Penalty.query.all()], ensure_ascii=False) + ',\n'
 
@@ -1461,7 +1566,8 @@ def api_restore():
                     session_id=r.get('session_id'), position=r.get('position'),
                     controller_id=r.get('controller_id'), driver_name=r.get('driver_name'),
                     total_laps=r.get('total_laps'), best_laptime_ms=r.get('best_laptime_ms'),
-                    gap=r.get('gap'), disqualified=r.get('disqualified', False),
+                    gap=r.get('gap'), pitstops=r.get('pitstops', 0),
+                    disqualified=r.get('disqualified', False),
                     retired=r.get('retired', False),
                     created_at=datetime.fromisoformat(r['created_at']) if r.get('created_at') else None,
                 ))
@@ -1472,6 +1578,7 @@ def api_restore():
                 db.session.add(Penalty(
                     session_id=p.get('session_id'), controller_id=p.get('controller_id'),
                     driver_name=p.get('driver_name'), penalty_type=p.get('penalty_type'),
+                    penalty_seconds=p.get('penalty_seconds', 0),
                     created_at=datetime.fromisoformat(p['created_at']) if p.get('created_at') else None,
                 ))
             counts['penalties'] = len(data['penalties'])

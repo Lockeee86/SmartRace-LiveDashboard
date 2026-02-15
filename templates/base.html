@@ -188,16 +188,41 @@
     // Penalty-Benachrichtigung global
     socket.on('penalty', (data) => {
         const name = data.driver_name || 'Fahrer ' + (data.controller_id || '?');
-        showToast(`<strong>Strafe:</strong> ${name}`, 'warning', 6000);
+        const secs = data.penalty_seconds || 0;
+        if (secs === 0) {
+            showToast(`<strong>Strafe abgesessen:</strong> ${name}`, 'success', 5000);
+        } else {
+            showToast(`<strong>${secs}s Strafe:</strong> ${name}`, 'warning', 6000);
+        }
+    });
+
+    // VSC-Benachrichtigung
+    socket.on('vsc', (data) => {
+        if (data.active) {
+            showToast('<strong>Virtual Safety Car</strong> aktiviert', 'warning', 8000);
+        } else {
+            showToast('<strong>Virtual Safety Car</strong> zurueckgezogen', 'info', 5000);
+        }
+    });
+
+    // Aktive Strecke
+    socket.on('active_track', (data) => {
+        if (data.name) {
+            showToast(`<strong>Strecke:</strong> ${data.name}`, 'info', 5000);
+        }
     });
 
     // Rennstatus live aktualisieren
     const RACE_STATUS_MAP = {
-        'starting': { text: 'Startbereit', cls: 'bg-info', icon: 'fa-traffic-light' },
+        'prepare_for_start': { text: 'Startvorbereitung', cls: 'bg-info', icon: 'fa-traffic-light' },
+        'starting': { text: 'Startphase', cls: 'bg-info', icon: 'fa-traffic-light' },
+        'jumpstart': { text: 'Fruehstart!', cls: 'bg-danger', icon: 'fa-exclamation-triangle' },
         'running': { text: 'Rennen', cls: 'bg-success', icon: 'fa-play' },
         'racing': { text: 'Rennen', cls: 'bg-success', icon: 'fa-play' },
         'started': { text: 'Gestartet', cls: 'bg-success', icon: 'fa-play' },
+        'suspended': { text: 'Unterbrochen', cls: 'bg-warning', icon: 'fa-pause' },
         'paused': { text: 'Pausiert', cls: 'bg-warning', icon: 'fa-pause' },
+        'restarting': { text: 'Neustart', cls: 'bg-info', icon: 'fa-rotate' },
         'finished': { text: 'Beendet', cls: 'bg-secondary', icon: 'fa-flag-checkered' },
         'ended': { text: 'Beendet', cls: 'bg-secondary', icon: 'fa-flag-checkered' },
         'waiting': { text: 'Warte...', cls: 'bg-secondary', icon: 'fa-hourglass' },
