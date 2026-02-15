@@ -783,12 +783,16 @@ def api_live_data():
             return jsonify({})
 
         # Penalties pro Controller zaehlen
-        penalty_q = Penalty.query
-        if sid and sid != 'all':
-            penalty_q = penalty_q.filter(Penalty.session_id == sid)
         penalty_counts = {}
-        for p in penalty_q.all():
-            penalty_counts[p.controller_id] = penalty_counts.get(p.controller_id, 0) + 1
+        try:
+            penalty_q = Penalty.query
+            if sid and sid != 'all':
+                penalty_q = penalty_q.filter(Penalty.session_id == sid)
+            for p in penalty_q.all():
+                penalty_counts[p.controller_id] = penalty_counts.get(p.controller_id, 0) + 1
+        except Exception as e:
+            log.warning(f"Penalty query failed (migration pending?): {e}")
+            db.session.rollback()
 
         # DNF/DQ Status + Pitstops pruefen
         dnf_dq = {}
@@ -809,7 +813,7 @@ def api_live_data():
                         'disqualified': r.disqualified,
                     }
         except Exception as e:
-            log.warning(f"RaceResult query failed: {e}")
+            log.warning(f"RaceResult query failed (migration pending?): {e}")
             db.session.rollback()
 
         ctrls = {}
@@ -1042,17 +1046,25 @@ def api_penalties():
         if sid and sid != 'all':
             q = q.filter(Penalty.session_id == sid)
 
-        return jsonify([{
-            'id': p.id,
-            'session_id': p.session_id,
-            'controller_id': p.controller_id,
-            'driver_name': p.driver_name,
-            'penalty_type': p.penalty_type,
-            'penalty_seconds': p.penalty_seconds or 0,
-            'timestamp': p.created_at.isoformat() if p.created_at else None,
-        } for p in q.order_by(Penalty.created_at.desc()).all()])
+        penalties = []
+        for p in q.order_by(Penalty.created_at.desc()).all():
+            entry = {
+                'id': p.id,
+                'session_id': p.session_id,
+                'controller_id': p.controller_id,
+                'driver_name': p.driver_name,
+                'penalty_type': p.penalty_type,
+                'timestamp': p.created_at.isoformat() if p.created_at else None,
+            }
+            try:
+                entry['penalty_seconds'] = p.penalty_seconds or 0
+            except Exception:
+                entry['penalty_seconds'] = 0
+            penalties.append(entry)
+        return jsonify(penalties)
     except Exception as e:
         log.error(f"penalties: {e}")
+        db.session.rollback()
         return jsonify([])
 
 
