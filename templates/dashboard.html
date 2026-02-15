@@ -172,8 +172,15 @@ async function loadLiveFeed() {
     try {
         const res = await fetch('/api/live-feed?limit=25');
         if (!res.ok) return;
-        const items = await res.json();
-        renderLiveFeed(items);
+        const apiItems = await res.json();
+        // Echtzeit-Events (vsc, fuel_warning, car_removed, track) behalten
+        const realtimeTypes = ['vsc', 'fuel_warning', 'car_removed', 'track'];
+        const realtimeItems = liveFeedItems.filter(i => realtimeTypes.includes(i.type));
+        // API-Items + Echtzeit-Events zusammenfuehren, nach Zeit sortieren
+        liveFeedItems = [...apiItems, ...realtimeItems]
+            .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
+            .slice(0, 50);
+        renderLiveFeed(liveFeedItems);
     } catch (e) {
         console.error('Live-Feed-Fehler:', e);
     }
@@ -200,20 +207,24 @@ function renderLiveFeed(items) {
             </div>`;
         }
         if (item.type === 'penalty') {
+            const secs = item.penalty_seconds || 0;
+            const detail = secs > 0 ? `${secs}s Strafe` : (item.penalty_type || 'Strafe abgesessen');
             return `<div class="feed-item feed-penalty">
                 <div class="feed-time">${time}</div>
                 <div class="feed-content">
                     <i class="fas fa-exclamation-triangle text-danger"></i>
-                    <strong>${item.driver_name}</strong> - ${item.penalty_type || 'Strafe'}
+                    <strong>${item.driver_name}</strong> - ${detail}
                 </div>
             </div>`;
         }
         if (item.type === 'status') {
+            const sMap = typeof RACE_STATUS_MAP !== 'undefined' ? RACE_STATUS_MAP : {};
+            const s = sMap[item.status] || { text: item.status, icon: 'fa-flag' };
             return `<div class="feed-item feed-status">
                 <div class="feed-time">${time}</div>
                 <div class="feed-content">
-                    <i class="fas fa-flag text-info"></i>
-                    Status: <strong>${item.status}</strong> ${item.race_type ? '(' + item.race_type + ')' : ''}
+                    <i class="fas ${s.icon} text-info"></i>
+                    Status: <strong>${s.text}</strong> ${item.race_type ? '(' + item.race_type + ')' : ''}
                 </div>
             </div>`;
         }
@@ -237,8 +248,55 @@ function renderLiveFeed(items) {
                 </div>
             </div>`;
         }
+        if (item.type === 'vsc') {
+            const vscText = item.active ? 'VSC aktiviert' : 'VSC zurueckgezogen';
+            const vscIcon = item.active ? 'text-warning' : 'text-muted';
+            return `<div class="feed-item feed-status" style="border-left-color: #eab308; background: rgba(234,179,8,0.08);">
+                <div class="feed-time">${time}</div>
+                <div class="feed-content">
+                    <i class="fas fa-shield-halved ${vscIcon}"></i>
+                    <strong>${vscText}</strong>
+                </div>
+            </div>`;
+        }
+        if (item.type === 'fuel_warning') {
+            return `<div class="feed-item" style="border-left-color: #a855f7; background: rgba(168,85,247,0.05);">
+                <div class="feed-time">${time}</div>
+                <div class="feed-content">
+                    <i class="fas fa-gas-pump" style="color: #a855f7"></i>
+                    <strong>${item.driver_name}</strong> - Tank: <strong class="text-danger">${item.fuel}%</strong>
+                </div>
+            </div>`;
+        }
+        if (item.type === 'car_removed') {
+            return `<div class="feed-item feed-dnf">
+                <div class="feed-time">${time}</div>
+                <div class="feed-content">
+                    <i class="fas fa-car-burst text-warning"></i>
+                    <strong>${item.driver_name}</strong> - Aus Session entfernt
+                </div>
+            </div>`;
+        }
+        if (item.type === 'track') {
+            return `<div class="feed-item feed-status">
+                <div class="feed-time">${time}</div>
+                <div class="feed-content">
+                    <i class="fas fa-road text-info"></i>
+                    Strecke: <strong>${item.name}</strong>
+                </div>
+            </div>`;
+        }
         return '';
     }).join('');
+}
+
+// Echtzeit-Event in Ticker einfuegen (oben)
+let liveFeedItems = [];
+function prependFeedItem(item) {
+    item.timestamp = new Date().toISOString();
+    liveFeedItems.unshift(item);
+    if (liveFeedItems.length > 50) liveFeedItems.length = 50;
+    renderLiveFeed(liveFeedItems);
 }
 
 // Sessions laden
@@ -657,8 +715,45 @@ socket.on('track_record', (data) => {
     }
 });
 
-socket.on('penalty', () => {
-    loadLiveFeed();
+socket.on('penalty', (data) => {
+    const name = data.driver_name || 'Fahrer ' + (data.controller_id || '?');
+    const secs = data.penalty_seconds || 0;
+    const detail = secs > 0 ? `${secs}s Strafe` : 'Strafe abgesessen';
+    prependFeedItem({ type: 'penalty', driver_name: name, penalty_seconds: secs, penalty_type: detail, color: data.color });
+});
+
+// VSC im Ticker
+socket.on('vsc', (data) => {
+    prependFeedItem({ type: 'vsc', active: data.active });
+});
+
+// Fuel-Warnung im Ticker (nur bei <= 20%)
+socket.on('fuel_update', (data) => {
+    if (data.fuel >= 0 && data.fuel <= 20) {
+        const name = data.driver_name || 'Controller ' + (data.controller_id || '?');
+        prependFeedItem({ type: 'fuel_warning', driver_name: name, fuel: data.fuel });
+    }
+});
+
+// Auto entfernt
+socket.on('car_removed', (data) => {
+    const name = data.driver_name || 'Controller ' + (data.controller_id || '?');
+    prependFeedItem({ type: 'car_removed', driver_name: name, color: data.color });
+});
+
+// Strecke gewechselt
+socket.on('active_track', (data) => {
+    if (data.name) {
+        prependFeedItem({ type: 'track', name: data.name });
+    }
+});
+
+// Rennstatus im Ticker
+socket.on('race_status', (data) => {
+    prependFeedItem({ type: 'status', status: data.status, race_type: data.race_type });
+    if (data.status === 'jumpstart' && typeof playSound === 'function') {
+        playSound('jumpstart');
+    }
 });
 
 // ---- Layout Toggle ----
@@ -691,13 +786,6 @@ socket.on('fuel_update', (data) => {
             fuelLevels[cid] = data.fuel;
         }
         renderControllers();
-    }
-});
-
-// Jumpstart Sound
-socket.on('race_status', (data) => {
-    if (data.status === 'jumpstart' && typeof playSound === 'function') {
-        playSound('jumpstart');
     }
 });
 
