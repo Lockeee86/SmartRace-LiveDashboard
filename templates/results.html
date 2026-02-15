@@ -98,11 +98,13 @@
                         <th class="text-center">Runden</th>
                         <th class="text-center">Beste Zeit</th>
                         <th class="text-center">Durchschnitt</th>
+                        <th class="text-center">Pitstops</th>
+                        <th class="text-center">Strafen</th>
                         <th class="text-center">Status</th>
                     </tr>
                 </thead>
                 <tbody id="resultBody">
-                    <tr><td colspan="7" class="text-center text-muted py-4">Lade Ergebnis...</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-4">Lade Ergebnis...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -157,6 +159,7 @@ function renderResult(data, penalties) {
         totalLaps += cd.laps.length;
 
         const driverPenalties = penalties.filter(p => p.controller_id === cid);
+        const totalPenaltySecs = driverPenalties.reduce((sum, p) => sum + (p.penalty_seconds || 0), 0);
 
         drivers.push({
             name: cd.name || 'Fahrer ' + cid,
@@ -166,6 +169,8 @@ function renderResult(data, penalties) {
             bestTime: best,
             avgTime: avg,
             penalties: driverPenalties.length,
+            penaltySeconds: totalPenaltySecs,
+            pitstops: cd.pitstops || 0,
             retired: cd.retired || false,
             disqualified: cd.disqualified || false,
         });
@@ -210,7 +215,7 @@ function renderResult(data, penalties) {
     // Tabelle
     const tbody = document.getElementById('resultBody');
     if (drivers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Keine Daten</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Keine Daten</td></tr>';
         return;
     }
 
@@ -219,12 +224,20 @@ function renderResult(data, penalties) {
         let posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : 'other';
         if (d.retired || d.disqualified) posClass = 'other';
 
-        let status = '<span class="text-muted">Aktiv</span>';
+        let status = '';
         if (d.disqualified) status = '<span class="badge bg-danger">DQ</span>';
         else if (d.retired) status = '<span class="badge bg-warning text-dark">DNF</span>';
-        else if (d.penalties > 0) status = `<span class="badge bg-danger">${d.penalties}x Strafe</span>`;
         else if (pos === 1) status = '<i class="fas fa-crown text-warning"></i> Sieger';
         else if (pos <= 3) status = '<i class="fas fa-medal"></i> Podium';
+        else status = '<span class="text-muted">--</span>';
+
+        const penaltyDisplay = d.penalties > 0
+            ? `<span class="text-danger">${d.penalties}x <small>(${d.penaltySeconds}s)</small></span>`
+            : '<span class="text-muted">--</span>';
+
+        const pitstopDisplay = d.pitstops > 0
+            ? `<span>${d.pitstops}</span>`
+            : '<span class="text-muted">--</span>';
 
         return `<tr style="border-left: 4px solid ${d.color}">
             <td class="text-center"><span class="position-badge ${posClass}">${d.retired ? '-' : (d.disqualified ? '-' : pos)}</span></td>
@@ -233,6 +246,8 @@ function renderResult(data, penalties) {
             <td class="text-center">${d.laps}</td>
             <td class="text-center font-mono fw-bold">${formatTime(d.bestTime)}</td>
             <td class="text-center font-mono">${formatTime(d.avgTime)}</td>
+            <td class="text-center">${pitstopDisplay}</td>
+            <td class="text-center">${penaltyDisplay}</td>
             <td class="text-center">${status}</td>
         </tr>`;
     }).join('');

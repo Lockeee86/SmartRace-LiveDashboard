@@ -439,6 +439,142 @@ body {
     background: var(--sr-muted);
 }
 
+/* VSC Banner */
+.vsc-banner {
+    background: linear-gradient(90deg, #eab308, #f59e0b, #eab308);
+    color: #000;
+    text-align: center;
+    font-weight: 800;
+    font-size: 1rem;
+    letter-spacing: 3px;
+    padding: 0.5rem;
+    animation: vscPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes vscPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Race-Info-Bar */
+.race-info-bar {
+    background-color: rgba(26, 29, 39, 0.95);
+    border-bottom: 1px solid var(--sr-border);
+    padding: 0.4rem 0;
+    font-size: 0.8rem;
+}
+
+.race-info-bar .fas {
+    opacity: 0.7;
+}
+
+/* Race Progress Bar */
+.race-progress-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 300px;
+}
+
+.race-progress-bar {
+    flex-grow: 1;
+    height: 6px;
+    background: var(--sr-border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.race-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--sr-accent), var(--sr-success));
+    border-radius: 3px;
+    transition: width 0.5s ease;
+}
+
+.race-progress-text {
+    font-family: 'Courier New', monospace;
+    font-weight: 700;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    min-width: 50px;
+    text-align: right;
+}
+
+/* Light Theme Overrides */
+[data-bs-theme="light"] {
+    --sr-bg: #f0f2f5;
+    --sr-card: #ffffff;
+    --sr-border: #dee2e6;
+    --sr-text: #1a1a2e;
+    --sr-muted: #6c757d;
+}
+
+[data-bs-theme="light"] body {
+    background-color: var(--sr-bg);
+}
+
+[data-bs-theme="light"] .navbar {
+    background-color: #fff !important;
+    border-bottom-color: #dee2e6 !important;
+}
+
+[data-bs-theme="light"] .card {
+    background-color: #fff;
+    border-color: #dee2e6;
+}
+
+[data-bs-theme="light"] .race-info-bar {
+    background-color: rgba(255, 255, 255, 0.95);
+}
+
+[data-bs-theme="light"] .controller-card {
+    background-color: #fff;
+    border-color: #dee2e6;
+}
+
+[data-bs-theme="light"] .session-selector {
+    background-color: #fff;
+    border-color: #dee2e6;
+}
+
+[data-bs-theme="light"] .table thead th {
+    background-color: rgba(0, 0, 0, 0.03);
+    color: #6c757d;
+}
+
+[data-bs-theme="light"] .filter-section {
+    background-color: #fff;
+    border-color: #dee2e6;
+}
+
+[data-bs-theme="light"] footer {
+    border-top-color: #dee2e6 !important;
+}
+
+/* Fuel Bar */
+.fuel-bar-container {
+    height: 4px;
+    background: var(--sr-border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 0.35rem;
+}
+
+.fuel-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s ease, background-color 0.3s ease;
+}
+
+.fuel-label {
+    font-size: 0.65rem;
+    color: var(--sr-muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.15rem;
+}
+
 /* Animations */
 @keyframes pulse {
     0%, 100% { opacity: 1; }

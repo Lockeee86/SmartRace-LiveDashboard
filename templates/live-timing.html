@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block title %}Live-Timing - SmartRace Live{% endblock %}
+
+{% block styles %}
+<style>
+.timing-table {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+}
+.timing-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: var(--sr-card) !important;
+}
+.timing-table .driver-col {
+    min-width: 140px;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+}
+.timing-row {
+    transition: background-color 0.3s ease;
+}
+.timing-row.leader {
+    background: linear-gradient(90deg, rgba(234, 179, 8, 0.12), transparent) !important;
+}
+.timing-row .gap-cell {
+    color: var(--sr-muted);
+}
+.timing-row .gap-cell.gap-leader {
+    color: var(--sr-warning);
+    font-weight: 700;
+}
+.lap-fastest {
+    color: #a855f7;
+    font-weight: 700;
+}
+.lap-pb {
+    color: var(--sr-success);
+    font-weight: 700;
+}
+.lap-normal {
+    color: var(--sr-text);
+}
+.lap-slow {
+    color: var(--sr-danger);
+}
+.sector-fastest { color: #a855f7; font-weight: 700; }
+.sector-pb { color: var(--sr-success); font-weight: 700; }
+.sector-normal { color: var(--sr-muted); }
+.interval-positive { color: var(--sr-danger); }
+.interval-negative { color: var(--sr-success); }
+.mini-chart {
+    width: 120px;
+    height: 30px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="session-selector d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="fas fa-stopwatch me-2"></i>Live-Timing</h5>
+    <div class="d-flex align-items-center gap-2">
+        <select id="timingSession" class="form-select form-select-sm" style="min-width: 280px;">
+            <option value="current">Aktuelle Session (Live)</option>
+        </select>
+        <button id="timingRefresh" class="btn btn-sm btn-outline-primary" title="Aktualisieren">
+            <i class="fas fa-sync-alt"></i>
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: calc(100vh - 260px); overflow-y: auto;">
+            <table class="table table-sm mb-0 timing-table">
+                <thead>
+                    <tr>
+                        <th class="text-center" style="width: 45px;">P</th>
+                        <th class="driver-col">Fahrer</th>
+                        <th class="text-center">Runden</th>
+                        <th class="text-center">Letzte</th>
+                        <th class="text-center">Beste</th>
+                        <th class="text-center">Gap</th>
+                        <th class="text-center">Intervall</th>
+                        <th class="text-center d-none d-lg-table-cell">S1</th>
+                        <th class="text-center d-none d-lg-table-cell">S2</th>
+                        <th class="text-center d-none d-lg-table-cell">S3</th>
+                        <th class="text-center d-none d-xl-table-cell">Pitstops</th>
+                        <th class="text-center d-none d-xl-table-cell">Tank</th>
+                    </tr>
+                </thead>
+                <tbody id="timingBody">
+                    <tr><td colspan="12" class="text-center text-muted py-4">Lade Daten...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let timingData = {};
+let fuelData = {};
+let currentSession = 'current';
+
+async function loadSessions() {
+    try {
+        const res = await fetch('/api/sessions');
+        if (!res.ok) return;
+        const sessions = await res.json();
+        const sel = document.getElementById('timingSession');
+        sessions.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.session_id;
+            opt.textContent = `${s.display_name || s.session_id} (${s.total_laps} Runden)`;
+            sel.appendChild(opt);
+        });
+    } catch (e) {}
+}
+
+async function loadTimingData() {
+    try {
+        let url = '/api/live-data';
+        if (currentSession !== 'current') url += '?session_id=' + encodeURIComponent(currentSession);
+        const res = await fetch(url);
+        if (!res.ok) return;
+        timingData = await res.json();
+        renderTiming();
+    } catch (e) {
+        console.error('Timing-Fehler:', e);
+    }
+}
+
+function renderTiming() {
+    const tbody = document.getElementById('timingBody');
+    const drivers = [];
+
+    // Globale Bestzeit und Sektoren fuer Farb-Highlighting
+    let globalBest = null;
+    let globalS1 = null, globalS2 = null, globalS3 = null;
+
+    Object.entries(timingData).forEach(([cid, cd]) => {
+        if (!cd.laps || cd.laps.length === 0) return;
+        const sortedLaps = [...cd.laps].sort((a, b) => (b.lap || 0) - (a.lap || 0));
+        const latest = sortedLaps[0] || {};
+        const times = cd.laps.map(l => l.laptime_raw).filter(t => t > 0);
+        const best = times.length > 0 ? Math.min(...times) : null;
+
+        if (best && (!globalBest || best < globalBest)) globalBest = best;
+
+        // Sektoren global tracken
+        cd.laps.forEach(l => {
+            if (l.sector_1) { const v = parseFloat(l.sector_1); if (v > 0 && (!globalS1 || v < globalS1)) globalS1 = v; }
+            if (l.sector_2) { const v = parseFloat(l.sector_2); if (v > 0 && (!globalS2 || v < globalS2)) globalS2 = v; }
+            if (l.sector_3) { const v = parseFloat(l.sector_3); if (v > 0 && (!globalS3 || v < globalS3)) globalS3 = v; }
+        });
+
+        drivers.push({
+            cid,
+            name: cd.name || 'Fahrer ' + cid,
+            car: cd.car || '',
+            color: cd.color || getControllerColor(cid),
+            laps: sortedLaps.length,
+            latest,
+            bestTime: best,
+            retired: cd.retired || false,
+            disqualified: cd.disqualified || false,
+            pitstops: cd.pitstops || 0,
+            fuel: fuelData[cid],
+        });
+    });
+
+    // Sortieren: Runden (absteigend), dann Bestzeit (aufsteigend)
+    drivers.sort((a, b) => {
+        if (a.disqualified !== b.disqualified) return a.disqualified ? 1 : -1;
+        if (a.retired !== b.retired) return a.retired ? 1 : -1;
+        if (a.laps !== b.laps) return b.laps - a.laps;
+        if (a.bestTime && b.bestTime) return a.bestTime - b.bestTime;
+        return 0;
+    });
+
+    if (drivers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-4">Keine Daten</td></tr>';
+        return;
+    }
+
+    const leader = drivers[0];
+
+    tbody.innerHTML = drivers.map((d, i) => {
+        const pos = i + 1;
+        const isLeader = pos === 1;
+
+        // Gap zum Leader
+        let gapHtml = '--';
+        if (isLeader) {
+            gapHtml = '<span class="gap-leader">LEADER</span>';
+        } else if (d.laps < leader.laps) {
+            const lapDiff = leader.laps - d.laps;
+            gapHtml = `+${lapDiff} Rd.`;
+        } else if (d.bestTime && leader.bestTime) {
+            const gap = d.bestTime - leader.bestTime;
+            gapHtml = `+${(gap / 1000).toFixed(3)}`;
+        }
+
+        // Intervall zum Vordermann
+        let intervalHtml = '--';
+        if (i > 0) {
+            const prev = drivers[i - 1];
+            if (d.laps < prev.laps) {
+                intervalHtml = `+${prev.laps - d.laps} Rd.`;
+            } else if (d.bestTime && prev.bestTime) {
+                const diff = d.bestTime - prev.bestTime;
+                intervalHtml = `+${(diff / 1000).toFixed(3)}`;
+            }
+        }
+
+        // Letzte Rundenzeit mit Farbe
+        const lastTime = d.latest.laptime_raw;
+        let lastCls = 'lap-normal';
+        if (lastTime > 0) {
+            if (lastTime === globalBest) lastCls = 'lap-fastest';
+            else if (lastTime === d.bestTime) lastCls = 'lap-pb';
+            else if (d.bestTime && lastTime > d.bestTime * 1.05) lastCls = 'lap-slow';
+        }
+
+        // Beste Rundenzeit mit Farbe
+        let bestCls = d.bestTime === globalBest ? 'lap-fastest' : 'lap-pb';
+
+        // Sektoren mit Farbcodierung
+        const s1 = d.latest.sector_1;
+        const s2 = d.latest.sector_2;
+        const s3 = d.latest.sector_3;
+        const s1Cls = s1 && parseFloat(s1) === globalS1 ? 'sector-fastest' : s1 ? 'sector-pb' : 'sector-normal';
+        const s2Cls = s2 && parseFloat(s2) === globalS2 ? 'sector-fastest' : s2 ? 'sector-pb' : 'sector-normal';
+        const s3Cls = s3 && parseFloat(s3) === globalS3 ? 'sector-fastest' : s3 ? 'sector-pb' : 'sector-normal';
+
+        // Fuel
+        let fuelHtml = '--';
+        if (d.fuel !== undefined && d.fuel >= 0) {
+            const fuelColor = d.fuel > 50 ? 'var(--sr-success)' : d.fuel > 20 ? 'var(--sr-warning)' : 'var(--sr-danger)';
+            fuelHtml = `<span style="color: ${fuelColor}">${d.fuel}%</span>`;
+        }
+
+        // Status
+        let statusIcon = '';
+        if (d.disqualified) statusIcon = ' <span class="badge bg-danger" style="font-size:0.6rem">DQ</span>';
+        else if (d.retired) statusIcon = ' <span class="badge bg-warning text-dark" style="font-size:0.6rem">DNF</span>';
+
+        const posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : 'other';
+
+        return `<tr class="timing-row ${isLeader ? 'leader' : ''}" style="border-left: 3px solid ${d.color}">
+            <td class="text-center"><span class="position-badge ${posClass}" style="width:26px;height:26px;font-size:0.75rem">${pos}</span></td>
+            <td class="driver-col">
+                <span class="fw-bold" style="color: ${d.color}">${d.name}</span>${statusIcon}
+                <div class="text-muted" style="font-size:0.7rem">${d.car}</div>
+            </td>
+            <td class="text-center">${d.laps}</td>
+            <td class="text-center ${lastCls}">${lastTime > 0 ? formatTime(lastTime) : '--:--.---'}</td>
+            <td class="text-center ${bestCls}">${formatTime(d.bestTime)}</td>
+            <td class="text-center gap-cell">${gapHtml}</td>
+            <td class="text-center gap-cell">${intervalHtml}</td>
+            <td class="text-center d-none d-lg-table-cell ${s1Cls}">${s1 || '--'}</td>
+            <td class="text-center d-none d-lg-table-cell ${s2Cls}">${s2 || '--'}</td>
+            <td class="text-center d-none d-lg-table-cell ${s3Cls}">${s3 || '--'}</td>
+            <td class="text-center d-none d-xl-table-cell">${d.pitstops || '--'}</td>
+            <td class="text-center d-none d-xl-table-cell">${fuelHtml}</td>
+        </tr>`;
+    }).join('');
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadSessions();
+    await loadTimingData();
+});
+
+document.getElementById('timingSession').addEventListener('change', function() {
+    currentSession = this.value;
+    loadTimingData();
+});
+
+document.getElementById('timingRefresh').addEventListener('click', () => loadTimingData());
+
+// Live-Updates
+socket.on('new_data', () => loadTimingData());
+
+socket.on('fuel_update', (data) => {
+    if (data.controller_id !== undefined && data.fuel !== undefined) {
+        const cid = String(data.controller_id);
+        if (data.fuel < 0) {
+            delete fuelData[cid];
+        } else {
+            fuelData[cid] = data.fuel;
+        }
+        renderTiming();
+    }
+});
+
+// Auto-Refresh Fallback
+setInterval(() => loadTimingData(), 10000);
+</script>
+{% endblock %}
