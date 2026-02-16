@@ -84,6 +84,10 @@
                 <button class="btn btn-sm btn-outline-light ms-1" id="soundToggleBtn" title="Ton an/aus">
                     <i class="fas fa-volume-xmark" id="soundIcon"></i>
                 </button>
+                <!-- Benachrichtigungen -->
+                <button class="btn btn-sm btn-outline-light ms-1" id="notifyToggleBtn" title="Browser-Benachrichtigungen">
+                    <i class="fas fa-bell-slash" id="notifyIcon"></i>
+                </button>
                 <!-- Vollbild -->
                 <button class="btn btn-sm btn-outline-light ms-1" id="fullscreenBtn" title="Vollbild (F11)">
                     <i class="fas fa-expand"></i>
@@ -492,6 +496,158 @@
     socket.on('track_record', () => playSound('record'));
     socket.on('penalty', (data) => {
         if (data.penalty_seconds > 0) playSound('penalty');
+    });
+
+    // =========================================================================
+    // Browser-Benachrichtigungen (Push Notifications)
+    // =========================================================================
+    let notifyEnabled = localStorage.getItem('sr-notify') === 'true';
+    const notifyIconEl = document.getElementById('notifyIcon');
+    const notifyBtn = document.getElementById('notifyToggleBtn');
+
+    function updateNotifyIcon() {
+        if (notifyEnabled && Notification.permission === 'granted') {
+            notifyIconEl.className = 'fas fa-bell';
+            notifyBtn.classList.remove('btn-outline-light');
+            notifyBtn.classList.add('btn-outline-warning');
+        } else {
+            notifyIconEl.className = 'fas fa-bell-slash';
+            notifyBtn.classList.remove('btn-outline-warning');
+            notifyBtn.classList.add('btn-outline-light');
+        }
+    }
+
+    function sendNotification(title, body, tag) {
+        if (!notifyEnabled || Notification.permission !== 'granted') return;
+        // Nicht senden wenn Tab aktiv ist
+        if (document.visibilityState === 'visible') return;
+        try {
+            new Notification(title, {
+                body: body,
+                tag: tag || 'sr-' + Date.now(),
+                icon: '/static/img/favicon.png',
+                badge: '/static/img/favicon.png',
+                silent: false,
+            });
+        } catch (e) {}
+    }
+
+    notifyBtn.addEventListener('click', async () => {
+        if (!('Notification' in window)) {
+            showToast('Browser unterstuetzt keine Benachrichtigungen', 'warning', 4000);
+            return;
+        }
+        if (!notifyEnabled) {
+            // Aktivieren: erst Permission anfragen
+            if (Notification.permission === 'default') {
+                const perm = await Notification.requestPermission();
+                if (perm !== 'granted') {
+                    showToast('Benachrichtigungen wurden blockiert', 'warning', 4000);
+                    return;
+                }
+            } else if (Notification.permission === 'denied') {
+                showToast('Benachrichtigungen im Browser blockiert. Bitte in den Browser-Einstellungen erlauben.', 'danger', 6000);
+                return;
+            }
+            notifyEnabled = true;
+            localStorage.setItem('sr-notify', 'true');
+            showToast('Benachrichtigungen aktiviert', 'success', 3000);
+        } else {
+            notifyEnabled = false;
+            localStorage.setItem('sr-notify', 'false');
+            showToast('Benachrichtigungen deaktiviert', 'info', 3000);
+        }
+        updateNotifyIcon();
+    });
+
+    updateNotifyIcon();
+
+    // --- Benachrichtigungen bei Events ---
+
+    // Neuer Streckenrekord
+    socket.on('track_record', (data) => {
+        if (data) {
+            const time = data.laptime_formatted || formatTime(data.laptime_ms);
+            sendNotification(
+                'Neuer Streckenrekord!',
+                `${data.driver_name} - ${time}`,
+                'sr-record'
+            );
+        }
+    });
+
+    // Rennende
+    socket.on('race_status', (data) => {
+        if (data.status === 'ended' || data.status === 'finished') {
+            sendNotification(
+                'Rennen beendet!',
+                'Das Rennen ist zu Ende.',
+                'sr-race-end'
+            );
+        } else if (data.status === 'running' || data.status === 'started') {
+            sendNotification(
+                'Rennen gestartet!',
+                data.race_type ? `Typ: ${data.race_type}` : 'Los gehts!',
+                'sr-race-start'
+            );
+        } else if (data.status === 'jumpstart') {
+            sendNotification(
+                'Fruehstart!',
+                'Ein Fahrer hat einen Fruehstart verursacht.',
+                'sr-jumpstart'
+            );
+        } else if (data.status === 'suspended') {
+            sendNotification(
+                'Rennen unterbrochen',
+                'Das Rennen wurde pausiert.',
+                'sr-suspended'
+            );
+        }
+    });
+
+    // Strafe
+    socket.on('penalty', (data) => {
+        if (data && data.penalty_seconds > 0) {
+            const name = data.driver_name || 'Unbekannt';
+            sendNotification(
+                'Strafe!',
+                `${name}: ${data.penalty_seconds}s Zeitstrafe`,
+                'sr-penalty-' + (data.controller_id || '')
+            );
+        }
+    });
+
+    // VSC
+    socket.on('vsc', (data) => {
+        if (data.active) {
+            sendNotification(
+                'Virtual Safety Car',
+                'VSC wurde aktiviert!',
+                'sr-vsc'
+            );
+        }
+    });
+
+    // Tankwarnung (niedrig)
+    socket.on('fuel_update', (data) => {
+        if (data.fuel >= 0 && data.fuel <= 10) {
+            const name = data.driver_name || 'Controller ' + (data.controller_id || '?');
+            sendNotification(
+                'Tankwarnung!',
+                `${name}: Nur noch ${data.fuel}% Tank`,
+                'sr-fuel-' + (data.controller_id || '')
+            );
+        }
+    });
+
+    // Auto aus Session entfernt
+    socket.on('car_removed', (data) => {
+        const name = data.driver_name || 'Controller ' + (data.controller_id || '?');
+        sendNotification(
+            'Auto entfernt',
+            `${name} wurde aus der Session entfernt.`,
+            'sr-removed-' + (data.controller_id || '')
+        );
     });
     </script>
 
