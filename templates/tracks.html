@@ -11,6 +11,10 @@
 .track-card:hover {
     border-left-color: var(--sr-success);
 }
+.track-card.active-track {
+    border-left-color: var(--sr-success);
+    box-shadow: 0 0 12px rgba(46, 204, 113, 0.15);
+}
 .track-stat {
     text-align: center;
     padding: 0.5rem;
@@ -35,6 +39,45 @@
 }
 .pb-row:hover {
     border-left-color: var(--sr-warning);
+}
+/* Track SVG Layout */
+.track-svg-container {
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    padding: 0.75rem;
+    text-align: center;
+    position: relative;
+    min-height: 120px;
+}
+.track-svg-container svg {
+    width: 100%;
+    height: auto;
+    max-height: 200px;
+}
+.track-svg-container svg path {
+    stroke: var(--sr-accent) !important;
+}
+.track-svg-upload-zone {
+    border: 2px dashed var(--sr-border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+.track-svg-upload-zone:hover, .track-svg-upload-zone.drag-over {
+    border-color: var(--sr-accent);
+    background: rgba(59, 130, 246, 0.05);
+}
+.svg-edit-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+}
+.track-svg-container:hover .svg-edit-btn {
+    opacity: 1;
 }
 </style>
 {% endblock %}
@@ -134,18 +177,45 @@ function renderTracks(tracks) {
         return;
     }
 
-    container.innerHTML = tracks.map(t => {
+    // Erste Strecke = zuletzt benutzt = aktiv
+    const activeTrackId = tracks.length > 0 ? tracks[0].id : null;
+
+    container.innerHTML = tracks.map((t, idx) => {
         const lengthDisplay = t.length ? `${t.length}m` : '--';
         const pitstopDisplay = t.pitstop_delta ? `${t.pitstop_delta}s` : '--';
         const lastUsed = t.last_used ? new Date(t.last_used).toLocaleDateString('de-DE', {
             day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
         }) : '--';
+        const isActive = idx === 0;
+        const activeClass = isActive ? ' active-track' : '';
+        const activeBadge = isActive ? '<span class="badge bg-success ms-2">Aktiv</span>' : '';
+
+        // SVG Layout oder Upload-Zone
+        let layoutHtml = '';
+        if (t.svg_layout) {
+            layoutHtml = `<div class="track-svg-container mt-3" id="svg-${t.id}">
+                ${t.svg_layout}
+                <button class="btn btn-sm btn-outline-light svg-edit-btn" onclick="editTrackSvg(${t.id})" title="Layout aendern">
+                    <i class="fas fa-pen-to-square"></i>
+                </button>
+            </div>`;
+        } else {
+            layoutHtml = `<div class="track-svg-upload-zone mt-3" id="upload-${t.id}"
+                onclick="promptSvgUpload(${t.id})"
+                ondragover="event.preventDefault(); this.classList.add('drag-over')"
+                ondragleave="this.classList.remove('drag-over')"
+                ondrop="handleSvgDrop(event, ${t.id})">
+                <i class="fas fa-draw-polygon text-muted mb-1"></i>
+                <div class="small text-muted">SVG-Layout hier ablegen oder klicken</div>
+            </div>`;
+        }
 
         return `<div class="col-md-6 col-lg-4">
-            <div class="card track-card h-100">
+            <div class="card track-card h-100${activeClass}">
                 <div class="card-body">
-                    <h6 class="fw-bold mb-3"><i class="fas fa-road me-2 text-muted"></i>${t.name}</h6>
-                    <div class="row g-2">
+                    <h6 class="fw-bold mb-3"><i class="fas fa-road me-2 text-muted"></i>${t.name}${activeBadge}</h6>
+                    ${layoutHtml}
+                    <div class="row g-2 mt-2">
                         <div class="col-4 track-stat">
                             <div class="value">${lengthDisplay}</div>
                             <div class="label">Laenge</div>
@@ -209,5 +279,82 @@ document.addEventListener('DOMContentLoaded', loadTracks);
 
 // Live-Update bei neuem Rekord
 socket.on('track_record', () => loadTracks());
+
+// ---- SVG Layout Upload ----
+
+function promptSvgUpload(trackId) {
+    const svg = prompt('SVG-Code hier einfuegen:\n(Den gesamten <svg>...</svg> Code kopieren und einfuegen)');
+    if (svg && svg.trim()) {
+        saveSvgLayout(trackId, svg.trim());
+    }
+}
+
+function editTrackSvg(trackId) {
+    const container = document.getElementById('svg-' + trackId);
+    const svgEl = container ? container.querySelector('svg') : null;
+    const currentSvg = svgEl ? svgEl.outerHTML : '';
+
+    const action = confirm('Streckenlayout aendern?\n\nOK = Neues SVG einfuegen\nAbbrechen = Layout loeschen');
+    if (action) {
+        const svg = prompt('Neuen SVG-Code einfuegen:', currentSvg);
+        if (svg !== null) {
+            saveSvgLayout(trackId, svg.trim());
+        }
+    } else {
+        if (confirm('Layout wirklich loeschen?')) {
+            saveSvgLayout(trackId, '');
+        }
+    }
+}
+
+function handleSvgDrop(event, trackId) {
+    event.preventDefault();
+    event.target.closest('.track-svg-upload-zone')?.classList.remove('drag-over');
+
+    // Text aus Drop lesen
+    const text = event.dataTransfer.getData('text/plain') || event.dataTransfer.getData('text/html') || '';
+    if (text && text.includes('<svg')) {
+        // SVG aus dem Text extrahieren
+        const match = text.match(/<svg[\s\S]*?<\/svg>/i);
+        if (match) {
+            saveSvgLayout(trackId, match[0]);
+            return;
+        }
+    }
+
+    // Datei-Drop
+    const file = event.dataTransfer.files?.[0];
+    if (file && file.name.endsWith('.svg')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const content = e.target.result;
+            if (content.includes('<svg')) {
+                saveSvgLayout(trackId, content);
+            } else {
+                showToast('Keine gueltige SVG-Datei', 'warning');
+            }
+        };
+        reader.readAsText(file);
+    }
+}
+
+async function saveSvgLayout(trackId, svgContent) {
+    try {
+        const res = await fetch(`/api/tracks/${trackId}/layout`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ svg_layout: svgContent }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast(svgContent ? 'Layout gespeichert' : 'Layout geloescht', 'success', 3000);
+            loadTracks();
+        } else {
+            showToast(data.error || 'Fehler beim Speichern', 'danger');
+        }
+    } catch (e) {
+        showToast('Fehler: ' + e.message, 'danger');
+    }
+}
 </script>
 {% endblock %}

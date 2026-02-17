@@ -766,6 +766,18 @@ footer {
     }
 }
 
+/* Track Layout Widget */
+.track-layout-widget svg {
+    width: 100%;
+    height: auto;
+    max-height: 90px;
+}
+
+.track-layout-widget svg path {
+    stroke: var(--sr-accent) !important;
+    stroke-width: 198 !important;
+}
+
 /* Head-to-Head Cards */
 .h2h-card {
     border: 2px solid var(--sr-border);

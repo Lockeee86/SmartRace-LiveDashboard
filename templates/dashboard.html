@@ -97,6 +97,12 @@
                         <i class="fas fa-chart-bar" style="color: #9b59b6"></i> Session Stats
                     </label>
                 </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="tracklayout" checked>
+                        <i class="fas fa-draw-polygon text-info"></i> Streckenlayout
+                    </label>
+                </li>
             </ul>
         </div>
         <button id="refreshBtn" class="btn btn-sm btn-outline-primary" title="Aktualisieren">
@@ -159,6 +165,17 @@
             </div>
         </div>
     </div>
+    <div class="col-md-6 col-lg-3 widget-col" data-widget="tracklayout" draggable="true">
+        <div class="card stat-card h-100" style="background: linear-gradient(135deg, #1a2030, #121820); border-left: 4px solid #3498db;">
+            <div class="card-body py-3">
+                <div class="stat-label mb-1"><i class="fas fa-draw-polygon me-1"></i> Strecke</div>
+                <div id="dashTrackLayoutName" class="small text-muted mb-1">--</div>
+                <div id="dashTrackLayout" class="text-center track-layout-widget" style="max-height: 100px; overflow: hidden;">
+                    <span class="text-muted small">Kein Layout</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Horizontaler Live Ticker -->
@@ -205,6 +222,29 @@ async function loadTrackRecord() {
     } catch (e) {
         console.error('Streckenrekord-Fehler:', e);
     }
+}
+
+// Aktives Streckenlayout laden
+async function loadActiveTrackLayout() {
+    try {
+        const res = await fetch('/api/active-track-layout');
+        if (!res.ok) return;
+        const data = await res.json();
+        const container = document.getElementById('dashTrackLayout');
+        const nameEl = document.getElementById('dashTrackLayoutName');
+        if (data.name) nameEl.textContent = data.name;
+        if (data.svg_layout) {
+            container.innerHTML = data.svg_layout;
+            const svg = container.querySelector('svg');
+            if (svg) {
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxHeight = '90px';
+            }
+        } else {
+            container.innerHTML = '<span class="text-muted small">Kein Layout</span>';
+        }
+    } catch (e) {}
 }
 
 // ---- Horizontaler Live Ticker ----
@@ -773,7 +813,7 @@ document.querySelectorAll('.ctrl-cb').forEach(cb => {
 document.addEventListener('DOMContentLoaded', async () => {
     await loadTrackRecord();
     await loadSessions();
-    await Promise.all([updateDashboard(), loadTickerFeed()]);
+    await Promise.all([updateDashboard(), loadTickerFeed(), loadActiveTrackLayout()]);
 });
 
 document.getElementById('sessionSelect').addEventListener('change', function() {
@@ -841,6 +881,7 @@ socket.on('car_removed', (data) => {
 socket.on('active_track', (data) => {
     if (data.name) {
         addTickerEvent({ type: 'track', name: data.name });
+        loadActiveTrackLayout();
     }
 });
 
