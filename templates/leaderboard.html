@@ -102,10 +102,9 @@
     </div>
     <div class="col-md-6 col-lg-3 lb-widget-col" data-widget="tracklayout" draggable="true">
         <div class="card stat-card h-100" style="background: linear-gradient(135deg, #1a2030, #121820); border-left: 4px solid #3498db;">
-            <div class="card-body py-3">
-                <div class="stat-label mb-1"><i class="fas fa-draw-polygon me-1"></i> Strecke</div>
-                <div id="lbTrackLayoutName" class="small text-muted mb-1">--</div>
-                <div id="lbTrackLayout" class="text-center track-layout-widget" style="max-height: 100px; overflow: hidden;">
+            <div class="card-body py-2 px-3">
+                <div class="stat-label mb-1"><i class="fas fa-draw-polygon me-1"></i> Strecke <span class="fw-normal text-muted ms-1" id="lbTrackLayoutName">--</span></div>
+                <div id="lbTrackLayout" class="text-center track-layout-widget">
                     <span class="text-muted small">Kein Layout</span>
                 </div>
             </div>
@@ -159,6 +158,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/track-positions.js') }}"></script>
 <script>
 let lbData = {};
 let lbTrackRecord = null;
@@ -481,6 +481,8 @@ function trimTicker() {
 window.addEventListener('resize', () => rebuildTicker());
 
 // Aktives Streckenlayout laden
+let lbTrackMap = null;
+
 async function loadLbTrackLayout() {
     try {
         const res = await fetch('/api/active-track-layout');
@@ -490,13 +492,15 @@ async function loadLbTrackLayout() {
         const nameEl = document.getElementById('lbTrackLayoutName');
         if (data.name) nameEl.textContent = data.name;
         if (data.svg_layout) {
+            if (lbTrackMap) { lbTrackMap.destroy(); lbTrackMap = null; }
             container.innerHTML = data.svg_layout;
             const svg = container.querySelector('svg');
             if (svg) {
                 svg.style.width = '100%';
                 svg.style.height = 'auto';
-                svg.style.maxHeight = '90px';
             }
+            lbTrackMap = new TrackPositionMap('lbTrackLayout', () => lbData);
+            lbTrackMap.init();
         } else {
             container.innerHTML = '<span class="text-muted small">Kein Layout</span>';
         }
