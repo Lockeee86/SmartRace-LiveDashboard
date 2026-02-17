@@ -770,12 +770,21 @@ footer {
 .track-layout-widget svg {
     width: 100%;
     height: auto;
-    max-height: 90px;
 }
 
 .track-layout-widget svg path {
     stroke: var(--sr-accent) !important;
-    stroke-width: 198 !important;
+    stroke-opacity: 0.5;
+}
+
+.track-layout-widget svg #driver-dots circle {
+    filter: drop-shadow(0 0 4px rgba(0,0,0,0.6));
+    transition: cx 0.8s ease, cy 0.8s ease;
+}
+
+.track-layout-widget svg #driver-dots text {
+    filter: drop-shadow(0 0 2px rgba(0,0,0,0.8));
+    transition: x 0.8s ease, y 0.8s ease;
 }
 
 /* Head-to-Head Cards */

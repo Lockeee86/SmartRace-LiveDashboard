@@ -167,10 +167,9 @@
     </div>
     <div class="col-md-6 col-lg-3 widget-col" data-widget="tracklayout" draggable="true">
         <div class="card stat-card h-100" style="background: linear-gradient(135deg, #1a2030, #121820); border-left: 4px solid #3498db;">
-            <div class="card-body py-3">
-                <div class="stat-label mb-1"><i class="fas fa-draw-polygon me-1"></i> Strecke</div>
-                <div id="dashTrackLayoutName" class="small text-muted mb-1">--</div>
-                <div id="dashTrackLayout" class="text-center track-layout-widget" style="max-height: 100px; overflow: hidden;">
+            <div class="card-body py-2 px-3">
+                <div class="stat-label mb-1"><i class="fas fa-draw-polygon me-1"></i> Strecke <span class="fw-normal text-muted ms-1" id="dashTrackLayoutName">--</span></div>
+                <div id="dashTrackLayout" class="text-center track-layout-widget">
                     <span class="text-muted small">Kein Layout</span>
                 </div>
             </div>
@@ -199,6 +198,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/track-positions.js') }}"></script>
 <script>
 let dashboardData = {};
 let trackRecord = null;
@@ -225,6 +225,8 @@ async function loadTrackRecord() {
 }
 
 // Aktives Streckenlayout laden
+let dashTrackMap = null;
+
 async function loadActiveTrackLayout() {
     try {
         const res = await fetch('/api/active-track-layout');
@@ -234,13 +236,17 @@ async function loadActiveTrackLayout() {
         const nameEl = document.getElementById('dashTrackLayoutName');
         if (data.name) nameEl.textContent = data.name;
         if (data.svg_layout) {
+            // Bestehende Map zerstoeren
+            if (dashTrackMap) { dashTrackMap.destroy(); dashTrackMap = null; }
             container.innerHTML = data.svg_layout;
             const svg = container.querySelector('svg');
             if (svg) {
                 svg.style.width = '100%';
                 svg.style.height = 'auto';
-                svg.style.maxHeight = '90px';
             }
+            // Position-Map initialisieren
+            dashTrackMap = new TrackPositionMap('dashTrackLayout', () => dashboardData);
+            dashTrackMap.init();
         } else {
             container.innerHTML = '<span class="text-muted small">Kein Layout</span>';
         }
