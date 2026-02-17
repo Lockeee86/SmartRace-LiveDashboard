@@ -140,6 +140,7 @@ class Track(db.Model):
     name = db.Column(db.String(200), unique=True, index=True)
     length = db.Column(db.Float, nullable=True)
     pitstop_delta = db.Column(db.Float, nullable=True)
+    svg_layout = db.Column(db.Text, nullable=True)
     last_used = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -195,6 +196,7 @@ def init_db():
     # Auto-Migration: fehlende Spalten hinzufuegen
     _add_column_if_missing('sr_race_result', 'pitstops', 'INTEGER DEFAULT 0')
     _add_column_if_missing('sr_penalty', 'penalty_seconds', 'INTEGER DEFAULT 0')
+    _add_column_if_missing('sr_tracks', 'svg_layout', 'TEXT')
 
 
 with app.app_context():
@@ -1762,6 +1764,7 @@ def api_tracks():
                 'name': t.name,
                 'length': t.length,
                 'pitstop_delta': t.pitstop_delta,
+                'svg_layout': t.svg_layout,
                 'last_used': t.last_used.isoformat() if t.last_used else None,
                 'created_at': t.created_at.isoformat() if t.created_at else None,
             }
@@ -1792,6 +1795,45 @@ def api_tracks():
         log.error(f"tracks api: {e}")
         db.session.rollback()
         return jsonify({'tracks': [], 'records': [], 'personal_records': []})
+
+
+@app.route('/api/tracks/<int:track_id>/layout', methods=['PUT'])
+def api_track_layout(track_id):
+    """SVG-Layout fuer eine Strecke speichern oder loeschen."""
+    try:
+        track = Track.query.get(track_id)
+        if not track:
+            return jsonify({'error': 'Strecke nicht gefunden'}), 404
+        data = request.get_json(silent=True) or {}
+        svg = (data.get('svg_layout') or '').strip()
+        # Einfache Validierung: muss SVG-artig sein oder leer
+        if svg and '<svg' not in svg.lower():
+            return jsonify({'error': 'Kein gueltiges SVG'}), 400
+        track.svg_layout = svg if svg else None
+        db.session.commit()
+        return jsonify({'ok': True, 'track_id': track_id})
+    except Exception as e:
+        log.error(f"track layout save: {e}")
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/active-track-layout')
+def api_active_track_layout():
+    """SVG-Layout der aktuell aktiven Strecke zurueckgeben."""
+    try:
+        track = Track.query.order_by(Track.last_used.desc()).first()
+        if track and track.svg_layout:
+            return jsonify({
+                'name': track.name,
+                'svg_layout': track.svg_layout,
+                'track_id': track.id,
+            })
+        return jsonify({'name': track.name if track else None, 'svg_layout': None})
+    except Exception as e:
+        log.error(f"active track layout: {e}")
+        db.session.rollback()
+        return jsonify({'name': None, 'svg_layout': None})
 
 
 @app.route('/api/driver-profile')
