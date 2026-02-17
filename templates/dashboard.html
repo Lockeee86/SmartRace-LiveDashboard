@@ -1021,6 +1021,56 @@ widgetRow.addEventListener('drop', (e) => {
     } catch (e) {}
 })();
 
+// ---- Widget Resize ----
+const WIDGET_SIZES = ['3', '6', '12'];
+const WIDGET_SIZE_ICONS = { '3': 'fa-expand', '6': 'fa-up-right-and-down-left-from-center', '12': 'fa-compress' };
+const WIDGET_SIZE_TITLES = { '3': 'Klein (25%)', '6': 'Mittel (50%)', '12': 'Gross (100%)' };
+
+function getWidgetSizes() {
+    try { return JSON.parse(localStorage.getItem('sr-widget-sizes') || '{}'); } catch (e) { return {}; }
+}
+
+function applyWidgetSize(col, size) {
+    col.className = col.className.replace(/col-lg-\d+/g, '');
+    col.classList.add('col-lg-' + size);
+    col.dataset.size = size;
+    const btn = col.querySelector('.widget-resize-btn');
+    if (btn) {
+        btn.innerHTML = '<i class="fas ' + (WIDGET_SIZE_ICONS[size] || 'fa-expand') + '"></i>';
+        btn.title = WIDGET_SIZE_TITLES[size] || '';
+    }
+}
+
+function initWidgetResize() {
+    const saved = getWidgetSizes();
+    document.querySelectorAll('#widgetRow .widget-col').forEach(col => {
+        const wid = col.dataset.widget;
+        // Resize-Button einfuegen
+        const card = col.querySelector('.card');
+        if (card && !col.querySelector('.widget-resize-btn')) {
+            const btn = document.createElement('button');
+            btn.className = 'widget-resize-btn';
+            btn.type = 'button';
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const cur = col.dataset.size || '3';
+                const idx = WIDGET_SIZES.indexOf(cur);
+                const next = WIDGET_SIZES[(idx + 1) % WIDGET_SIZES.length];
+                applyWidgetSize(col, next);
+                const sizes = getWidgetSizes();
+                sizes[wid] = next;
+                localStorage.setItem('sr-widget-sizes', JSON.stringify(sizes));
+            });
+            card.appendChild(btn);
+        }
+        // Gespeicherte Groesse anwenden
+        const size = saved[wid] || (col.className.match(/col-lg-(\d+)/) || [])[1] || '3';
+        applyWidgetSize(col, size);
+    });
+}
+
+initWidgetResize();
+
 // Fallback: alle 10 Sekunden aktualisieren
 setInterval(() => { updateDashboard(); loadTickerFeed(); }, 10000);
 </script>

@@ -787,6 +787,48 @@ footer {
     transition: x 0.8s ease, y 0.8s ease;
 }
 
+/* Widget Resize Button */
+.widget-col .card,
+.lb-widget-col .card {
+    position: relative;
+}
+
+.widget-resize-btn {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    font-size: 0.6rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 2;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--sr-muted);
+    cursor: pointer;
+}
+
+.widget-col:hover .widget-resize-btn,
+.lb-widget-col:hover .widget-resize-btn {
+    opacity: 1;
+}
+
+.widget-resize-btn:hover {
+    background: rgba(255,255,255,0.15);
+    color: var(--sr-text);
+}
+
+.widget-col,
+.lb-widget-col {
+    transition: flex 0.3s ease, max-width 0.3s ease;
+}
+
 /* Head-to-Head Cards */
 .h2h-card {
     border: 2px solid var(--sr-border);
