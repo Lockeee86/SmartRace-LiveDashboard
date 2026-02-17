@@ -85,11 +85,54 @@
 {% block content %}
 <div class="session-selector d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><i class="fas fa-road me-2"></i>Strecken & Rekorde</h5>
+    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#addTrackModal">
+        <i class="fas fa-plus me-1"></i>Strecke hinzufuegen
+    </button>
 </div>
 
 <!-- Strecken-Karten -->
 <div class="row g-3 mb-4" id="trackCards">
     <div class="text-center text-muted py-4">Lade Strecken...</div>
+</div>
+
+<!-- Modal: Strecke hinzufuegen -->
+<div class="modal fade" id="addTrackModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background: var(--sr-card); border: 1px solid var(--sr-border);">
+            <div class="modal-header border-0">
+                <h5 class="modal-title"><i class="fas fa-road me-2"></i>Strecke hinzufuegen</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="newTrackName" placeholder="z.B. Heimstrecke V3">
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label class="form-label">Laenge (m)</label>
+                        <input type="number" class="form-control" id="newTrackLength" placeholder="optional" step="0.1">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Pitstop Delta (s)</label>
+                        <input type="number" class="form-control" id="newTrackPitstop" placeholder="optional" step="0.1">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">SVG-Layout (optional)</label>
+                    <textarea class="form-control" id="newTrackSvg" rows="4" placeholder="SVG-Code hier einfuegen...&#10;&lt;svg viewBox=&quot;...&quot;&gt;...&lt;/svg&gt;"></textarea>
+                    <div class="form-text">Den kompletten &lt;svg&gt;...&lt;/svg&gt; Code einfuegen</div>
+                </div>
+                <div id="newTrackSvgPreview" class="track-svg-container d-none mb-3" style="min-height: 80px;"></div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-primary" id="saveNewTrackBtn">
+                    <i class="fas fa-save me-1"></i>Speichern
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Rekorde -->
@@ -166,11 +209,14 @@ function renderTracks(tracks) {
     const container = document.getElementById('trackCards');
     if (tracks.length === 0) {
         container.innerHTML = `<div class="col-12">
-            <div class="card text-center py-4">
+            <div class="card text-center py-5">
                 <div class="text-muted">
-                    <i class="fas fa-road fa-2x mb-2"></i>
-                    <div>Noch keine Strecken registriert</div>
-                    <div class="small mt-1">Strecken werden automatisch gespeichert wenn SmartRace eine Strecke aktiviert</div>
+                    <i class="fas fa-road fa-3x mb-3 d-block"></i>
+                    <div class="fs-5 mb-2">Noch keine Strecken registriert</div>
+                    <div class="small mb-3">Strecken werden automatisch gespeichert wenn SmartRace eine Strecke aktiviert,<br>oder du kannst manuell eine anlegen:</div>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTrackModal">
+                        <i class="fas fa-plus me-1"></i>Strecke hinzufuegen
+                    </button>
                 </div>
             </div>
         </div>`;
@@ -337,6 +383,72 @@ function handleSvgDrop(event, trackId) {
         reader.readAsText(file);
     }
 }
+
+// ---- Neue Strecke anlegen ----
+
+// SVG-Vorschau im Modal
+document.getElementById('newTrackSvg').addEventListener('input', function() {
+    const preview = document.getElementById('newTrackSvgPreview');
+    const val = this.value.trim();
+    if (val && val.includes('<svg')) {
+        preview.innerHTML = val;
+        preview.classList.remove('d-none');
+        const svg = preview.querySelector('svg');
+        if (svg) { svg.style.width = '100%'; svg.style.height = 'auto'; svg.style.maxHeight = '150px'; }
+    } else {
+        preview.innerHTML = '';
+        preview.classList.add('d-none');
+    }
+});
+
+document.getElementById('saveNewTrackBtn').addEventListener('click', async () => {
+    const name = document.getElementById('newTrackName').value.trim();
+    if (!name) {
+        showToast('Name ist erforderlich', 'warning');
+        document.getElementById('newTrackName').focus();
+        return;
+    }
+    const length = document.getElementById('newTrackLength').value || null;
+    const pitstop = document.getElementById('newTrackPitstop').value || null;
+    const svg = document.getElementById('newTrackSvg').value.trim() || null;
+
+    const btn = document.getElementById('saveNewTrackBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Speichern...';
+
+    try {
+        const res = await fetch('/api/tracks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: name,
+                length: length,
+                pitstop_delta: pitstop,
+                svg_layout: svg,
+            }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast(`Strecke "${name}" angelegt`, 'success', 3000);
+            bootstrap.Modal.getInstance(document.getElementById('addTrackModal')).hide();
+            // Felder zuruecksetzen
+            document.getElementById('newTrackName').value = '';
+            document.getElementById('newTrackLength').value = '';
+            document.getElementById('newTrackPitstop').value = '';
+            document.getElementById('newTrackSvg').value = '';
+            document.getElementById('newTrackSvgPreview').innerHTML = '';
+            document.getElementById('newTrackSvgPreview').classList.add('d-none');
+            loadTracks();
+        } else {
+            showToast(data.error || 'Fehler', 'danger');
+        }
+    } catch (e) {
+        showToast('Fehler: ' + e.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save me-1"></i>Speichern';
+    }
+});
 
 async function saveSvgLayout(trackId, svgContent) {
     try {

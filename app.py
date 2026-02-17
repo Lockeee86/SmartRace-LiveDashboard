@@ -1797,6 +1797,37 @@ def api_tracks():
         return jsonify({'tracks': [], 'records': [], 'personal_records': []})
 
 
+@app.route('/api/tracks', methods=['POST'])
+def api_create_track():
+    """Strecke manuell anlegen."""
+    try:
+        data = request.get_json(silent=True) or {}
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'Name ist erforderlich'}), 400
+        existing = Track.query.filter_by(name=name).first()
+        if existing:
+            return jsonify({'error': 'Strecke existiert bereits', 'track_id': existing.id}), 409
+        length = data.get('length')
+        pitstop_delta = data.get('pitstop_delta')
+        svg_layout = (data.get('svg_layout') or '').strip() or None
+        if svg_layout and '<svg' not in svg_layout.lower():
+            return jsonify({'error': 'Kein gueltiges SVG'}), 400
+        track = Track(
+            name=name,
+            length=float(length) if length else None,
+            pitstop_delta=float(pitstop_delta) if pitstop_delta else None,
+            svg_layout=svg_layout,
+        )
+        db.session.add(track)
+        db.session.commit()
+        return jsonify({'ok': True, 'track_id': track.id}), 201
+    except Exception as e:
+        log.error(f"create track: {e}")
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/tracks/<int:track_id>/layout', methods=['PUT'])
 def api_track_layout(track_id):
     """SVG-Layout fuer eine Strecke speichern oder loeschen."""
