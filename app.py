@@ -323,12 +323,12 @@ def _get_current_race_type():
 # =============================================================================
 
 @app.route('/')
-def page_dashboard():
-    return render_template('dashboard.html')
-
-@app.route('/leaderboard')
 def page_leaderboard():
     return render_template('leaderboard.html')
+
+@app.route('/dashboard')
+def page_dashboard():
+    return render_template('dashboard.html')
 
 @app.route('/analytics')
 def page_analytics():
