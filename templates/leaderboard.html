@@ -7,6 +7,15 @@
 <div class="session-selector d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><i class="fas fa-trophy me-2"></i>Live Leaderboard</h5>
     <div class="d-flex align-items-center gap-2">
+        <!-- Modus -->
+        <div class="btn-group btn-group-sm" id="lbModeGroup">
+            <button class="btn btn-outline-light active" data-mode="race" title="Rennen: Sortierung nach Runden">
+                <i class="fas fa-flag-checkered me-1"></i><span class="d-none d-sm-inline">Rennen</span>
+            </button>
+            <button class="btn btn-outline-light" data-mode="training" title="Training: Sortierung nach Bestzeit">
+                <i class="fas fa-stopwatch me-1"></i><span class="d-none d-sm-inline">Training</span>
+            </button>
+        </div>
         <!-- Widget Visibility Toggle -->
         <div class="dropdown" id="lbWidgetToggleDropdown">
             <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Widgets ein/ausblenden">
@@ -163,6 +172,26 @@
 let lbData = {};
 let lbTrackRecord = null;
 let previousPositions = {};
+let lbMode = localStorage.getItem('sr-lb-mode') || 'race';
+
+// Modus-Buttons initialisieren
+(function initModeButtons() {
+    const group = document.getElementById('lbModeGroup');
+    group.querySelectorAll('[data-mode]').forEach(btn => {
+        if (btn.dataset.mode === lbMode) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+        btn.addEventListener('click', () => {
+            lbMode = btn.dataset.mode;
+            localStorage.setItem('sr-lb-mode', lbMode);
+            group.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            updateLeaderboard();
+        });
+    });
+})();
 
 // Streckenrekord aus DB laden
 async function loadTrackRecord() {
@@ -239,16 +268,29 @@ function updateLeaderboard() {
         }
     });
 
-    // Sortieren: DQ/DNF ans Ende, dann meiste Runden, dann beste Zeit
-    drivers.sort((a, b) => {
-        if (a.disqualified !== b.disqualified) return a.disqualified ? 1 : -1;
-        if (a.retired !== b.retired) return a.retired ? 1 : -1;
-        if (a.totalLaps !== b.totalLaps) return b.totalLaps - a.totalLaps;
-        if (a.bestTime && b.bestTime) return a.bestTime - b.bestTime;
-        if (a.bestTime) return -1;
-        if (b.bestTime) return 1;
-        return 0;
-    });
+    // Sortieren je nach Modus
+    if (lbMode === 'training') {
+        // Training: beste Rundenzeit aufsteigend (schnellster oben)
+        drivers.sort((a, b) => {
+            if (a.disqualified !== b.disqualified) return a.disqualified ? 1 : -1;
+            if (a.retired !== b.retired) return a.retired ? 1 : -1;
+            if (a.bestTime && b.bestTime) return a.bestTime - b.bestTime;
+            if (a.bestTime) return -1;
+            if (b.bestTime) return 1;
+            return 0;
+        });
+    } else {
+        // Rennen: meiste Runden, dann beste Zeit
+        drivers.sort((a, b) => {
+            if (a.disqualified !== b.disqualified) return a.disqualified ? 1 : -1;
+            if (a.retired !== b.retired) return a.retired ? 1 : -1;
+            if (a.totalLaps !== b.totalLaps) return b.totalLaps - a.totalLaps;
+            if (a.bestTime && b.bestTime) return a.bestTime - b.bestTime;
+            if (a.bestTime) return -1;
+            if (b.bestTime) return 1;
+            return 0;
+        });
+    }
 
     // Stats
     document.getElementById('lb-totalLaps').textContent = totalLaps;
@@ -303,12 +345,20 @@ function updateLeaderboard() {
         } else if (d.retired) {
             gap = '<span class="text-warning fw-bold">DNF</span>';
         } else if (d === leader) {
-            gap = '<span class="text-warning fw-bold">Leader</span>';
-        } else if (d.totalLaps < leader.totalLaps) {
-            const diff = leader.totalLaps - d.totalLaps;
-            gap = '+' + diff + ' Runde' + (diff > 1 ? 'n' : '');
-        } else if (d.bestTime && leader.bestTime) {
-            gap = '+' + formatTime(d.bestTime - leader.bestTime);
+            gap = lbMode === 'training'
+                ? '<span class="text-warning fw-bold">P1</span>'
+                : '<span class="text-warning fw-bold">Leader</span>';
+        } else if (lbMode === 'training') {
+            if (d.bestTime && leader.bestTime) {
+                gap = '+' + formatTime(d.bestTime - leader.bestTime);
+            }
+        } else {
+            if (d.totalLaps < leader.totalLaps) {
+                const diff = leader.totalLaps - d.totalLaps;
+                gap = '+' + diff + ' Runde' + (diff > 1 ? 'n' : '');
+            } else if (d.bestTime && leader.bestTime) {
+                gap = '+' + formatTime(d.bestTime - leader.bestTime);
+            }
         }
 
         const isFastest = fastest && d.bestTime === fastest.time;
