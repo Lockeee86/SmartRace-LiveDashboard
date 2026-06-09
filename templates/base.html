@@ -12,15 +12,15 @@
 <body>
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg border-bottom">
-        <div class="container-fluid px-4">
+        <div class="container-fluid px-3">
             <a class="navbar-brand fw-bold" href="{{ url_for('page_leaderboard') }}">
-                <i class="fas fa-flag-checkered me-2"></i>SmartRace Live
+                <i class="fas fa-flag-checkered me-1"></i>SmartRace
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto flex-row flex-wrap justify-content-center gap-1">
+                <ul class="navbar-nav ms-auto flex-row flex-wrap justify-content-center gap-0">
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'page_leaderboard' %}active{% endif %}" href="{{ url_for('page_leaderboard') }}" title="Leaderboard">
                             <i class="fas fa-trophy me-1"></i><span class="d-none d-xl-inline">Leaderboard</span>
@@ -73,41 +73,59 @@
                     </li>
                 </ul>
                 <!-- Rennstatus Badge -->
-                <span class="badge race-status-badge bg-secondary ms-3" id="raceStatusBadge" title="Rennstatus">
-                    <i class="fas fa-hourglass me-1"></i> <span id="raceStatusText">Warte...</span>
+                <span class="badge race-status-badge bg-secondary ms-2" id="raceStatusBadge" title="Rennstatus" style="font-size:0.7rem;">
+                    <i class="fas fa-hourglass me-1"></i><span id="raceStatusText">Warte...</span>
                 </span>
-                <!-- Theme Toggle -->
-                <button class="btn btn-sm btn-outline-light ms-2" id="themeToggleBtn" title="Hell/Dunkel umschalten">
-                    <i class="fas fa-sun" id="themeIcon"></i>
-                </button>
-                <!-- Schriftgroesse -->
-                <div class="btn-group ms-1" id="fontSizeGroup">
-                    <button class="btn btn-sm btn-outline-light" id="fontSizeDownBtn" title="Schrift kleiner">
-                        <i class="fas fa-minus" style="font-size:0.6rem"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-light" id="fontSizeResetBtn" title="Schriftgroesse zuruecksetzen" style="min-width:38px; font-size:0.7rem; pointer-events:auto;">
-                        <span id="fontSizeLabel">100%</span>
-                    </button>
-                    <button class="btn btn-sm btn-outline-light" id="fontSizeUpBtn" title="Schrift groesser">
-                        <i class="fas fa-plus" style="font-size:0.6rem"></i>
-                    </button>
-                </div>
-                <!-- Sound Toggle -->
-                <button class="btn btn-sm btn-outline-light ms-1" id="soundToggleBtn" title="Ton an/aus">
-                    <i class="fas fa-volume-xmark" id="soundIcon"></i>
-                </button>
-                <!-- Benachrichtigungen -->
-                <button class="btn btn-sm btn-outline-light ms-1" id="notifyToggleBtn" title="Browser-Benachrichtigungen">
-                    <i class="fas fa-bell-slash" id="notifyIcon"></i>
-                </button>
-                <!-- Vollbild -->
-                <button class="btn btn-sm btn-outline-light ms-1" id="fullscreenBtn" title="Vollbild (F11)">
-                    <i class="fas fa-expand"></i>
-                </button>
                 <!-- Verbindungsstatus -->
-                <span class="badge bg-warning ms-2" id="connectionBadge">
-                    <i class="fas fa-circle me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Verbinde...
+                <span class="badge bg-warning ms-1" id="connectionBadge" style="font-size:0.65rem;">
+                    <i class="fas fa-circle me-1" style="font-size: 0.4rem; vertical-align: middle;"></i>Verbinde...
                 </span>
+                <!-- Settings Dropdown -->
+                <div class="dropdown ms-2">
+                    <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" id="settingsDropdownBtn" title="Einstellungen" style="font-size:0.8rem; padding:0.2rem 0.45rem;">
+                        <i class="fas fa-gear"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end settings-dropdown">
+                        <li><span class="setting-label">Darstellung</span></li>
+                        <li>
+                            <a class="dropdown-item" href="#" id="themeToggleBtn">
+                                <i class="fas fa-sun" id="themeIcon" style="width:16px; text-align:center;"></i> <span id="themeLabel">Light Mode</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="#" id="fullscreenBtn">
+                                <i class="fas fa-expand" style="width:16px; text-align:center;"></i> Vollbild <span class="text-muted ms-auto" style="font-size:0.65rem;">F11</span>
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><span class="setting-label">Schriftgroesse</span></li>
+                        <li>
+                            <div class="d-flex align-items-center gap-1 px-2 py-1">
+                                <button class="btn btn-sm btn-outline-secondary flex-shrink-0" id="fontSizeDownBtn" style="font-size:0.65rem; padding:0.15rem 0.4rem;">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary flex-grow-1" id="fontSizeResetBtn" style="font-size:0.7rem; padding:0.15rem 0.3rem;">
+                                    <span id="fontSizeLabel">100%</span>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary flex-shrink-0" id="fontSizeUpBtn" style="font-size:0.65rem; padding:0.15rem 0.4rem;">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><span class="setting-label">Benachrichtigungen</span></li>
+                        <li>
+                            <a class="dropdown-item" href="#" id="soundToggleBtn">
+                                <i class="fas fa-volume-xmark" id="soundIcon" style="width:16px; text-align:center;"></i> <span id="soundLabel">Ton aus</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="#" id="notifyToggleBtn">
+                                <i class="fas fa-bell-slash" id="notifyIcon" style="width:16px; text-align:center;"></i> <span id="notifyLabel">Push aus</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
     </nav>
@@ -212,17 +230,17 @@
     const badge = document.getElementById('connectionBadge');
 
     socket.on('connect', () => {
-        badge.className = 'badge bg-success ms-2';
+        badge.className = 'badge bg-success ms-1';
         badge.innerHTML = '<i class="fas fa-circle me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Verbunden';
     });
 
     socket.on('disconnect', () => {
-        badge.className = 'badge bg-danger ms-2';
+        badge.className = 'badge bg-danger ms-1';
         badge.innerHTML = '<i class="fas fa-circle me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Getrennt';
     });
 
     socket.on('reconnect_attempt', (attempt) => {
-        badge.className = 'badge bg-warning ms-2';
+        badge.className = 'badge bg-warning ms-1';
         badge.innerHTML = '<i class="fas fa-circle me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Verbinde... (' + attempt + ')';
     });
 
@@ -231,13 +249,13 @@
     });
 
     socket.on('reconnect_failed', () => {
-        badge.className = 'badge bg-danger ms-2';
+        badge.className = 'badge bg-danger ms-1';
         badge.innerHTML = '<i class="fas fa-circle me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Offline';
         showToast('Verbindung zum Server verloren. Bitte Seite neu laden.', 'danger', 0);
     });
 
     socket.on('connect_error', () => {
-        badge.className = 'badge bg-danger ms-2';
+        badge.className = 'badge bg-danger ms-1';
         badge.innerHTML = '<i class="fas fa-circle me-1" style="font-size: 0.5rem; vertical-align: middle;"></i> Fehler';
     });
 
@@ -296,7 +314,7 @@
         const statusBadge = document.getElementById('raceStatusBadge');
         const statusText = document.getElementById('raceStatusText');
         const s = RACE_STATUS_MAP[status] || RACE_STATUS_MAP['unknown'];
-        statusBadge.className = 'badge race-status-badge ' + s.cls + ' ms-3';
+        statusBadge.className = 'badge race-status-badge ' + s.cls + ' ms-2';
         const typeLabel = raceType ? ` (${raceType})` : '';
         statusText.textContent = s.text + typeLabel;
         statusBadge.querySelector('i').className = 'fas ' + s.icon + ' me-1';
@@ -314,7 +332,10 @@
         }
     }
 
-    document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+    document.getElementById('fullscreenBtn').addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleFullscreen();
+    });
 
     document.addEventListener('fullscreenchange', () => {
         const btn = document.getElementById('fullscreenBtn');
@@ -409,6 +430,7 @@
     // =========================================================================
     const themeBtn = document.getElementById('themeToggleBtn');
     const themeIcon = document.getElementById('themeIcon');
+    const themeLabel = document.getElementById('themeLabel');
     let currentTheme = localStorage.getItem('sr-theme') || 'dark';
 
     function applyTheme(theme) {
@@ -418,15 +440,20 @@
             document.body.style.backgroundColor = '#f0f2f5';
             document.body.style.color = '#1a1a2e';
             themeIcon.className = 'fas fa-moon';
+            themeLabel.textContent = 'Dark Mode';
         } else {
             document.body.style.backgroundColor = '';
             document.body.style.color = '';
             themeIcon.className = 'fas fa-sun';
+            themeLabel.textContent = 'Light Mode';
         }
+        themeIcon.style.width = '16px';
+        themeIcon.style.textAlign = 'center';
         localStorage.setItem('sr-theme', theme);
     }
 
-    themeBtn.addEventListener('click', () => {
+    themeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
     });
 
@@ -477,12 +504,17 @@
     // =========================================================================
     let soundEnabled = localStorage.getItem('sr-sound') === 'true';
     const soundIconEl = document.getElementById('soundIcon');
+    const soundLabel = document.getElementById('soundLabel');
 
     function updateSoundIcon() {
         soundIconEl.className = soundEnabled ? 'fas fa-volume-high' : 'fas fa-volume-xmark';
+        soundIconEl.style.width = '16px';
+        soundIconEl.style.textAlign = 'center';
+        soundLabel.textContent = soundEnabled ? 'Ton an' : 'Ton aus';
     }
 
-    document.getElementById('soundToggleBtn').addEventListener('click', () => {
+    document.getElementById('soundToggleBtn').addEventListener('click', (e) => {
+        e.preventDefault();
         soundEnabled = !soundEnabled;
         localStorage.setItem('sr-sound', soundEnabled);
         updateSoundIcon();
@@ -556,17 +588,18 @@
     let notifyEnabled = localStorage.getItem('sr-notify') === 'true';
     const notifyIconEl = document.getElementById('notifyIcon');
     const notifyBtn = document.getElementById('notifyToggleBtn');
+    const notifyLabel = document.getElementById('notifyLabel');
 
     function updateNotifyIcon() {
         if (notifyEnabled && Notification.permission === 'granted') {
             notifyIconEl.className = 'fas fa-bell';
-            notifyBtn.classList.remove('btn-outline-light');
-            notifyBtn.classList.add('btn-outline-warning');
+            notifyLabel.textContent = 'Push an';
         } else {
             notifyIconEl.className = 'fas fa-bell-slash';
-            notifyBtn.classList.remove('btn-outline-warning');
-            notifyBtn.classList.add('btn-outline-light');
+            notifyLabel.textContent = 'Push aus';
         }
+        notifyIconEl.style.width = '16px';
+        notifyIconEl.style.textAlign = 'center';
     }
 
     function sendNotification(title, body, tag) {
@@ -584,7 +617,8 @@
         } catch (e) {}
     }
 
-    notifyBtn.addEventListener('click', async () => {
+    notifyBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
         if (!('Notification' in window)) {
             showToast('Browser unterstuetzt keine Benachrichtigungen', 'warning', 4000);
             return;
