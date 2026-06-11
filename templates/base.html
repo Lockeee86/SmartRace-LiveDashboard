@@ -97,6 +97,11 @@
                                 <i class="fas fa-expand" style="width:16px; text-align:center;"></i> Vollbild <span class="text-muted ms-auto" style="font-size:0.65rem;">F11</span>
                             </a>
                         </li>
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('page_tv') }}" target="_blank">
+                                <i class="fas fa-tv" style="width:16px; text-align:center;"></i> TV-Modus
+                            </a>
+                        </li>
                         <li><hr class="dropdown-divider"></li>
                         <li><span class="setting-label">Schriftgroesse</span></li>
                         <li>
@@ -148,6 +153,10 @@
                     <div class="race-progress-fill" id="raceProgressFill" style="width: 0%"></div>
                 </div>
                 <span class="race-progress-text" id="raceProgressText">--</span>
+            </div>
+            <div class="d-none d-flex align-items-center gap-2" id="raceCountdownContainer">
+                <i class="fas fa-clock"></i>
+                <span class="font-mono fw-bold" id="raceCountdownTime" style="font-size:1.1rem; letter-spacing:1px;">--:--</span>
             </div>
         </div>
     </div>
@@ -363,6 +372,8 @@
     let raceInfo = { type: '', laps: '', duration: '', status: '' };
     let raceMaxLaps = 0;
     let raceDuration = 0;
+    let countdownStartedAt = null;
+    let countdownInterval = null;
 
     function updateRaceInfoBar(data) {
         const bar = document.getElementById('raceInfoBar');
@@ -385,16 +396,21 @@
         const typeLabel = raceInfo.type === 'race' ? 'Rennen' : raceInfo.type === 'qualifying' ? 'Qualifying' : raceInfo.type;
         typeEl.innerHTML = `<i class="fas fa-flag-checkered me-1"></i>${typeLabel}`;
 
+        const countdownContainer = document.getElementById('raceCountdownContainer');
         if (raceMaxLaps > 0) {
             targetEl.textContent = raceMaxLaps + ' Runden';
             progressContainer.classList.remove('d-none');
+            countdownContainer.classList.add('d-none');
         } else if (raceDuration > 0) {
             const mins = Math.floor(raceDuration / 60);
             targetEl.textContent = mins + ' Minuten';
             progressContainer.classList.remove('d-none');
+            countdownContainer.classList.remove('d-none');
+            countdownContainer.classList.add('d-flex');
         } else {
             targetEl.textContent = '';
             progressContainer.classList.add('d-none');
+            countdownContainer.classList.add('d-none');
         }
     }
 
@@ -405,9 +421,54 @@
         document.getElementById('raceProgressText').textContent = `${currentLap}/${raceMaxLaps}`;
     }
 
+    function startCountdown() {
+        stopCountdown();
+        countdownStartedAt = Date.now();
+        const el = document.getElementById('raceCountdownTime');
+        countdownInterval = setInterval(() => {
+            if (!countdownStartedAt || raceDuration <= 0) { stopCountdown(); return; }
+            const elapsed = (Date.now() - countdownStartedAt) / 1000;
+            const remaining = Math.max(0, raceDuration - elapsed);
+            const mins = Math.floor(remaining / 60);
+            const secs = Math.floor(remaining % 60);
+            el.textContent = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+            if (remaining <= 60) {
+                el.classList.add('text-danger');
+            } else {
+                el.classList.remove('text-danger');
+            }
+            if (remaining <= 0) {
+                el.textContent = 'ZEIT!';
+                stopCountdown();
+            }
+            // Progress-Bar fuer Zeitrennen
+            const pct = Math.min(100, Math.round((elapsed / raceDuration) * 100));
+            document.getElementById('raceProgressFill').style.width = pct + '%';
+            document.getElementById('raceProgressText').textContent = el.textContent;
+        }, 500);
+    }
+
+    function stopCountdown() {
+        if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+    }
+
+    function pauseCountdown() {
+        stopCountdown();
+    }
+
     socket.on('race_status', (data) => {
         updateRaceStatusBadge(data.status, data.race_type);
         updateRaceInfoBar(data);
+
+        if (raceDuration > 0) {
+            if (data.status === 'running' || data.status === 'started' || data.status === 'racing') {
+                if (!countdownInterval) startCountdown();
+            } else if (data.status === 'suspended' || data.status === 'paused') {
+                pauseCountdown();
+            } else if (data.status === 'ended' || data.status === 'finished') {
+                stopCountdown();
+            }
+        }
 
         if (data.status === 'ended') {
             playSound('finish');
