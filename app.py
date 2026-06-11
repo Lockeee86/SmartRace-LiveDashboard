@@ -346,6 +346,10 @@ def page_live_timing():
 def page_race_control():
     return render_template('race-control.html')
 
+@app.route('/tv')
+def page_tv():
+    return render_template('tv.html')
+
 @app.route('/driver/<name>')
 def page_driver_profile(name):
     return render_template('driver-profile.html', driver_name=name)

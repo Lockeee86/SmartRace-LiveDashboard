@@ -1054,3 +1054,69 @@ footer {
         padding: 0.2rem 0.4rem;
     }
 }
+
+/* Sparkline Charts */
+.sparkline-canvas {
+    display: block;
+    margin: 0 auto;
+}
+
+/* Fuel Bar */
+.fuel-bar-mini {
+    width: 100%;
+    height: 4px;
+    background: var(--sr-border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 2px;
+}
+
+.fuel-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s ease;
+}
+
+.fuel-pct {
+    font-size: 0.65rem;
+    color: var(--sr-text-muted, #6c757d);
+}
+
+/* Sektorenanalyse */
+.sector-analysis-container {
+    overflow-x: auto;
+}
+
+.sector-table {
+    width: 100%;
+    font-size: 0.75rem;
+    border-collapse: collapse;
+}
+
+.sector-table th,
+.sector-table td {
+    padding: 0.2rem 0.4rem;
+    text-align: center;
+}
+
+.sector-table th {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    color: var(--sr-text-muted, #6c757d);
+    border-bottom: 1px solid var(--sr-border);
+}
+
+.sector-table td {
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.sector-table td.sector-best {
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ecc71;
+    font-weight: 700;
+}
+
+/* Countdown */
+#raceCountdownTime.text-danger {
+    animation: pulse 1s infinite;
+}

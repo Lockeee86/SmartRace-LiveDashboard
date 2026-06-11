@@ -49,6 +49,12 @@
                 </li>
                 <li>
                     <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="sectors" checked>
+                        <i class="fas fa-chart-bar text-success"></i> Sektorenanalyse
+                    </label>
+                </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
                         <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="tracklayout" checked>
                         <i class="fas fa-draw-polygon text-info"></i> Streckenlayout
                     </label>
@@ -109,6 +115,16 @@
             </div>
         </div>
     </div>
+    <div class="col-md-6 col-lg-6 lb-widget-col" data-widget="sectors" draggable="true">
+        <div class="card stat-card h-100" style="background: linear-gradient(135deg, #1a2d20, #122018); border-left: 4px solid #2ecc71;">
+            <div class="card-body py-2 px-3">
+                <div class="stat-label mb-1"><i class="fas fa-chart-bar me-1"></i> Sektorenanalyse</div>
+                <div id="lbSectorAnalysis" class="sector-analysis-container">
+                    <span class="text-muted small">Warte auf Sektordaten...</span>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="col-md-6 col-lg-3 lb-widget-col" data-widget="tracklayout" draggable="true">
         <div class="card stat-card h-100" style="background: linear-gradient(135deg, #1a2030, #121820); border-left: 4px solid #3498db;">
             <div class="card-body py-2 px-3">
@@ -148,13 +164,15 @@
                         <th class="text-center">Runden</th>
                         <th class="text-center">Beste Zeit</th>
                         <th class="text-center">Letzte Zeit</th>
+                        <th class="text-center" style="width:110px;">Trend</th>
                         <th class="text-center">Sektoren</th>
+                        <th class="text-center" style="width:70px;">Tank</th>
                         <th class="text-center">Abstand</th>
                         <th class="text-center">Status</th>
                     </tr>
                 </thead>
                 <tbody id="leaderboardBody">
-                    <tr><td colspan="10" class="text-center text-muted py-5">
+                    <tr><td colspan="12" class="text-center text-muted py-5">
                         <i class="fas fa-flag-checkered fa-2x mb-2 d-block"></i>
                         Warte auf Rennstart...
                     </td></tr>
@@ -173,6 +191,7 @@ let lbData = {};
 let lbTrackRecord = null;
 let previousPositions = {};
 let lbMode = localStorage.getItem('sr-lb-mode') || 'race';
+let lbFuelLevels = {};
 
 // Modus-Buttons initialisieren
 (function initModeButtons() {
@@ -261,6 +280,7 @@ function updateLeaderboard() {
             penalties: cd.penalties || 0,
             retired: cd.retired || false,
             disqualified: cd.disqualified || false,
+            fuel: lbFuelLevels[cid] !== undefined ? lbFuelLevels[cid] : -1,
         });
 
         if (cd.best_time_raw && (!fastest || cd.best_time_raw < fastest.time)) {
@@ -312,7 +332,7 @@ function updateLeaderboard() {
     // Leaderboard Tabelle
     const tbody = document.getElementById('leaderboardBody');
     if (drivers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-5"><i class="fas fa-flag-checkered fa-2x mb-2 d-block"></i>Warte auf Rennstart...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-5"><i class="fas fa-flag-checkered fa-2x mb-2 d-block"></i>Warte auf Rennstart...</td></tr>';
         return;
     }
 
@@ -387,6 +407,13 @@ function updateLeaderboard() {
             sectors = `<span class="sector-mini">${d.lastSector1 || '--'}</span> <span class="sector-mini">${d.lastSector2 || '--'}</span> <span class="sector-mini">${d.lastSector3 || '--'}</span>`;
         }
 
+        // Fuel
+        let fuelHtml = '<span class="text-muted">--</span>';
+        if (d.fuel >= 0) {
+            const fc = d.fuel > 50 ? '#2ecc71' : d.fuel > 20 ? '#f1c40f' : '#e74c3c';
+            fuelHtml = `<div class="fuel-bar-mini"><div class="fuel-bar-fill" style="width:${d.fuel}%;background:${fc}"></div></div><span class="fuel-pct">${d.fuel}%</span>`;
+        }
+
         let rowClass = '';
         if (d.disqualified) rowClass = 'leaderboard-row disqualified';
         else if (d.retired) rowClass = 'leaderboard-row retired';
@@ -401,12 +428,118 @@ function updateLeaderboard() {
             <td class="text-center fw-bold">${d.totalLaps}</td>
             <td class="text-center font-mono ${isFastest ? 'text-warning fw-bold' : ''}">${formatTime(d.bestTime)}${isFastest ? ' <i class="fas fa-trophy"></i>' : ''}</td>
             <td class="text-center font-mono">${formatTime(d.lastTime)}</td>
+            <td class="text-center"><canvas id="spark-${d.cid}" width="100" height="28" class="sparkline-canvas"></canvas></td>
             <td class="text-center font-mono small">${sectors}</td>
+            <td class="text-center small">${fuelHtml}</td>
             <td class="text-center small">${gap}</td>
             <td class="text-center small">${status}</td>
         </tr>`;
     }).join('');
 
+    renderSparklines();
+    updateSectorAnalysis();
+}
+
+// ---- Sparklines (Mini-Trend-Chart pro Fahrer) ----
+function renderSparklines() {
+    Object.entries(lbData).forEach(([cid, cd]) => {
+        const canvas = document.getElementById('spark-' + cid);
+        if (!canvas) return;
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+        const laps = getSessionLaps(cd);
+        const times = laps
+            .filter(l => l.laptime_raw > 0)
+            .sort((a, b) => (a.lap || 0) - (b.lap || 0))
+            .slice(-20)
+            .map(l => l.laptime_raw);
+        if (times.length < 2) return;
+        const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
+        new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: times.map((_, i) => i),
+                datasets: [{
+                    data: times,
+                    borderColor: color,
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.3,
+                }],
+            },
+            options: {
+                responsive: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                scales: { x: { display: false }, y: { display: false } },
+                animation: false,
+                elements: { line: { borderJoinStyle: 'round' } },
+            },
+        });
+    });
+}
+
+// ---- Sektorenanalyse ----
+function parseSectorMs(val) {
+    if (!val) return null;
+    const s = String(val).replace(',', '.');
+    const num = parseFloat(s);
+    return isNaN(num) ? null : num * 1000;
+}
+
+function updateSectorAnalysis() {
+    const container = document.getElementById('lbSectorAnalysis');
+    if (!container) return;
+
+    const driverSectors = [];
+    Object.entries(lbData).forEach(([cid, cd]) => {
+        const laps = getSessionLaps(cd);
+        const s1Times = [], s2Times = [], s3Times = [];
+        laps.forEach(l => {
+            const v1 = parseSectorMs(l.sector_1);
+            const v2 = parseSectorMs(l.sector_2);
+            const v3 = parseSectorMs(l.sector_3);
+            if (v1) s1Times.push(v1);
+            if (v2) s2Times.push(v2);
+            if (v3) s3Times.push(v3);
+        });
+        if (s1Times.length === 0 && s2Times.length === 0 && s3Times.length === 0) return;
+        const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+        const best = arr => arr.length ? Math.min(...arr) : null;
+        const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
+        driverSectors.push({
+            name: cd.name || 'Fahrer ' + cid,
+            color: color,
+            avgS1: avg(s1Times), avgS2: avg(s2Times), avgS3: avg(s3Times),
+            bestS1: best(s1Times), bestS2: best(s2Times), bestS3: best(s3Times),
+        });
+    });
+
+    if (driverSectors.length === 0) {
+        container.innerHTML = '<span class="text-muted small">Keine Sektordaten</span>';
+        return;
+    }
+
+    const globalBestS1 = Math.min(...driverSectors.map(d => d.bestS1).filter(Boolean));
+    const globalBestS2 = Math.min(...driverSectors.map(d => d.bestS2).filter(Boolean));
+    const globalBestS3 = Math.min(...driverSectors.map(d => d.bestS3).filter(Boolean));
+
+    const fmtSec = ms => ms ? (ms / 1000).toFixed(3) : '--';
+
+    let html = '<table class="sector-table"><thead><tr><th>Fahrer</th><th>S1</th><th>S2</th><th>S3</th></tr></thead><tbody>';
+    driverSectors.forEach(d => {
+        const b1 = d.bestS1 === globalBestS1 ? ' sector-best' : '';
+        const b2 = d.bestS2 === globalBestS2 ? ' sector-best' : '';
+        const b3 = d.bestS3 === globalBestS3 ? ' sector-best' : '';
+        html += `<tr>
+            <td style="color:${d.color}; font-weight:600;">${d.name}</td>
+            <td class="font-mono${b1}">${fmtSec(d.bestS1)}</td>
+            <td class="font-mono${b2}">${fmtSec(d.bestS2)}</td>
+            <td class="font-mono${b3}">${fmtSec(d.bestS3)}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
 }
 
 // ---- Live Ticker ----
@@ -650,6 +783,18 @@ socket.on('race_status', (data) => {
 
 socket.on('active_track', () => {
     loadLbTrackLayout();
+});
+
+socket.on('fuel_update', (data) => {
+    if (data.controller_id !== undefined && data.fuel !== undefined) {
+        const cid = String(data.controller_id);
+        if (data.fuel < 0) {
+            delete lbFuelLevels[cid];
+        } else {
+            lbFuelLevels[cid] = data.fuel;
+        }
+        updateLeaderboard();
+    }
 });
 
 // Fallback
