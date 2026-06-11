@@ -174,28 +174,12 @@ def init_db():
         db.create_all()
         log.info("DB-Tabellen bereit.")
     except Exception as e:
-        log.warning(f"create_all fehlgeschlagen: {e}")
+        log.error(f"create_all fehlgeschlagen: {e} — bitte DB manuell pruefen.")
         db.session.rollback()
-        try:
-            db.session.execute(text("""
-                DO $$ DECLARE r RECORD;
-                BEGIN
-                    FOR r IN (SELECT tablename FROM pg_tables
-                              WHERE schemaname = 'public') LOOP
-                        EXECUTE 'DROP TABLE IF EXISTS '
-                                || quote_ident(r.tablename) || ' CASCADE';
-                    END LOOP;
-                END $$;
-            """))
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-        db.create_all()
-        log.info("DB nach Bereinigung neu erstellt.")
 
     # Auto-Migration: fehlende Spalten hinzufuegen
-    _add_column_if_missing('sr_race_result', 'pitstops', 'INTEGER DEFAULT 0')
-    _add_column_if_missing('sr_penalty', 'penalty_seconds', 'INTEGER DEFAULT 0')
+    _add_column_if_missing('sr_results', 'pitstops', 'INTEGER DEFAULT 0')
+    _add_column_if_missing('sr_penalties', 'penalty_seconds', 'INTEGER DEFAULT 0')
     _add_column_if_missing('sr_tracks', 'svg_layout', 'TEXT')
 
 
@@ -269,7 +253,7 @@ def _session_display_name(session_id, session_type=None):
 
 
 # Events die eine NEUE Session starten (neues Rennen / Training)
-_NEW_SESSION_EVENTS = {'ui.reset', 'event.change_status', 'event.start'}
+_NEW_SESSION_EVENTS = {'ui.reset', 'event.start'}
 
 
 def _get_session_id(etype, data=None):
@@ -279,7 +263,7 @@ def _get_session_id(etype, data=None):
     und an alle Folgeereignisse weitergereicht).
     Fallback: Timestamp-basierte Session-ID.
 
-    Neue Session bei ui.reset / event.change_status / event.start.
+    Neue Session bei ui.reset / event.start.
     Alle anderen Events gehoeren zur aktuellen Session.
     """
     # SmartRace event_id als primaere Session-Zuordnung
@@ -418,10 +402,29 @@ def receive_smartrace():
         log.info(f"Event: {etype} | Session: {sid}")
 
         # WebSocket: alle verbundenen Clients benachrichtigen
-        socketio.emit('new_data', {
+        ws_payload = {
             'event_type': etype,
             'session_id': sid,
-        })
+        }
+
+        if etype == 'ui.lap_update':
+            ws_payload['lap'] = {
+                'controller_id': str(ed.get('controller_id', '0')),
+                'driver_name': (ed.get('driver_data') or {}).get('name', ''),
+                'car_name': (ed.get('car_data') or {}).get('name', ''),
+                'lap_number': ed.get('lap'),
+                'laptime_ms': ed.get('laptime_raw'),
+                'laptime_formatted': ed.get('laptime') or fmt_ms(ed.get('laptime_raw')),
+                'sector_1': ed.get('sector_1'),
+                'sector_2': ed.get('sector_2'),
+                'sector_3': ed.get('sector_3'),
+                'is_pb': bool(ed.get('lap_pb', False)),
+                'color': rgb_to_hex((ed.get('controller_data') or {}).get('color_bg'))
+                         or rgb_to_hex((ed.get('car_data') or {}).get('color')),
+                'timestamp': datetime.utcnow().isoformat(),
+            }
+
+        socketio.emit('new_data', ws_payload)
 
         if etype == 'event.start':
             race_type_start = ed.get('type') or ''
@@ -1040,25 +1043,38 @@ def api_analytics():
             'avg_time': round(r.avg_time) if r.avg_time else 0,
         } for r in q.group_by(Lap.driver_name).all()}
 
-        # 2. Letzte 50 Rundenzeiten pro Fahrer (fuer Chart)
+        # 2. Letzte 50 Rundenzeiten pro Fahrer (ein Query statt N)
+        ranked = db.session.query(
+            Lap.driver_name,
+            Lap.laptime_ms,
+            func.row_number().over(
+                partition_by=Lap.driver_name,
+                order_by=Lap.created_at.desc(),
+            ).label('rn'),
+        ).filter(Lap.laptime_ms > 0, Lap.driver_name.isnot(None))
+
+        if sid and sid != 'all':
+            ranked = ranked.filter(Lap.session_id == sid)
+
+        ranked_sub = ranked.subquery()
+        recent_laps = db.session.query(
+            ranked_sub.c.driver_name,
+            ranked_sub.c.laptime_ms,
+        ).filter(ranked_sub.c.rn <= 50).order_by(
+            ranked_sub.c.driver_name, ranked_sub.c.rn.desc(),
+        ).all()
+
+        laps_by_driver = {}
+        for row in recent_laps:
+            laps_by_driver.setdefault(row.driver_name, []).append(row.laptime_ms)
+
         result = {}
         for name, s in agg.items():
-            lap_q = Lap.query.filter(
-                Lap.driver_name == name,
-                Lap.laptime_ms > 0,
-            )
-            if sid and sid != 'all':
-                lap_q = lap_q.filter(Lap.session_id == sid)
-
-            recent = lap_q.order_by(Lap.created_at.desc()).limit(50).all()
-            # Umkehren fuer chronologische Reihenfolge
-            laps_list = [l.laptime_ms for l in reversed(recent)]
-
             result[name] = {
                 'avg_time': s['avg_time'],
                 'best_time': s['best_time'],
                 'total_laps': s['total_laps'],
-                'laps': laps_list,
+                'laps': laps_by_driver.get(name, []),
             }
 
         return jsonify(result)
@@ -1126,6 +1142,7 @@ def api_driver_stats():
             func.count(func.distinct(Lap.session_id)).label('total_sessions'),
             func.min(Lap.laptime_ms).label('best_time'),
             func.avg(Lap.laptime_ms).label('avg_time'),
+            func.stddev_samp(Lap.laptime_ms).label('stddev_time'),
         ).filter(
             Lap.laptime_ms > 0,
             Lap.driver_name.isnot(None),
@@ -1157,16 +1174,12 @@ def api_driver_stats():
         ).group_by(Penalty.driver_name).all()
         penalty_map = {r.driver_name: r.cnt for r in penalty_rows}
 
-        # Konsistenz-Score: Stddev pro Fahrer berechnen
+        # Konsistenz-Score: direkt aus SQL-Aggregation (stddev_samp)
         consistency_map = {}
         for r in lap_rows:
-            times = [l.laptime_ms for l in Lap.query.filter(
-                Lap.driver_name == r.driver_name,
-                Lap.laptime_ms > 0,
-            ).with_entities(Lap.laptime_ms).all()]
-            stddev = _calc_stddev(times)
-            avg_val = sum(times) / len(times) if times else 0
-            if avg_val > 0 and len(times) >= 2:
+            avg_val = r.avg_time or 0
+            stddev = r.stddev_time or 0
+            if avg_val > 0 and r.total_laps >= 2 and stddev > 0:
                 consistency_map[r.driver_name] = {
                     'score': round((1 - stddev / avg_val) * 100, 1),
                     'stddev_ms': round(stddev),

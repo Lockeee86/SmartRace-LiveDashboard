@@ -837,15 +837,71 @@ document.getElementById('refreshBtn').addEventListener('click', async () => {
     btn.disabled = false;
 });
 
-// WebSocket: Live-Updates statt Polling
-socket.on('new_data', () => {
-    updateDashboard();
-    setTimeout(loadTickerFeed, 500);
+// WebSocket: Live-Updates — Delta wenn Lap-Daten vorhanden, sonst Full-Fetch
+socket.on('new_data', (data) => {
+    if (data && data.lap && data.event_type === 'ui.lap_update' && (currentSession === 'current' || currentSession === data.session_id)) {
+        const lap = data.lap;
+        const cid = lap.controller_id;
+        if (!dashboardData[cid]) {
+            dashboardData[cid] = {
+                name: lap.driver_name,
+                car: lap.car_name,
+                color: lap.color || getControllerColor(cid),
+                laps: [],
+                best_time_raw: null,
+                penalties: 0,
+                pitstops: 0,
+                retired: false,
+                disqualified: false,
+            };
+        }
+        dashboardData[cid].laps.push({
+            lap: lap.lap_number || 0,
+            laptime_raw: lap.laptime_ms || 0,
+            laptime_formatted: lap.laptime_formatted || formatTime(lap.laptime_ms),
+            timestamp: lap.timestamp,
+            is_pb: lap.is_pb,
+            session_id: data.session_id,
+            sector_1: lap.sector_1,
+            sector_2: lap.sector_2,
+            sector_3: lap.sector_3,
+        });
+        if (lap.laptime_ms && lap.laptime_ms > 0) {
+            const best = dashboardData[cid].best_time_raw;
+            if (!best || lap.laptime_ms < best) {
+                dashboardData[cid].best_time_raw = lap.laptime_ms;
+            }
+        }
+        const newRanking = computeRanking(dashboardData);
+        if (previousRanking.length >= 2 && newRanking.length >= 2) {
+            detectOvertakes(previousRanking, newRanking);
+        }
+        previousRanking = newRanking;
+        renderStats();
+        renderControllers();
+        updateControllerNames();
+        addTickerEvent({
+            type: 'lap',
+            driver_name: lap.driver_name,
+            color: lap.color || getControllerColor(cid),
+            lap_number: lap.lap_number,
+            laptime_ms: lap.laptime_ms,
+            laptime_formatted: lap.laptime_formatted,
+            is_pb: lap.is_pb,
+        });
+    } else {
+        updateDashboard();
+        setTimeout(loadTickerFeed, 500);
+    }
     // Fortschritt aktualisieren: hoechste Rundenzahl aller Controller
     if (typeof raceMaxLaps !== 'undefined' && raceMaxLaps > 0) {
         let maxLap = 0;
         Object.values(dashboardData).forEach(cd => {
-            if (cd.laps && cd.laps.length > maxLap) maxLap = cd.laps.length;
+            if (cd.laps) {
+                const nums = cd.laps.map(l => l.lap || 0);
+                const m = nums.length > 0 ? Math.max(...nums) : 0;
+                if (m > maxLap) maxLap = m;
+            }
         });
         if (maxLap > 0 && typeof updateRaceProgress === 'function') {
             updateRaceProgress(maxLap);

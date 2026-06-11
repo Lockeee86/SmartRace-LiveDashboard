@@ -563,11 +563,55 @@ fetchLeaderboard();
 loadTickerFeed();
 loadLbTrackLayout();
 
-// WebSocket: Live-Updates statt Polling
+// WebSocket: Live-Updates — Delta wenn Lap-Daten vorhanden, sonst Full-Fetch
 socket.on('new_data', (data) => {
-    fetchLeaderboard();
-    // Ticker nach kurzer Verzoegerung aktualisieren (Events muessen erst in DB sein)
-    setTimeout(loadTickerFeed, 500);
+    if (data.lap && data.event_type === 'ui.lap_update') {
+        const lap = data.lap;
+        const cid = lap.controller_id;
+        if (!lbData[cid]) {
+            lbData[cid] = {
+                name: lap.driver_name,
+                car: lap.car_name,
+                color: lap.color || getControllerColor(cid),
+                laps: [],
+                best_time_raw: null,
+                penalties: 0,
+                pitstops: 0,
+                retired: false,
+                disqualified: false,
+            };
+        }
+        lbData[cid].laps.push({
+            lap: lap.lap_number || 0,
+            laptime_raw: lap.laptime_ms || 0,
+            laptime_formatted: lap.laptime_formatted || formatTime(lap.laptime_ms),
+            timestamp: lap.timestamp,
+            is_pb: lap.is_pb,
+            session_id: data.session_id,
+            sector_1: lap.sector_1,
+            sector_2: lap.sector_2,
+            sector_3: lap.sector_3,
+        });
+        if (lap.laptime_ms && lap.laptime_ms > 0) {
+            const best = lbData[cid].best_time_raw;
+            if (!best || lap.laptime_ms < best) {
+                lbData[cid].best_time_raw = lap.laptime_ms;
+            }
+        }
+        updateLeaderboard();
+        addTickerEvent({
+            type: 'lap',
+            driver_name: lap.driver_name,
+            color: lap.color || getControllerColor(cid),
+            lap_number: lap.lap_number,
+            laptime_ms: lap.laptime_ms,
+            laptime_formatted: lap.laptime_formatted,
+            is_pb: lap.is_pb,
+        });
+    } else {
+        fetchLeaderboard();
+        setTimeout(loadTickerFeed, 500);
+    }
 });
 
 socket.on('track_record', (data) => {
