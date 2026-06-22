@@ -802,6 +802,52 @@ footer {
     }
 }
 
+/* Ticker Size Variants */
+.ticker-body {
+    height: 52px;
+    transition: height 0.25s ease;
+}
+
+.ticker-card.ticker-sm .ticker-body { height: 42px; }
+.ticker-card.ticker-sm .ticker-entry { font-size: 0.8rem; padding: 0.2rem 0.5rem; gap: 0.3rem; }
+.ticker-card.ticker-sm .ticker-label { font-size: 0.75rem; padding-left: 0.6rem !important; padding-right: 0.6rem !important; }
+.ticker-card.ticker-sm .ticker-dot { width: 8px; height: 8px; }
+
+.ticker-card.ticker-md .ticker-body { height: 52px; }
+
+.ticker-card.ticker-lg .ticker-body { height: 78px; }
+.ticker-card.ticker-lg .ticker-entry { font-size: 1.35rem; padding: 0.5rem 1rem; gap: 0.6rem; }
+.ticker-card.ticker-lg .ticker-label { font-size: 1.1rem; }
+.ticker-card.ticker-lg .ticker-dot { width: 14px; height: 14px; }
+
+.ticker-size-controls {
+    border-left: 1px solid var(--sr-border);
+    height: 100%;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+}
+
+.ticker-size-btn {
+    color: rgba(255,255,255,0.35);
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.1rem 0.35rem;
+    line-height: 1;
+    border: 1px solid transparent;
+    border-radius: 3px;
+}
+
+.ticker-size-btn:hover {
+    color: rgba(255,255,255,0.7);
+}
+
+.ticker-size-btn.active {
+    color: #fff;
+    border-color: var(--sr-primary);
+    background: rgba(59,130,246,0.2);
+}
+
 /* Track Layout Widget */
 .track-layout-widget svg {
     width: 100%;

@@ -178,8 +178,8 @@
 </div>
 
 <!-- Horizontaler Live Ticker -->
-<div class="card mb-3 ticker-card">
-    <div class="card-body p-0 d-flex align-items-center overflow-hidden" style="height: 52px;">
+<div class="card mb-3 ticker-card" id="tickerCard">
+    <div class="card-body p-0 d-flex align-items-center overflow-hidden ticker-body">
         <div class="ticker-label px-3 d-flex align-items-center h-100">
             <i class="fas fa-broadcast-tower me-1 pulse"></i><span class="d-none d-sm-inline">LIVE</span>
         </div>
@@ -187,6 +187,11 @@
             <div class="ticker-strip d-flex align-items-center h-100" id="tickerStrip">
                 <span class="ticker-entry text-muted">Warte auf Events...</span>
             </div>
+        </div>
+        <div class="ticker-size-controls d-flex align-items-center gap-1 px-2 flex-shrink-0">
+            <button class="btn btn-sm ticker-size-btn" data-tsize="sm" title="Klein">S</button>
+            <button class="btn btn-sm ticker-size-btn" data-tsize="md" title="Mittel">M</button>
+            <button class="btn btn-sm ticker-size-btn" data-tsize="lg" title="Gross">L</button>
         </div>
     </div>
 </div>
@@ -252,6 +257,24 @@ async function loadActiveTrackLayout() {
         }
     } catch (e) {}
 }
+
+// ---- Ticker Groesse ----
+(function() {
+    const card = document.getElementById('tickerCard');
+    const saved = localStorage.getItem('sr-ticker-size') || 'md';
+    card.classList.add('ticker-' + saved);
+    document.querySelectorAll('.ticker-size-btn').forEach(btn => {
+        if (btn.dataset.tsize === saved) btn.classList.add('active');
+        btn.addEventListener('click', () => {
+            card.classList.remove('ticker-sm', 'ticker-md', 'ticker-lg');
+            card.classList.add('ticker-' + btn.dataset.tsize);
+            localStorage.setItem('sr-ticker-size', btn.dataset.tsize);
+            document.querySelectorAll('.ticker-size-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            rebuildTicker();
+        });
+    });
+})();
 
 // ---- Horizontaler Live Ticker ----
 const TICKER_HISTORY = 30;
