@@ -487,9 +487,16 @@ function renderSparklines() {
 // ---- Sektorenanalyse ----
 function parseSectorMs(val) {
     if (!val) return null;
-    const s = String(val).replace(',', '.');
-    const num = parseFloat(s);
-    return isNaN(num) ? null : num * 1000;
+    const s = String(val).trim();
+    if (s.includes(':')) {
+        const [minPart, secPart] = s.split(':');
+        const mins = parseInt(minPart, 10) || 0;
+        const secs = parseFloat(secPart.replace(',', '.'));
+        if (isNaN(secs)) return null;
+        return (mins * 60 + secs) * 1000;
+    }
+    const num = parseFloat(s.replace(',', '.'));
+    return isNaN(num) || num === 0 ? null : num * 1000;
 }
 
 function updateSectorAnalysis() {
