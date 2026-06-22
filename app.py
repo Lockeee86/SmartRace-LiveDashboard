@@ -809,7 +809,8 @@ def api_live_data():
             latest_event = db.session.query(Event.session_id).order_by(
                 Event.id.desc()).first()
             if latest_event and latest_event.session_id:
-                q = q.filter(Lap.session_id == latest_event.session_id)
+                sid = latest_event.session_id
+                q = q.filter(Lap.session_id == sid)
             else:
                 # Fallback: letzte 2 Stunden
                 cutoff = datetime.utcnow() - timedelta(hours=2)
