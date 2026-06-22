@@ -600,8 +600,8 @@ def _save_lap(sid, ed):
         is_personal_best=bool(ed.get('lap_pb', False)),
     ))
 
-    # Streckenrekord pruefen
-    if laptime_ms and laptime_ms > 0:
+    # Streckenrekord pruefen (Minimum 1000ms = 1s als Plausibilitaetsfilter)
+    if laptime_ms and laptime_ms > 1000:
         current_record = TrackRecord.query.order_by(TrackRecord.laptime_ms.asc()).first()
         if not current_record or laptime_ms < current_record.laptime_ms:
             db.session.add(TrackRecord(
@@ -1337,6 +1337,7 @@ def api_track_record():
         rec = TrackRecord.query.order_by(TrackRecord.laptime_ms.asc()).first()
         if rec:
             return jsonify({
+                'id': rec.id,
                 'laptime_ms': rec.laptime_ms,
                 'laptime_formatted': fmt_ms(rec.laptime_ms),
                 'driver_name': rec.driver_name,
@@ -1348,6 +1349,82 @@ def api_track_record():
     except Exception as e:
         log.error(f"track-record: {e}")
         return jsonify(None)
+
+
+@app.route('/api/track-records')
+def api_track_records():
+    """Alle Streckenrekorde (fuer Verwaltung)."""
+    try:
+        records = TrackRecord.query.order_by(TrackRecord.laptime_ms.asc()).all()
+        return jsonify([{
+            'id': r.id,
+            'laptime_ms': r.laptime_ms,
+            'laptime_formatted': fmt_ms(r.laptime_ms),
+            'driver_name': r.driver_name,
+            'car_name': r.car_name,
+            'session_id': r.session_id,
+            'created_at': r.created_at.isoformat() if r.created_at else None,
+        } for r in records])
+    except Exception as e:
+        log.error(f"track-records: {e}")
+        return jsonify([])
+
+
+@app.route('/api/track-records/<int:record_id>', methods=['DELETE'])
+def api_delete_track_record(record_id):
+    """Einzelnen Streckenrekord loeschen."""
+    try:
+        rec = TrackRecord.query.get(record_id)
+        if not rec:
+            return jsonify({'error': 'Nicht gefunden'}), 404
+        db.session.delete(rec)
+        db.session.commit()
+        new_best = TrackRecord.query.order_by(TrackRecord.laptime_ms.asc()).first()
+        if new_best:
+            socketio.emit('track_record', {
+                'laptime_ms': new_best.laptime_ms,
+                'laptime_formatted': fmt_ms(new_best.laptime_ms),
+                'driver_name': new_best.driver_name,
+                'car_name': new_best.car_name,
+            })
+        return jsonify({'status': 'ok', 'deleted_id': record_id})
+    except Exception as e:
+        db.session.rollback()
+        log.error(f"delete-track-record: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/personal-records')
+def api_personal_records():
+    """Alle persoenlichen Rekorde."""
+    try:
+        records = PersonalRecord.query.order_by(PersonalRecord.laptime_ms.asc()).all()
+        return jsonify([{
+            'id': r.id,
+            'driver_name': r.driver_name,
+            'laptime_ms': r.laptime_ms,
+            'laptime_formatted': fmt_ms(r.laptime_ms),
+            'car_name': r.car_name,
+        } for r in records])
+    except Exception as e:
+        log.error(f"personal-records: {e}")
+        return jsonify([])
+
+
+@app.route('/api/personal-records/<int:record_id>', methods=['DELETE'])
+def api_delete_personal_record(record_id):
+    """Einzelnen persoenlichen Rekord loeschen."""
+    try:
+        rec = PersonalRecord.query.get(record_id)
+        if not rec:
+            return jsonify({'error': 'Nicht gefunden'}), 404
+        db.session.delete(rec)
+        db.session.commit()
+        return jsonify({'status': 'ok', 'deleted_id': record_id})
+    except Exception as e:
+        db.session.rollback()
+        log.error(f"delete-personal-record: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/live-feed')
