@@ -1825,26 +1825,6 @@ def api_restore():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/personal-records')
-def api_personal_records():
-    """Persoenliche Rekorde aller Fahrer."""
-    try:
-        records = PersonalRecord.query.order_by(
-            PersonalRecord.laptime_ms.asc()).all()
-        return jsonify([{
-            'driver_name': r.driver_name,
-            'laptime_ms': r.laptime_ms,
-            'laptime_formatted': fmt_ms(r.laptime_ms),
-            'car_name': r.car_name,
-            'session_id': r.session_id,
-            'created_at': r.created_at.isoformat() if r.created_at else None,
-            'updated_at': r.updated_at.isoformat() if r.updated_at else None,
-        } for r in records])
-    except Exception as e:
-        log.error(f"personal-records: {e}")
-        return jsonify([])
-
-
 @app.route('/api/tracks')
 def api_tracks():
     """Alle Strecken mit Rekorden und Statistiken."""
