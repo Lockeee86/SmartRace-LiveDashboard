@@ -1,104 +1,106 @@
 # SmartRace LiveDashboard
 
-Ein Echtzeit-Dashboard fuer [Carrera Digital](https://www.carrera-toys.com/) Slotcar-Rennen. Empfaengt Live-Daten ueber die [SmartRace-Datenschnittstelle](https://www.smartrace.de/anleitung/datenschnittstelle/), speichert alle Runden, Ergebnisse und Rekorde in einer PostgreSQL-Datenbank und zeigt alles in Echtzeit im Browser an.
+**[Deutsch](README.de.md)** | English
+
+A real-time dashboard for [Carrera Digital](https://www.carrera-toys.com/) slot car racing. Receives live data from the [SmartRace data interface](https://www.smartrace.de/en/the-smartrace-manual/data-interface/), stores all laps, results and records in a PostgreSQL database, and displays everything in real time in the browser.
 
 ![Live Leaderboard](https://raw.githubusercontent.com/Lockeee86/SmartRace-LiveDashboard/main/docs/leaderboard.png)
 
 ## Features
 
-**Live-Ansichten**
-- **Leaderboard** — Sortierbar nach Runden (Rennen) oder Bestzeit (Training), mit Sektoranalyse, Sparkline-Trends und Tankfuellstand
-- **Dashboard** — Controller-Karten mit Streckenposition, Streckenrekord und Live-Ticker
-- **TV-Modus** — Vollbild-Ansicht fuer den Renn-Monitor mit automatisch rotierenden Views (Leaderboard, Streckenmap, Statistiken)
-- **Live-Ticker** — Horizontaler Ticker mit einstellbarer Groesse (S/M/L) fuer gute Lesbarkeit auf Racing-Bildschirmen
+**Live Views**
+- **Leaderboard** — Sortable by laps (race) or best time (practice), with sector analysis, sparkline trends and fuel level
+- **Dashboard** — Controller cards with track position, track record and live ticker
+- **TV Mode** — Fullscreen spectator view with auto-rotating panels (leaderboard, track map, statistics)
+- **Live Ticker** — Horizontal ticker with adjustable size (S/M/L) for readability on race day screens
 
-**Analyse & Statistiken**
-- **Race Analytics** — Rundenzeiten-Verlauf, Fahrer-Radar, Auto-Vergleich
-- **Live Timing** — Sektor- und Zwischenzeiten
-- **Head-to-Head** — Direkter Fahrer-Vergleich
-- **Fahrer-Statistiken** — Persoenliche Rekorde, Konsistenz-Score
-- **Strecken** — Streckenrekorde, SVG-Layouts mit Live-Positionen
+**Analysis & Statistics**
+- **Race Analytics** — Lap time progression, driver radar chart, car comparison
+- **Live Timing** — Sector and split times
+- **Head-to-Head** — Direct driver comparison
+- **Driver Statistics** — Personal records, consistency score
+- **Tracks** — Track records, SVG layouts with live positions
 
-**Datenbank**
-- Alle Runden, Sektoren, Strafen und Ergebnisse werden dauerhaft in PostgreSQL gespeichert
-- Session-Verwaltung mit automatischer Erkennung (Training / Rennen / Qualifying)
-- Strecken- und persoenliche Rekorde mit Verwaltungsoberflaeche (ungueltige Zeiten loeschen)
-- Datenbank-Browser mit Filter, Sortierung und Export (CSV/JSON)
-- Backup & Restore
+**Database**
+- All laps, sectors, penalties and results are stored persistently in PostgreSQL
+- Session management with automatic detection (practice / race / qualifying)
+- Track and personal records with management UI (delete invalid times)
+- Database browser with filtering, sorting and export (CSV/JSON)
+- Backup & restore
 
-**Renn-Features**
-- Automatische Status-Erkennung (Training, Rennen, Qualifying)
-- Countdown-Timer bei Zeitrennen
-- Virtual Safety Car (VSC) Banner
-- Strafen-Tracking mit Live-Anzeige
-- Tankfuellstand-Anzeige
-- Ueberholungs-Erkennung
+**Race Features**
+- Automatic status detection (practice, race, qualifying)
+- Countdown timer for timed races
+- Virtual Safety Car (VSC) banner
+- Penalty tracking with live display
+- Fuel level indicator
+- Overtake detection
 
-## Voraussetzungen
+## Requirements
 
 - Docker & Docker Compose
-- [SmartRace App](https://www.smartrace.de/) mit aktivierter Datenschnittstelle
-- Beide Geraete im selben Netzwerk
+- [SmartRace App](https://www.smartrace.de/) with data interface enabled
+- Both devices on the same network
 
 ## Installation
 
-### 1. Repository klonen
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/Lockeee86/SmartRace-LiveDashboard.git
 cd SmartRace-LiveDashboard
 ```
 
-### 2. Umgebungsvariablen konfigurieren
+### 2. Configure environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Die `.env` Datei anpassen:
+Edit the `.env` file:
 
 ```env
 POSTGRES_DB=smartrace
 POSTGRES_USER=smartrace
-POSTGRES_PASSWORD=ein_sicheres_passwort
-SECRET_KEY=ein_zufaelliger_schluessel
+POSTGRES_PASSWORD=a_secure_password
+SECRET_KEY=a_random_secret_key
 FLASK_DEBUG=false
 ```
 
-### 3. Starten
+### 3. Start
 
 ```bash
 docker compose up -d
 ```
 
-Das Dashboard ist dann erreichbar unter `http://<SERVER-IP>:5000`.
+The dashboard will be available at `http://<SERVER-IP>:5000`.
 
-### 4. SmartRace verbinden
+### 4. Connect SmartRace
 
-In der SmartRace App unter **Einstellungen > Datenschnittstelle** diese URL eintragen:
+In the SmartRace app, go to **Settings > Data Interface** and enter this URL:
 
 ```
 http://<SERVER-IP>:5000/api/smartrace
 ```
 
-Ab sofort werden alle Renn-Daten automatisch an das Dashboard gesendet.
+All race data will now be sent to the dashboard automatically.
 
-## Architektur
+## Architecture
 
 ```
 SmartRace App  ──POST──>  Flask Backend  ──WebSocket──>  Browser
-                            │
-                            ▼
+                            |
+                            v
                         PostgreSQL
-                     (alle Runden, Ergebnisse,
-                      Rekorde, Strafen)
+                     (all laps, results,
+                      records, penalties)
 ```
 
-| Komponente | Technologie |
+| Component | Technology |
 |---|---|
 | Backend | Flask 3.0 + Gunicorn + eventlet |
-| Datenbank | PostgreSQL 16 |
-| Echtzeit | Flask-SocketIO (WebSocket) |
+| Database | PostgreSQL 16 |
+| Real-time | Flask-SocketIO (WebSocket) |
 | Frontend | Bootstrap 5.3, Chart.js 4.4, Socket.IO |
 | Deployment | Docker Compose |
 
@@ -107,25 +109,25 @@ SmartRace App  ──POST──>  Flask Backend  ──WebSocket──>  Browser
 ### Race Analytics
 ![Analytics](https://raw.githubusercontent.com/Lockeee86/SmartRace-LiveDashboard/main/docs/analytics.png)
 
-### Datenbank
-![Datenbank](https://raw.githubusercontent.com/Lockeee86/SmartRace-LiveDashboard/main/docs/database.png)
+### Database
+![Database](https://raw.githubusercontent.com/Lockeee86/SmartRace-LiveDashboard/main/docs/database.png)
 
 ## API
 
-| Endpunkt | Beschreibung |
+| Endpoint | Description |
 |---|---|
-| `POST /api/smartrace` | Webhook fuer SmartRace-Daten |
-| `GET /api/health` | Health-Check |
-| `GET /api/live-data` | Aktuelle Live-Daten nach Controller |
-| `GET /api/race-status` | Aktueller Rennstatus |
-| `GET /api/laps` | Runden mit Filter & Pagination |
-| `GET /api/track-record` | Aktueller Streckenrekord |
-| `GET /api/analytics` | Analyse-Daten |
+| `POST /api/smartrace` | Webhook for SmartRace data |
+| `GET /api/health` | Health check |
+| `GET /api/live-data` | Current live data grouped by controller |
+| `GET /api/race-status` | Current race status |
+| `GET /api/laps` | Laps with filtering & pagination |
+| `GET /api/track-record` | Current track record |
+| `GET /api/analytics` | Analytics data |
 
 ## Portainer
 
-Das Projekt ist fuer den Betrieb mit [Portainer](https://www.portainer.io/) optimiert. Einfach als Stack deployen und die Umgebungsvariablen in der Portainer-Oberflaeche setzen.
+This project is optimized for deployment with [Portainer](https://www.portainer.io/). Simply deploy as a stack and set the environment variables in the Portainer UI.
 
-## Lizenz
+## License
 
 MIT
