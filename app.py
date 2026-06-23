@@ -241,15 +241,37 @@ def _session_display_name(session_id, session_type=None):
         ).first()
         if lap:
             type_label = lap.session_type
-    type_label = type_label or 'Training'
-    # Auto-generieren aus session_id Format "session_YYYYMMDD_HHMMSS"
+
+    type_map = {
+        'race': 'Rennen',
+        'qualifying': 'Qualifying',
+        'training': 'Training',
+        'practice': 'Training',
+        'free_practice': 'Freies Training',
+    }
+    raw_label = type_label or 'Training'
+    type_label = type_map.get(raw_label.lower().strip(), raw_label)
+
+    # Datum aus session_id Format "session_YYYYMMDD_HHMMSS"
     try:
         parts = session_id.replace('session_', '')
         dt = datetime.strptime(parts, '%Y%m%d_%H%M%S')
         date_str = dt.strftime('%d.%m.%Y %H:%M')
-        return f"{type_label} - {date_str}"
+        return f"{type_label} — {date_str}"
     except Exception:
-        return session_id
+        pass
+
+    # Fuer event_XXX IDs: Datum aus erstem Event der Session
+    try:
+        first_event = Event.query.filter_by(session_id=session_id).order_by(
+            Event.created_at.asc()).first()
+        if first_event and first_event.created_at:
+            date_str = first_event.created_at.strftime('%d.%m.%Y %H:%M')
+            return f"{type_label} — {date_str}"
+    except Exception:
+        pass
+
+    return f"{type_label} — {session_id}"
 
 
 # Events die eine NEUE Session starten (neues Rennen / Training)
