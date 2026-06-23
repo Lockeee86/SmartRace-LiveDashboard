@@ -583,6 +583,18 @@ def _save_lap(sid, ed):
     driver_name = dd.get('name') or f"Fahrer {cid}"
     car_name = cd.get('name') or f"Auto {cid}"
 
+    # Wenn kein RaceStatus fuer diese Session existiert, Training annehmen
+    rs = RaceStatus.query.filter_by(session_id=sid).first()
+    if not rs:
+        db.session.add(RaceStatus(
+            session_id=sid, status='running', race_type='Training',
+        ))
+        socketio.emit('race_status', {
+            'session_id': sid,
+            'status': 'running',
+            'race_type': 'Training',
+        })
+
     db.session.add(Lap(
         session_id=sid,
         session_type=_get_current_race_type(),

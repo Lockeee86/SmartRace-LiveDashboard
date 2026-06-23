@@ -720,11 +720,33 @@ async function loadLbTrackLayout() {
     } catch (e) {}
 }
 
+// Modus automatisch beim Laden setzen
+function applyAutoMode(raceType) {
+    const rt = (raceType || '').toLowerCase().trim();
+    let newMode = null;
+    if (rt === 'race' || rt === 'qualifying') {
+        newMode = 'race';
+    } else if (!rt || rt === 'unknown' || rt === 'training') {
+        newMode = 'training';
+    }
+    if (newMode && newMode !== lbMode) {
+        lbMode = newMode;
+        localStorage.setItem('sr-lb-mode', lbMode);
+        const group = document.getElementById('lbModeGroup');
+        group.querySelectorAll('[data-mode]').forEach(b => {
+            b.classList.toggle('active', b.dataset.mode === lbMode);
+        });
+    }
+}
+
 // Start
 loadTrackRecord();
 fetchLeaderboard();
 loadTickerFeed();
 loadLbTrackLayout();
+fetch('/api/race-status').then(r => r.ok ? r.json() : null).then(data => {
+    if (data && data.race_type) applyAutoMode(data.race_type);
+}).catch(() => {});
 
 // WebSocket: Live-Updates — Delta wenn Lap-Daten vorhanden, sonst Full-Fetch
 socket.on('new_data', (data) => {
@@ -808,6 +830,13 @@ socket.on('race_status', (data) => {
             status: data.status || 'unknown',
             race_type: data.race_type || '',
         });
+
+        // Modus automatisch umschalten je nach Event-Typ
+        if (data.race_type !== undefined) {
+            const before = lbMode;
+            applyAutoMode(data.race_type);
+            if (lbMode !== before) updateLeaderboard();
+        }
     }
 });
 
