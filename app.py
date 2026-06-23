@@ -278,6 +278,9 @@ def _session_display_name(session_id, session_type=None):
 _NEW_SESSION_EVENTS = {'ui.reset', 'event.start'}
 
 
+_SESSION_TIMEOUT_SECONDS = 300  # 5 Minuten ohne Events = neue Session
+
+
 def _get_session_id(etype, data=None):
     """Session-ID ermitteln.
 
@@ -285,21 +288,36 @@ def _get_session_id(etype, data=None):
     und an alle Folgeereignisse weitergereicht).
     Fallback: Timestamp-basierte Session-ID.
 
-    Neue Session bei ui.reset / event.start.
-    Alle anderen Events gehoeren zur aktuellen Session.
+    Neue Session bei:
+    - ui.reset / event.start (explizit)
+    - Neue event_id (SmartRace hat neues Event gestartet)
+    - Timeout: > 5 Minuten seit letztem Event
     """
-    # SmartRace event_id als primaere Session-Zuordnung
+    event_id = None
     if data:
         event_id = data.get('event_id') or (data.get('event_data') or {}).get('event_id')
+
+    # Bei session-startenden Events: immer neue Session
+    if etype in _NEW_SESSION_EVENTS:
         if event_id:
             return f"event_{event_id}"
-
-    if etype in _NEW_SESSION_EVENTS:
         return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-    latest = db.session.query(Event.session_id).order_by(Event.id.desc()).first()
-    if latest and latest.session_id:
-        return latest.session_id
+    # event_id vorhanden: SmartRace ordnet das Event einer Session zu
+    if event_id:
+        return f"event_{event_id}"
+
+    # Kein expliziter Trigger und keine event_id:
+    # Pruefen ob die letzte Session noch aktiv ist (Timeout)
+    latest = db.session.query(Event.session_id, Event.created_at).order_by(
+        Event.id.desc()).first()
+    if latest and latest.session_id and latest.created_at:
+        age = (datetime.utcnow() - latest.created_at).total_seconds()
+        if age < _SESSION_TIMEOUT_SECONDS:
+            return latest.session_id
+        # Timeout: neue Session starten
+        log.info(f"Session-Timeout ({age:.0f}s) — neue Session")
+        return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
