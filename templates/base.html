@@ -307,8 +307,8 @@
         'prepare_for_start': { text: 'Startvorbereitung', cls: 'bg-info', icon: 'fa-traffic-light' },
         'starting': { text: 'Startphase', cls: 'bg-info', icon: 'fa-traffic-light' },
         'jumpstart': { text: 'Fruehstart!', cls: 'bg-danger', icon: 'fa-exclamation-triangle' },
-        'running': { text: 'Rennen', cls: 'bg-success', icon: 'fa-play' },
-        'racing': { text: 'Rennen', cls: 'bg-success', icon: 'fa-play' },
+        'running': { text: 'Laeuft', cls: 'bg-success', icon: 'fa-play' },
+        'racing': { text: 'Laeuft', cls: 'bg-success', icon: 'fa-play' },
         'started': { text: 'Gestartet', cls: 'bg-success', icon: 'fa-play' },
         'suspended': { text: 'Unterbrochen', cls: 'bg-warning', icon: 'fa-pause' },
         'paused': { text: 'Pausiert', cls: 'bg-warning', icon: 'fa-pause' },
@@ -319,13 +319,22 @@
         'unknown': { text: 'Unbekannt', cls: 'bg-secondary', icon: 'fa-question' },
     };
 
+    const RACE_TYPE_LABELS = {
+        'race': 'Rennen',
+        'qualifying': 'Qualifying',
+        'training': 'Training',
+        'practice': 'Training',
+        'free_practice': 'Freies Training',
+    };
+
     function updateRaceStatusBadge(status, raceType) {
         const statusBadge = document.getElementById('raceStatusBadge');
         const statusText = document.getElementById('raceStatusText');
         const s = RACE_STATUS_MAP[status] || RACE_STATUS_MAP['unknown'];
         statusBadge.className = 'badge race-status-badge ' + s.cls + ' ms-2';
-        const typeLabel = raceType ? ` (${raceType})` : '';
-        statusText.textContent = s.text + typeLabel;
+        const rt = (raceType || '').toLowerCase().trim();
+        const typeLabel = RACE_TYPE_LABELS[rt] || (raceType || '');
+        statusText.textContent = typeLabel ? `${typeLabel} — ${s.text}` : s.text;
         statusBadge.querySelector('i').className = 'fas ' + s.icon + ' me-1';
     }
 
