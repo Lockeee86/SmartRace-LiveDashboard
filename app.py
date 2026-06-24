@@ -363,21 +363,11 @@ def page_stats():
 def page_tracks():
     return render_template('tracks.html')
 
-@app.route('/head-to-head')
-def page_head_to_head():
-    return render_template('head-to-head.html')
 
 @app.route('/results')
 def page_results():
     return render_template('results.html')
 
-@app.route('/live-timing')
-def page_live_timing():
-    return render_template('live-timing.html')
-
-@app.route('/race-control')
-def page_race_control():
-    return render_template('race-control.html')
 
 @app.route('/tv')
 def page_tv():
@@ -1569,92 +1559,6 @@ def api_live_feed():
     except Exception as e:
         log.error(f"live-feed: {e}")
         return jsonify([])
-
-
-@app.route('/api/head-to-head')
-def api_head_to_head():
-    """Vergleich zweier Fahrer."""
-    try:
-        d1 = request.args.get('driver1', '')
-        d2 = request.args.get('driver2', '')
-        sid = request.args.get('session_id')
-
-        if not d1 or not d2:
-            return jsonify({'error': 'Zwei Fahrer angeben'}), 400
-
-        # Beide Fahrer in einem Query laden (statt N+1)
-        q = Lap.query.filter(
-            Lap.driver_name.in_([d1, d2]),
-            Lap.laptime_ms > 0,
-        )
-        if sid and sid != 'all':
-            q = q.filter(Lap.session_id == sid)
-
-        all_laps = q.order_by(Lap.lap_number.asc()).all()
-
-        # Nach Fahrer gruppieren
-        laps_by_driver = {d1: [], d2: []}
-        for lap in all_laps:
-            if lap.driver_name in laps_by_driver:
-                laps_by_driver[lap.driver_name].append(lap)
-
-        # Bestzeiten pro Fahrer pro Session (fuer Siege)
-        bests = {}  # {(driver, session): best_time}
-        for lap in all_laps:
-            key = (lap.driver_name, lap.session_id)
-            if key not in bests or lap.laptime_ms < bests[key]:
-                bests[key] = lap.laptime_ms
-
-        # Penalties fuer beide Fahrer in einem Query
-        penalty_counts = {}
-        for row in db.session.query(
-            Penalty.driver_name,
-            func.count(Penalty.id).label('cnt'),
-        ).filter(
-            Penalty.driver_name.in_([d1, d2])
-        ).group_by(Penalty.driver_name).all():
-            penalty_counts[row.driver_name] = row.cnt
-
-        result = {}
-        for name in [d1, d2]:
-            laps = laps_by_driver[name]
-            times = [l.laptime_ms for l in laps]
-            sessions = set(l.session_id for l in laps)
-
-            # Siege: Sessions wo dieser Fahrer schneller war
-            opp = d2 if name == d1 else d1
-            wins = 0
-            for s in sessions:
-                my_best = bests.get((name, s))
-                opp_best = bests.get((opp, s))
-                if my_best and opp_best and my_best < opp_best:
-                    wins += 1
-
-            result[name] = {
-                'driver_name': name,
-                'total_laps': len(laps),
-                'best_time': min(times) if times else None,
-                'best_time_formatted': fmt_ms(min(times)) if times else '--',
-                'avg_time': round(sum(times) / len(times)) if times else None,
-                'avg_time_formatted': fmt_ms(round(sum(times) / len(times))) if times else '--',
-                'total_sessions': len(sessions),
-                'wins': wins,
-                'penalties': penalty_counts.get(name, 0),
-                'lap_times': [
-                    {
-                        'lap': l.lap_number,
-                        'time': l.laptime_ms,
-                        'formatted': l.laptime_display or fmt_ms(l.laptime_ms) or '--',
-                        'session_id': l.session_id,
-                    }
-                    for l in laps
-                ],
-            }
-
-        return jsonify(result)
-    except Exception as e:
-        log.error(f"head-to-head: {e}")
-        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/backup')
