@@ -16,6 +16,36 @@
     </div>
 </div>
 
+<!-- Rekorde Verwaltung -->
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0"><i class="fas fa-trophy text-warning me-1"></i> Streckenrekorde</h6>
+                    <button class="btn btn-sm btn-outline-light" onclick="loadTrackRecords()"><i class="fas fa-sync-alt"></i></button>
+                </div>
+                <div id="trackRecordsList" class="small">
+                    <span class="text-muted">Klicke Aktualisieren zum Laden</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0"><i class="fas fa-user text-info me-1"></i> Persoenliche Rekorde</h6>
+                    <button class="btn btn-sm btn-outline-light" onclick="loadPersonalRecords()"><i class="fas fa-sync-alt"></i></button>
+                </div>
+                <div id="personalRecordsList" class="small">
+                    <span class="text-muted">Klicke Aktualisieren zum Laden</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Filter Leiste -->
 <div class="filter-section mb-3">
     <div class="row g-2 align-items-end">
@@ -165,36 +195,6 @@
         </div>
     </div>
 </div>
-<!-- Rekorde Verwaltung -->
-<div class="row g-3 mt-3">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="mb-0"><i class="fas fa-trophy text-warning me-1"></i> Streckenrekorde</h6>
-                    <button class="btn btn-sm btn-outline-light" onclick="loadTrackRecords()"><i class="fas fa-sync-alt"></i></button>
-                </div>
-                <div id="trackRecordsList" class="small">
-                    <span class="text-muted">Klicke Aktualisieren zum Laden</span>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="mb-0"><i class="fas fa-user text-info me-1"></i> Persoenliche Rekorde</h6>
-                    <button class="btn btn-sm btn-outline-light" onclick="loadPersonalRecords()"><i class="fas fa-sync-alt"></i></button>
-                </div>
-                <div id="personalRecordsList" class="small">
-                    <span class="text-muted">Klicke Aktualisieren zum Laden</span>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 {% endblock %}
 
 {% block scripts %}
