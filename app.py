@@ -616,6 +616,20 @@ def _save_lap(sid, ed):
             'status': 'running',
             'race_type': 'Training',
         })
+    elif rs.race_type and rs.race_type != 'Training':
+        had_start = Event.query.filter_by(
+            session_id=sid, event_type='event.start',
+        ).first()
+        if not had_start:
+            rs.race_type = 'Training'
+            if rs.status != 'running':
+                rs.status = 'running'
+            socketio.emit('race_status', {
+                'session_id': sid,
+                'status': rs.status,
+                'race_type': 'Training',
+            })
+            log.info(f"Self-heal: session {sid} corrected to Training (no event.start found)")
 
     db.session.add(Lap(
         session_id=sid,
@@ -734,7 +748,10 @@ def _save_status(sid, ed):
             rs.race_type = event_race_type
         rs.updated_at = datetime.utcnow()
     else:
-        race_type = event_race_type or _get_current_race_type(sid)
+        had_start = Event.query.filter_by(
+            session_id=sid, event_type='event.start',
+        ).first()
+        race_type = event_race_type or ('Training' if not had_start else _get_current_race_type(sid))
         db.session.add(RaceStatus(
             session_id=sid, status=status, race_type=race_type,
         ))
