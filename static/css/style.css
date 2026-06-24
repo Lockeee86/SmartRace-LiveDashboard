@@ -149,6 +149,21 @@ body {
     opacity: 0.7;
 }
 
+.stat-card.stat-card-consistency {
+    background: linear-gradient(135deg, #2d2020, #1a1212);
+    border-left: 4px solid #e67e22;
+}
+
+.stat-card.stat-card-sectors {
+    background: linear-gradient(135deg, #1a2d20, #122018);
+    border-left: 4px solid #2ecc71;
+}
+
+.stat-card.stat-card-track {
+    background: linear-gradient(135deg, #1a2030, #121820);
+    border-left: 4px solid #3498db;
+}
+
 /* Controller Grid */
 .controller-grid {
     display: grid;
@@ -554,18 +569,83 @@ body {
     border-bottom-color: #dee2e6 !important;
 }
 
+[data-bs-theme="light"] .nav-link:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
 [data-bs-theme="light"] .card {
     background-color: #fff;
     border-color: #dee2e6;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+[data-bs-theme="light"] .card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-bs-theme="light"] .card-header {
+    background-color: rgba(0, 0, 0, 0.02);
 }
 
 [data-bs-theme="light"] .race-info-bar {
     background-color: rgba(255, 255, 255, 0.95);
+    border-bottom-color: #dee2e6;
 }
 
 [data-bs-theme="light"] .controller-card {
     background-color: #fff;
     border-color: #dee2e6;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+[data-bs-theme="light"] .controller-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* Stat Cards im Light Mode */
+[data-bs-theme="light"] .stat-card.fastest {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    border-left: 4px solid var(--sr-accent);
+    color: #1e3a5f;
+}
+
+[data-bs-theme="light"] .stat-card.record {
+    background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+    border-left: 4px solid var(--sr-success);
+    color: #14532d;
+}
+
+[data-bs-theme="light"] .stat-card.stats {
+    background: linear-gradient(135deg, #f3e8ff, #e9d5ff);
+    border-left: 4px solid #9b59b6;
+    color: #3b0764;
+}
+
+[data-bs-theme="light"] .stat-card.stat-card-consistency {
+    background: linear-gradient(135deg, #fef3e2, #fde8cd);
+    border-left: 4px solid #e67e22;
+    color: #7c2d12;
+}
+
+[data-bs-theme="light"] .stat-card.stat-card-sectors {
+    background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+    border-left: 4px solid #2ecc71;
+    color: #14532d;
+}
+
+[data-bs-theme="light"] .stat-card.stat-card-track {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    border-left: 4px solid #3498db;
+    color: #1e3a5f;
+}
+
+[data-bs-theme="light"] .stat-card .stat-value {
+    color: #1a1a2e;
+}
+
+[data-bs-theme="light"] .stat-card .stat-label {
+    color: #6c757d;
+    opacity: 1;
 }
 
 [data-bs-theme="light"] .session-selector {
@@ -578,9 +658,143 @@ body {
     color: #6c757d;
 }
 
+[data-bs-theme="light"] .table tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+[data-bs-theme="light"] .table .row-pb {
+    background: linear-gradient(90deg, rgba(234, 179, 8, 0.1), transparent) !important;
+}
+
+[data-bs-theme="light"] .table .row-latest {
+    background: rgba(59, 130, 246, 0.06) !important;
+}
+
+[data-bs-theme="light"] .leaderboard-row.leader {
+    background: linear-gradient(90deg, rgba(234, 179, 8, 0.08), transparent) !important;
+}
+
+[data-bs-theme="light"] .leaderboard-row.podium {
+    background: rgba(0, 0, 0, 0.02) !important;
+}
+
 [data-bs-theme="light"] .filter-section {
     background-color: #fff;
     border-color: #dee2e6;
+}
+
+[data-bs-theme="light"] .form-select,
+[data-bs-theme="light"] .form-control {
+    background-color: #fff;
+    border-color: #ced4da;
+    color: #1a1a2e;
+}
+
+[data-bs-theme="light"] .form-select:focus,
+[data-bs-theme="light"] .form-control:focus {
+    background-color: #fff;
+    color: #1a1a2e;
+}
+
+[data-bs-theme="light"] .sector-badge {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: #dee2e6;
+    color: #6c757d;
+}
+
+[data-bs-theme="light"] .sector-mini {
+    background: rgba(0, 0, 0, 0.03);
+    color: #6c757d;
+}
+
+/* Ticker im Light Mode */
+[data-bs-theme="light"] .ticker-entry {
+    border-right-color: #dee2e6;
+}
+
+[data-bs-theme="light"] .ticker-size-btn {
+    color: rgba(0, 0, 0, 0.3);
+}
+
+[data-bs-theme="light"] .ticker-size-btn:hover {
+    color: rgba(0, 0, 0, 0.6);
+}
+
+[data-bs-theme="light"] .ticker-size-btn.active {
+    color: #1a1a2e;
+    background: rgba(59, 130, 246, 0.1);
+}
+
+[data-bs-theme="light"] .ticker-size-controls {
+    border-left-color: #dee2e6;
+}
+
+/* Feed Items im Light Mode */
+[data-bs-theme="light"] .feed-item:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+[data-bs-theme="light"] .feed-item.feed-penalty {
+    background: rgba(239, 68, 68, 0.06);
+}
+
+[data-bs-theme="light"] .feed-item.feed-status {
+    background: rgba(59, 130, 246, 0.06);
+}
+
+[data-bs-theme="light"] .feed-item.feed-record {
+    background: rgba(234, 179, 8, 0.08);
+}
+
+/* Controller Filter Dropdown im Light Mode */
+[data-bs-theme="light"] #controllerFilterDropdown .dropdown-item:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Settings Dropdown im Light Mode */
+[data-bs-theme="light"] .settings-dropdown {
+    background-color: #fff;
+    border-color: #dee2e6;
+}
+
+[data-bs-theme="light"] .settings-dropdown .dropdown-item {
+    color: #1a1a2e;
+}
+
+[data-bs-theme="light"] .settings-dropdown .dropdown-item:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+[data-bs-theme="light"] .settings-dropdown .dropdown-divider {
+    border-color: #dee2e6;
+}
+
+/* Widget resize button im Light Mode */
+[data-bs-theme="light"] .widget-resize-btn {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-bs-theme="light"] .widget-resize-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+/* Scrollbar im Light Mode */
+[data-bs-theme="light"] ::-webkit-scrollbar-track {
+    background: #f0f2f5;
+}
+
+[data-bs-theme="light"] ::-webkit-scrollbar-thumb {
+    background: #ced4da;
+}
+
+[data-bs-theme="light"] ::-webkit-scrollbar-thumb:hover {
+    background: #adb5bd;
+}
+
+/* Fullscreen im Light Mode */
+[data-bs-theme="light"] .fullscreen-mode {
+    background-color: #f0f2f5;
 }
 
 [data-bs-theme="light"] footer {
