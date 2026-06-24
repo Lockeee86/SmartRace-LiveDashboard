@@ -724,9 +724,9 @@ async function loadLbTrackLayout() {
 function applyAutoMode(raceType) {
     const rt = (raceType || '').toLowerCase().trim();
     let newMode = null;
-    if (rt === 'race' || rt === 'qualifying') {
+    if (rt === 'race') {
         newMode = 'race';
-    } else if (!rt || rt === 'unknown' || rt === 'training') {
+    } else if (!rt || rt === 'unknown' || rt === 'training' || rt === 'qualifying') {
         newMode = 'training';
     }
     if (newMode && newMode !== lbMode) {
