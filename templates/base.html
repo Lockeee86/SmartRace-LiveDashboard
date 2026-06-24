@@ -114,6 +114,14 @@
                                 <i class="fas fa-bell-slash" id="notifyIcon" style="width:16px; text-align:center;"></i> <span id="notifyLabel">Push aus</span>
                             </a>
                         </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><span class="setting-label">Version</span></li>
+                        <li>
+                            <span class="dropdown-item-text d-flex align-items-center gap-2" id="versionInfo" style="font-size:0.75rem; cursor:default;">
+                                <i class="fas fa-spinner fa-spin" id="versionIcon" style="width:16px; text-align:center;"></i>
+                                <span id="versionLabel">Pruefe...</span>
+                            </span>
+                        </li>
                     </ul>
                 </div>
             </div>
@@ -158,6 +166,7 @@
     <footer class="border-top mt-4 py-3 text-center text-muted small">
         <div class="container-fluid d-flex justify-content-center align-items-center gap-3">
             <span>SmartRace Live Dashboard &middot; Carrera Digital</span>
+            <span id="versionFooter" class="d-none" style="font-size:0.7rem; opacity:0.7;"></span>
         </div>
     </footer>
 
@@ -790,6 +799,62 @@
             'sr-removed-' + (data.controller_id || '')
         );
     });
+
+    // =========================================================================
+    // Versions-Check
+    // =========================================================================
+    (function checkVersion() {
+        fetch('/api/version')
+            .then(r => r.ok ? r.json() : null)
+            .then(v => {
+                if (!v) return;
+                const icon = document.getElementById('versionIcon');
+                const label = document.getElementById('versionLabel');
+                const footer = document.getElementById('versionFooter');
+                const settingsBtn = document.getElementById('settingsDropdownBtn');
+
+                const shortHash = v.local_short || '?';
+                const branch = v.branch || '?';
+                const dateStr = v.local_date ? v.local_date.substring(0, 10) : '';
+
+                if (v.up_to_date === true) {
+                    icon.className = 'fas fa-check-circle text-success';
+                    icon.style.width = '16px';
+                    label.innerHTML = `Aktuell <span class="text-muted">${shortHash}</span>`;
+                    if (footer) {
+                        footer.textContent = `${branch}@${shortHash}`;
+                        footer.classList.remove('d-none');
+                    }
+                } else if (v.up_to_date === false) {
+                    const n = v.commits_behind || 0;
+                    icon.className = 'fas fa-arrow-up-from-bracket text-warning';
+                    icon.style.width = '16px';
+                    label.innerHTML = `Update verfuegbar <span class="text-muted">(${n} Commit${n !== 1 ? 's' : ''})</span>`;
+                    if (footer) {
+                        footer.innerHTML = `<span class="text-warning"><i class="fas fa-arrow-up-from-bracket me-1"></i>${n} Update${n !== 1 ? 's' : ''}</span> &middot; ${shortHash}`;
+                        footer.classList.remove('d-none');
+                    }
+                    if (settingsBtn) {
+                        settingsBtn.classList.remove('btn-outline-light');
+                        settingsBtn.classList.add('btn-outline-warning');
+                    }
+                } else {
+                    icon.className = 'fas fa-code-branch text-muted';
+                    icon.style.width = '16px';
+                    label.innerHTML = `${shortHash} <span class="text-muted">${dateStr}</span>`;
+                    if (footer) {
+                        footer.textContent = `${branch}@${shortHash}`;
+                        footer.classList.remove('d-none');
+                    }
+                }
+            })
+            .catch(() => {
+                const icon = document.getElementById('versionIcon');
+                const label = document.getElementById('versionLabel');
+                if (icon) { icon.className = 'fas fa-code-branch text-muted'; icon.style.width = '16px'; }
+                if (label) label.textContent = 'Nicht verfuegbar';
+            });
+    })();
     </script>
 
     {% block scripts %}{% endblock %}
