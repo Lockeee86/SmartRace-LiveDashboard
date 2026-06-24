@@ -323,15 +323,13 @@ def _get_session_id(etype, data=None):
 
 
 def _get_current_race_type(sid=None):
-    """Aktuellen Renntyp aus letztem Status-Event oder Race-Result ermitteln."""
+    """Aktuellen Renntyp fuer eine Session ermitteln."""
     if sid:
         rs = RaceStatus.query.filter_by(session_id=sid).order_by(
             RaceStatus.id.desc()).first()
         if rs and rs.race_type:
             return rs.race_type
-    rs = RaceStatus.query.order_by(RaceStatus.id.desc()).first()
-    if rs and rs.race_type:
-        return rs.race_type
+        return 'Training'
     return 'Training'
 
 
@@ -1171,17 +1169,24 @@ def api_penalties():
 
 @app.route('/api/race-status')
 def api_race_status():
-    """Aktueller Rennstatus."""
+    """Aktueller Rennstatus (nur aktuelle Session)."""
     try:
-        rs = RaceStatus.query.order_by(RaceStatus.id.desc()).first()
-        if rs:
-            return jsonify({
-                'session_id': rs.session_id,
-                'status': rs.status,
-                'race_type': rs.race_type,
-                'updated_at': rs.updated_at.isoformat() if rs.updated_at else None,
-            })
-        return jsonify({'status': 'waiting', 'race_type': '', 'session_id': ''})
+        # Aktuelle Session ermitteln (wie in api_live_data)
+        latest_event = db.session.query(Event.session_id).order_by(
+            Event.id.desc()).first()
+        current_sid = latest_event.session_id if latest_event else None
+
+        if current_sid:
+            rs = RaceStatus.query.filter_by(session_id=current_sid).order_by(
+                RaceStatus.id.desc()).first()
+            if rs:
+                return jsonify({
+                    'session_id': rs.session_id,
+                    'status': rs.status,
+                    'race_type': rs.race_type,
+                    'updated_at': rs.updated_at.isoformat() if rs.updated_at else None,
+                })
+        return jsonify({'status': 'waiting', 'race_type': '', 'session_id': current_sid or ''})
     except Exception as e:
         log.error(f"race-status: {e}")
         return jsonify({'status': 'unknown'})
