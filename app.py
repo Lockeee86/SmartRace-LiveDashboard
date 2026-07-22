@@ -1917,15 +1917,25 @@ def api_tracks():
         records = TrackRecord.query.order_by(TrackRecord.laptime_ms.asc()).limit(10).all()
         pbs = PersonalRecord.query.order_by(PersonalRecord.laptime_ms.asc()).all()
 
-        return jsonify({
-            'tracks': result,
-            'records': [{
+        records_data = []
+        for r in records:
+            lap = Lap.query.filter_by(
+                laptime_ms=r.laptime_ms, driver_name=r.driver_name,
+            ).order_by(Lap.created_at.desc()).first() if r.driver_name else None
+            records_data.append({
                 'laptime_ms': r.laptime_ms,
                 'laptime_formatted': fmt_ms(r.laptime_ms),
                 'driver_name': r.driver_name,
                 'car_name': r.car_name,
                 'date': r.created_at.isoformat() if r.created_at else None,
-            } for r in records],
+                'sector_1': lap.sector_1 if lap else None,
+                'sector_2': lap.sector_2 if lap else None,
+                'sector_3': lap.sector_3 if lap else None,
+            })
+
+        return jsonify({
+            'tracks': result,
+            'records': records_data,
             'personal_records': [{
                 'driver_name': p.driver_name,
                 'laptime_ms': p.laptime_ms,
