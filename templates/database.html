@@ -18,7 +18,7 @@
 
 <!-- Rekorde Verwaltung -->
 <div class="row g-3 mb-3">
-    <div class="col-md-6">
+    <div class="col-12">
         <div class="card">
             <div class="card-body py-2">
                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -31,7 +31,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-6">
+    <div class="col-12">
         <div class="card">
             <div class="card-body py-2">
                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -654,21 +654,47 @@ document.addEventListener('keydown', e => {
 async function loadTrackRecords() {
     const container = document.getElementById('trackRecordsList');
     try {
-        const res = await fetch('/api/track-records');
-        if (!res.ok) throw new Error('Fehler');
-        const records = await res.json();
-        if (records.length === 0) {
+        const [recRes, vbRes] = await Promise.all([
+            fetch('/api/track-records'),
+            fetch('/api/virtual-best'),
+        ]);
+        if (!recRes.ok) throw new Error('Fehler');
+        const records = await recRes.json();
+        const vb = vbRes.ok ? await vbRes.json() : null;
+
+        if (records.length === 0 && !vb) {
             container.innerHTML = '<span class="text-muted">Keine Streckenrekorde</span>';
             return;
         }
-        container.innerHTML = '<table class="table table-sm mb-0"><thead><tr><th>Zeit</th><th>Fahrer</th><th>Auto</th><th>Datum</th><th></th></tr></thead><tbody>' +
-            records.map((r, i) => `<tr${i === 0 ? ' class="table-success"' : ''}>
+
+        let html = '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Zeit</th><th>Fahrer</th><th>Auto</th><th>S1</th><th>S2</th><th>S3</th><th>Datum</th><th></th></tr></thead><tbody>';
+
+        if (vb) {
+            html += `<tr style="border-left: 3px solid #9b59b6; background: rgba(155,89,182,0.08);">
+                <td class="font-mono fw-bold" style="color:#9b59b6">${vb.laptime_formatted}</td>
+                <td style="color:#9b59b6"><i class="fas fa-bolt me-1"></i>Virtuelle Beste</td>
+                <td class="text-muted small">Theoretisch</td>
+                <td class="font-mono small">${vb.sector_1 || '--'}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_1_driver}</span></td>
+                <td class="font-mono small">${vb.sector_2 || '--'}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_2_driver}</span></td>
+                <td class="font-mono small">${vb.sector_3 || '--'}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_3_driver}</span></td>
+                <td class="text-muted">--</td>
+                <td></td>
+            </tr>`;
+        }
+
+        html += records.map((r, i) => `<tr${i === 0 ? ' class="table-success"' : ''}>
                 <td class="font-mono fw-bold">${r.laptime_formatted}</td>
                 <td>${r.driver_name || '--'}</td>
                 <td class="text-muted">${r.car_name || '--'}</td>
+                <td class="font-mono small">${r.sector_1 || '--'}</td>
+                <td class="font-mono small">${r.sector_2 || '--'}</td>
+                <td class="font-mono small">${r.sector_3 || '--'}</td>
                 <td class="text-muted">${r.created_at ? new Date(r.created_at).toLocaleDateString('de-DE') : '--'}</td>
                 <td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteTrackRecord(${r.id})" title="Loeschen"><i class="fas fa-trash-alt" style="font-size:0.7rem"></i></button></td>
-            </tr>`).join('') + '</tbody></table>';
+            </tr>`).join('');
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
     } catch (e) {
         container.innerHTML = '<span class="text-danger">Fehler beim Laden</span>';
     }

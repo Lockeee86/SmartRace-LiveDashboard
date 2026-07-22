@@ -211,6 +211,21 @@ def fmt_ms(ms):
     return f"{int(s // 60)}:{s % 60:06.3f}"
 
 
+def _parse_sector_ms(s):
+    """Sektor-String 'M:SS.mmm' -> Millisekunden (int), None bei Fehler."""
+    if not s or not isinstance(s, str):
+        return None
+    try:
+        if ':' in s:
+            parts = s.split(':')
+            mins = int(parts[0])
+            secs = float(parts[1])
+            return int((mins * 60 + secs) * 1000)
+        return int(float(s) * 1000)
+    except (ValueError, IndexError):
+        return None
+
+
 def _calc_stddev(times):
     """Standardabweichung einer Liste von Zeiten berechnen."""
     if len(times) < 2:
@@ -1426,21 +1441,88 @@ def api_track_record():
 
 @app.route('/api/track-records')
 def api_track_records():
-    """Alle Streckenrekorde (fuer Verwaltung)."""
+    """Alle Streckenrekorde mit Sektorzeiten aus Laps."""
     try:
         records = TrackRecord.query.order_by(TrackRecord.laptime_ms.asc()).all()
-        return jsonify([{
-            'id': r.id,
-            'laptime_ms': r.laptime_ms,
-            'laptime_formatted': fmt_ms(r.laptime_ms),
-            'driver_name': r.driver_name,
-            'car_name': r.car_name,
-            'session_id': r.session_id,
-            'created_at': r.created_at.isoformat() if r.created_at else None,
-        } for r in records])
+        result = []
+        for r in records:
+            lap = Lap.query.filter_by(
+                laptime_ms=r.laptime_ms, driver_name=r.driver_name,
+            ).order_by(Lap.created_at.desc()).first() if r.driver_name else None
+            result.append({
+                'id': r.id,
+                'laptime_ms': r.laptime_ms,
+                'laptime_formatted': fmt_ms(r.laptime_ms),
+                'driver_name': r.driver_name,
+                'car_name': r.car_name,
+                'session_id': r.session_id,
+                'created_at': r.created_at.isoformat() if r.created_at else None,
+                'sector_1': lap.sector_1 if lap else None,
+                'sector_2': lap.sector_2 if lap else None,
+                'sector_3': lap.sector_3 if lap else None,
+            })
+        return jsonify(result)
     except Exception as e:
         log.error(f"track-records: {e}")
         return jsonify([])
+
+
+@app.route('/api/virtual-best')
+def api_virtual_best():
+    """Virtuelle schnellste Runde aus den besten Sektorzeiten."""
+    try:
+        laps = Lap.query.filter(
+            Lap.laptime_ms > 1000,
+            Lap.sector_1.isnot(None), Lap.sector_1 != '',
+            Lap.sector_2.isnot(None), Lap.sector_2 != '',
+            Lap.sector_3.isnot(None), Lap.sector_3 != '',
+        ).all()
+
+        if not laps:
+            return jsonify(None)
+
+        best_s1 = None
+        best_s2 = None
+        best_s3 = None
+        s1_driver = s2_driver = s3_driver = ''
+
+        for lap in laps:
+            s1 = _parse_sector_ms(lap.sector_1)
+            s2 = _parse_sector_ms(lap.sector_2)
+            s3 = _parse_sector_ms(lap.sector_3)
+            if s1 and (best_s1 is None or s1 < best_s1):
+                best_s1 = s1
+                s1_driver = lap.driver_name or ''
+                s1_display = lap.sector_1
+            if s2 and (best_s2 is None or s2 < best_s2):
+                best_s2 = s2
+                s2_driver = lap.driver_name or ''
+                s2_display = lap.sector_2
+            if s3 and (best_s3 is None or s3 < best_s3):
+                best_s3 = s3
+                s3_driver = lap.driver_name or ''
+                s3_display = lap.sector_3
+
+        if not all([best_s1, best_s2, best_s3]):
+            return jsonify(None)
+
+        total_ms = best_s1 + best_s2 + best_s3
+        return jsonify({
+            'laptime_ms': total_ms,
+            'laptime_formatted': fmt_ms(total_ms),
+            'sector_1': s1_display,
+            'sector_1_ms': best_s1,
+            'sector_1_driver': s1_driver,
+            'sector_2': s2_display,
+            'sector_2_ms': best_s2,
+            'sector_2_driver': s2_driver,
+            'sector_3': s3_display,
+            'sector_3_ms': best_s3,
+            'sector_3_driver': s3_driver,
+        })
+    except Exception as e:
+        log.error(f"virtual-best: {e}")
+        return jsonify(None)
 
 
 @app.route('/api/track-records/<int:record_id>', methods=['DELETE'])
