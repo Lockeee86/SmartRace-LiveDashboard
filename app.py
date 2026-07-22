@@ -11,7 +11,6 @@ import io
 import re
 import math
 import logging
-import subprocess
 
 # =============================================================================
 # App
@@ -2155,41 +2154,25 @@ def api_health():
 
 @app.route('/api/version')
 def api_version():
-    """Git-Versionsinformationen: lokaler und Remote-Stand."""
-    def _git(args):
-        try:
-            r = subprocess.run(
-                ['git'] + args,
-                capture_output=True, text=True, timeout=10,
-                cwd=os.path.dirname(os.path.abspath(__file__)),
-            )
-            return r.stdout.strip() if r.returncode == 0 else None
-        except Exception:
-            return None
+    """Versionsinformationen aus VERSION-Datei und Build-Datum."""
+    app_dir = os.path.dirname(os.path.abspath(__file__))
+    version = '?'
+    try:
+        with open(os.path.join(app_dir, 'VERSION')) as f:
+            version = f.read().strip()
+    except FileNotFoundError:
+        pass
 
-    local_hash = _git(['rev-parse', 'HEAD'])
-    local_short = _git(['rev-parse', '--short', 'HEAD'])
-    local_date = _git(['log', '-1', '--format=%ci'])
-    branch = _git(['rev-parse', '--abbrev-ref', 'HEAD'])
-
-    _git(['fetch', 'origin', '--quiet'])
-    remote_hash = _git(['rev-parse', f'origin/{branch}']) if branch else None
-
-    up_to_date = None
-    behind = 0
-    if local_hash and remote_hash:
-        up_to_date = local_hash == remote_hash
-        count = _git(['rev-list', '--count', f'HEAD..origin/{branch}'])
-        behind = int(count) if count and count.isdigit() else 0
+    build_date = ''
+    try:
+        with open(os.path.join(app_dir, 'build-date.txt')) as f:
+            build_date = f.read().strip()[:10]
+    except FileNotFoundError:
+        pass
 
     return jsonify({
-        'local_hash': local_hash,
-        'local_short': local_short,
-        'local_date': local_date,
-        'branch': branch,
-        'remote_hash': remote_hash,
-        'up_to_date': up_to_date,
-        'commits_behind': behind,
+        'version': version,
+        'build_date': build_date,
     })
 
 

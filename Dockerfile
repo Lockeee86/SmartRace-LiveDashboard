@@ -10,6 +10,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+RUN date -Iseconds > /app/build-date.txt
+
 EXPOSE 5000
 
 # eventlet Worker fuer WebSocket-Support, 1 Worker (eventlet handled Concurrency)

@@ -811,41 +811,18 @@
                 const icon = document.getElementById('versionIcon');
                 const label = document.getElementById('versionLabel');
                 const footer = document.getElementById('versionFooter');
-                const settingsBtn = document.getElementById('settingsDropdownBtn');
 
-                const shortHash = v.local_short || '?';
-                const branch = v.branch || '?';
-                const dateStr = v.local_date ? v.local_date.substring(0, 10) : '';
+                const ver = v.version || '?';
+                const buildDate = v.build_date || '';
 
-                if (v.up_to_date === true) {
-                    icon.className = 'fas fa-check-circle text-success';
-                    icon.style.width = '16px';
-                    label.innerHTML = `Aktuell <span class="text-muted">${shortHash}</span>`;
-                    if (footer) {
-                        footer.textContent = `${branch}@${shortHash}`;
-                        footer.classList.remove('d-none');
-                    }
-                } else if (v.up_to_date === false) {
-                    const n = v.commits_behind || 0;
-                    icon.className = 'fas fa-arrow-up-from-bracket text-warning';
-                    icon.style.width = '16px';
-                    label.innerHTML = `Update verfuegbar <span class="text-muted">(${n} Commit${n !== 1 ? 's' : ''})</span>`;
-                    if (footer) {
-                        footer.innerHTML = `<span class="text-warning"><i class="fas fa-arrow-up-from-bracket me-1"></i>${n} Update${n !== 1 ? 's' : ''}</span> &middot; ${shortHash}`;
-                        footer.classList.remove('d-none');
-                    }
-                    if (settingsBtn) {
-                        settingsBtn.classList.remove('btn-outline-light');
-                        settingsBtn.classList.add('btn-outline-warning');
-                    }
-                } else {
-                    icon.className = 'fas fa-code-branch text-muted';
-                    icon.style.width = '16px';
-                    label.innerHTML = `${shortHash} <span class="text-muted">${dateStr}</span>`;
-                    if (footer) {
-                        footer.textContent = `${branch}@${shortHash}`;
-                        footer.classList.remove('d-none');
-                    }
+                icon.className = 'fas fa-check-circle text-success';
+                icon.style.width = '16px';
+                const datePart = buildDate ? ` <span class="text-muted">(${buildDate})</span>` : '';
+                label.innerHTML = `v${ver}${datePart}`;
+
+                if (footer) {
+                    footer.innerHTML = `v${ver}${datePart}`;
+                    footer.classList.remove('d-none');
                 }
             })
             .catch(() => {
