@@ -137,7 +137,7 @@
 
 <!-- Rekorde -->
 <div class="row g-3">
-    <div class="col-lg-6">
+    <div class="col-12">
         <div class="card">
             <div class="card-header border-0 bg-transparent">
                 <h6 class="mb-0"><i class="fas fa-trophy text-warning me-2"></i>Streckenrekorde (Top 10)</h6>
@@ -151,11 +151,14 @@
                                 <th>Fahrer</th>
                                 <th>Auto</th>
                                 <th class="text-center">Zeit</th>
+                                <th class="text-center">S1</th>
+                                <th class="text-center">S2</th>
+                                <th class="text-center">S3</th>
                                 <th class="text-center d-none d-md-table-cell">Datum</th>
                             </tr>
                         </thead>
                         <tbody id="recordsBody">
-                            <tr><td colspan="5" class="text-center text-muted py-3">Lade...</td></tr>
+                            <tr><td colspan="8" class="text-center text-muted py-3">Lade...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -194,11 +197,15 @@
 <script>
 async function loadTracks() {
     try {
-        const res = await fetch('/api/tracks');
-        if (!res.ok) return;
-        const data = await res.json();
+        const [tracksRes, vbRes] = await Promise.all([
+            fetch('/api/tracks'),
+            fetch('/api/virtual-best'),
+        ]);
+        if (!tracksRes.ok) return;
+        const data = await tracksRes.json();
+        const vb = vbRes.ok ? await vbRes.json() : null;
         renderTracks(data.tracks || []);
-        renderRecords(data.records || []);
+        renderRecords(data.records || [], vb);
         renderPBs(data.personal_records || []);
     } catch (e) {
         console.error('Strecken-Fehler:', e);
@@ -281,13 +288,26 @@ function renderTracks(tracks) {
     }).join('');
 }
 
-function renderRecords(records) {
+function renderRecords(records, vb) {
     const tbody = document.getElementById('recordsBody');
-    if (records.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Keine Rekorde</td></tr>';
+    if (records.length === 0 && !vb) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Keine Rekorde</td></tr>';
         return;
     }
-    tbody.innerHTML = records.map((r, i) => {
+    let html = '';
+    if (vb) {
+        html += `<tr style="border-left: 3px solid #9b59b6; background: rgba(155,89,182,0.08);">
+            <td class="text-center"><span class="position-badge" style="width:26px;height:26px;font-size:0.6rem;background:linear-gradient(135deg,#9b59b6,#8e44ad);color:#fff"><i class="fas fa-bolt"></i></span></td>
+            <td class="fw-bold" style="color:#9b59b6">Virtuelle Beste</td>
+            <td class="text-muted small">Theoretisch</td>
+            <td class="text-center font-mono fw-bold" style="color:#9b59b6">${vb.laptime_formatted}</td>
+            <td class="text-center font-mono small">${vb.sector_1 || '--'}<br><span class="text-muted" style="font-size:0.6rem">${vb.sector_1_driver}</span></td>
+            <td class="text-center font-mono small">${vb.sector_2 || '--'}<br><span class="text-muted" style="font-size:0.6rem">${vb.sector_2_driver}</span></td>
+            <td class="text-center font-mono small">${vb.sector_3 || '--'}<br><span class="text-muted" style="font-size:0.6rem">${vb.sector_3_driver}</span></td>
+            <td class="text-center text-muted d-none d-md-table-cell">--</td>
+        </tr>`;
+    }
+    html += records.map((r, i) => {
         const pos = i + 1;
         const posClass = pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : 'other';
         const date = r.date ? new Date(r.date).toLocaleDateString('de-DE') : '--';
@@ -296,9 +316,13 @@ function renderRecords(records) {
             <td class="fw-bold">${r.driver_name}</td>
             <td class="text-muted">${r.car_name || '--'}</td>
             <td class="text-center font-mono fw-bold">${r.laptime_formatted}</td>
+            <td class="text-center font-mono small">${r.sector_1 || '--'}</td>
+            <td class="text-center font-mono small">${r.sector_2 || '--'}</td>
+            <td class="text-center font-mono small">${r.sector_3 || '--'}</td>
             <td class="text-center text-muted d-none d-md-table-cell">${date}</td>
         </tr>`;
     }).join('');
+    tbody.innerHTML = html;
 }
 
 function renderPBs(pbs) {
