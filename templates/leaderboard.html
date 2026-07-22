@@ -938,6 +938,8 @@ socket.on('track_record', (data) => {
     }
 });
 
+socket.on('active_track', () => loadTrackRecord());
+
 socket.on('penalty', (data) => {
     if (data) {
         addTickerEvent({

@@ -952,6 +952,8 @@ socket.on('track_record', (data) => {
     }
 });
 
+socket.on('active_track', () => loadTrackRecord());
+
 socket.on('penalty', (data) => {
     const name = data.driver_name || 'Fahrer ' + (data.controller_id || '?');
     const secs = data.penalty_seconds || 0;
