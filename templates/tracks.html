@@ -136,56 +136,59 @@
 </div>
 
 <!-- Rekorde -->
-<div class="row g-3">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header border-0 bg-transparent">
-                <h6 class="mb-0"><i class="fas fa-trophy text-warning me-2"></i>Streckenrekorde (Top 10)</h6>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm mb-0">
-                        <thead>
-                            <tr>
-                                <th class="text-center position-col">#</th>
-                                <th>Fahrer</th>
-                                <th>Auto</th>
-                                <th class="text-center">Zeit</th>
-                                <th class="text-center">S1</th>
-                                <th class="text-center">S2</th>
-                                <th class="text-center">S3</th>
-                                <th class="text-center d-none d-md-table-cell">Datum</th>
-                            </tr>
-                        </thead>
-                        <tbody id="recordsBody">
-                            <tr><td colspan="8" class="text-center text-muted py-3">Lade...</td></tr>
-                        </tbody>
-                    </table>
+<div id="trackRecordsSection" class="d-none">
+    <h6 class="mb-3"><i class="fas fa-trophy text-warning me-2"></i>Rekorde: <span id="selectedTrackName" class="text-info">--</span></h6>
+    <div class="row g-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header border-0 bg-transparent d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="fas fa-trophy text-warning me-2"></i>Streckenrekorde (Top 10)</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="text-center position-col">#</th>
+                                    <th>Fahrer</th>
+                                    <th>Auto</th>
+                                    <th class="text-center">Zeit</th>
+                                    <th class="text-center">S1</th>
+                                    <th class="text-center">S2</th>
+                                    <th class="text-center">S3</th>
+                                    <th class="text-center d-none d-md-table-cell">Datum</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recordsBody">
+                                <tr><td colspan="8" class="text-center text-muted py-3">Strecke auswaehlen...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header border-0 bg-transparent">
-                <h6 class="mb-0"><i class="fas fa-user-clock me-2"></i>Persoenliche Bestzeiten</h6>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-sm mb-0">
-                        <thead>
-                            <tr>
-                                <th class="text-center position-col">#</th>
-                                <th>Fahrer</th>
-                                <th>Auto</th>
-                                <th class="text-center">Bestzeit</th>
-                                <th class="text-center d-none d-md-table-cell">Datum</th>
-                            </tr>
-                        </thead>
-                        <tbody id="pbBody">
-                            <tr><td colspan="5" class="text-center text-muted py-3">Lade...</td></tr>
-                        </tbody>
-                    </table>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header border-0 bg-transparent">
+                    <h6 class="mb-0"><i class="fas fa-user-clock me-2"></i>Persoenliche Bestzeiten</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th class="text-center position-col">#</th>
+                                    <th>Fahrer</th>
+                                    <th>Auto</th>
+                                    <th class="text-center">Bestzeit</th>
+                                    <th class="text-center d-none d-md-table-cell">Datum</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pbBody">
+                                <tr><td colspan="5" class="text-center text-muted py-3">Strecke auswaehlen...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -195,21 +198,50 @@
 
 {% block scripts %}
 <script>
+let tracksData = [];
+let selectedTrackName = null;
+
 async function loadTracks() {
     try {
-        const [tracksRes, vbRes] = await Promise.all([
-            fetch('/api/tracks'),
-            fetch('/api/virtual-best'),
-        ]);
+        const tracksRes = await fetch('/api/tracks');
         if (!tracksRes.ok) return;
         const data = await tracksRes.json();
-        const vb = vbRes.ok ? await vbRes.json() : null;
-        renderTracks(data.tracks || []);
-        renderRecords(data.records || [], vb);
-        renderPBs(data.personal_records || []);
+        tracksData = data.tracks || [];
+        renderTracks(tracksData);
+
+        if (tracksData.length > 0) {
+            selectTrack(tracksData[0].name);
+        }
     } catch (e) {
         console.error('Strecken-Fehler:', e);
     }
+}
+
+async function selectTrack(trackName) {
+    selectedTrackName = trackName;
+    document.getElementById('selectedTrackName').textContent = trackName;
+    document.getElementById('trackRecordsSection').classList.remove('d-none');
+
+    document.querySelectorAll('.track-card').forEach(card => {
+        if (card.dataset.trackName === trackName) {
+            card.classList.add('active-track');
+        } else {
+            card.classList.remove('active-track');
+        }
+    });
+
+    const track = tracksData.find(t => t.name === trackName);
+    const records = track ? (track.records || []) : [];
+    const pbs = track ? (track.personal_records || []) : [];
+
+    try {
+        const vbRes = await fetch('/api/virtual-best?track=' + encodeURIComponent(trackName));
+        const vb = vbRes.ok ? await vbRes.json() : null;
+        renderRecords(records, vb);
+    } catch (e) {
+        renderRecords(records, null);
+    }
+    renderPBs(pbs);
 }
 
 function renderTracks(tracks) {
@@ -230,31 +262,29 @@ function renderTracks(tracks) {
         return;
     }
 
-    // Erste Strecke = zuletzt benutzt = aktiv
-    const activeTrackId = tracks.length > 0 ? tracks[0].id : null;
-
     container.innerHTML = tracks.map((t, idx) => {
         const lengthDisplay = t.length ? `${t.length}m` : '--';
         const pitstopDisplay = t.pitstop_delta ? `${t.pitstop_delta}s` : '--';
         const lastUsed = t.last_used ? new Date(t.last_used).toLocaleDateString('de-DE', {
             day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
         }) : '--';
-        const isActive = idx === 0;
-        const activeClass = isActive ? ' active-track' : '';
-        const activeBadge = isActive ? '<span class="badge bg-success ms-2">Aktiv</span>' : '';
+        const isSelected = t.name === selectedTrackName;
+        const selectedClass = isSelected ? ' active-track' : '';
+        const recCount = (t.records || []).length;
+        const bestRec = recCount > 0 ? t.records[0] : null;
 
         // SVG Layout oder Upload-Zone
         let layoutHtml = '';
         if (t.svg_layout) {
             layoutHtml = `<div class="track-svg-container mt-3" id="svg-${t.id}">
                 ${t.svg_layout}
-                <button class="btn btn-sm btn-outline-light svg-edit-btn" onclick="editTrackSvg(${t.id})" title="Layout aendern">
+                <button class="btn btn-sm btn-outline-light svg-edit-btn" onclick="event.stopPropagation(); editTrackSvg(${t.id})" title="Layout aendern">
                     <i class="fas fa-pen-to-square"></i>
                 </button>
             </div>`;
         } else {
             layoutHtml = `<div class="track-svg-upload-zone mt-3" id="upload-${t.id}"
-                onclick="promptSvgUpload(${t.id})"
+                onclick="event.stopPropagation(); promptSvgUpload(${t.id})"
                 ondragover="event.preventDefault(); this.classList.add('drag-over')"
                 ondragleave="this.classList.remove('drag-over')"
                 ondrop="handleSvgDrop(event, ${t.id})">
@@ -264,9 +294,10 @@ function renderTracks(tracks) {
         }
 
         return `<div class="col-md-6 col-lg-4">
-            <div class="card track-card h-100${activeClass}">
+            <div class="card track-card h-100${selectedClass}" data-track-name="${t.name}" onclick="selectTrack('${t.name.replace(/'/g, "\\'")}')" style="cursor:pointer">
                 <div class="card-body">
-                    <h6 class="fw-bold mb-3"><i class="fas fa-road me-2 text-muted"></i>${t.name}${activeBadge}</h6>
+                    <h6 class="fw-bold mb-3"><i class="fas fa-road me-2 text-muted"></i>${t.name}${idx === 0 ? '<span class="badge bg-success ms-2">Aktiv</span>' : ''}</h6>
+                    ${bestRec ? `<div class="small mb-2"><i class="fas fa-trophy text-warning me-1"></i><span class="font-mono fw-bold">${bestRec.laptime_formatted}</span> <span class="text-muted">${bestRec.driver_name}</span></div>` : ''}
                     ${layoutHtml}
                     <div class="row g-2 mt-2">
                         <div class="col-4 track-stat">
@@ -278,8 +309,8 @@ function renderTracks(tracks) {
                             <div class="label">Pitstop Δ</div>
                         </div>
                         <div class="col-4 track-stat">
-                            <div class="value" style="font-size:0.8rem">${lastUsed}</div>
-                            <div class="label">Zuletzt</div>
+                            <div class="value">${recCount}</div>
+                            <div class="label">Rekorde</div>
                         </div>
                     </div>
                 </div>

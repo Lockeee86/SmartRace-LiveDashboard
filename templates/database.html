@@ -23,7 +23,12 @@
             <div class="card-body py-2">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="mb-0"><i class="fas fa-trophy text-warning me-1"></i> Streckenrekorde</h6>
-                    <button class="btn btn-sm btn-outline-light" onclick="loadTrackRecords()"><i class="fas fa-sync-alt"></i></button>
+                    <div class="d-flex align-items-center gap-2">
+                        <select id="dbTrackFilter" class="form-select form-select-sm" style="min-width:160px;" onchange="loadTrackRecords()">
+                            <option value="">Alle Strecken</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-light" onclick="loadTrackRecords()"><i class="fas fa-sync-alt"></i></button>
+                    </div>
                 </div>
                 <div id="trackRecordsList" class="small">
                     <span class="text-muted">Klicke Aktualisieren zum Laden</span>
@@ -651,23 +656,38 @@ document.addEventListener('keydown', e => {
 });
 
 // ---- Rekord-Verwaltung ----
+async function loadDbTrackFilter() {
+    try {
+        const res = await fetch('/api/tracks');
+        if (!res.ok) return;
+        const data = await res.json();
+        const select = document.getElementById('dbTrackFilter');
+        const current = select.value;
+        select.innerHTML = '<option value="">Alle Strecken</option>' +
+            (data.tracks || []).map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+        if (current) select.value = current;
+    } catch (e) {}
+}
+
 async function loadTrackRecords() {
     const container = document.getElementById('trackRecordsList');
+    const trackFilter = document.getElementById('dbTrackFilter').value;
     try {
+        const params = trackFilter ? '?track=' + encodeURIComponent(trackFilter) : '';
         const [recRes, vbRes] = await Promise.all([
-            fetch('/api/track-records'),
-            fetch('/api/virtual-best'),
+            fetch('/api/track-records' + params),
+            fetch('/api/virtual-best' + params),
         ]);
         if (!recRes.ok) throw new Error('Fehler');
         const records = await recRes.json();
         const vb = vbRes.ok ? await vbRes.json() : null;
 
         if (records.length === 0 && !vb) {
-            container.innerHTML = '<span class="text-muted">Keine Streckenrekorde</span>';
+            container.innerHTML = '<span class="text-muted">Keine Streckenrekorde' + (trackFilter ? ' fuer ' + trackFilter : '') + '</span>';
             return;
         }
 
-        let html = '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Zeit</th><th>Fahrer</th><th>Auto</th><th>S1</th><th>S2</th><th>S3</th><th>Datum</th><th></th></tr></thead><tbody>';
+        let html = '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Zeit</th><th>Fahrer</th><th>Auto</th><th>S1</th><th>S2</th><th>S3</th>' + (trackFilter ? '' : '<th>Strecke</th>') + '<th>Datum</th><th></th></tr></thead><tbody>';
 
         if (vb) {
             html += `<tr style="border-left: 3px solid #9b59b6; background: rgba(155,89,182,0.08);">
@@ -677,6 +697,7 @@ async function loadTrackRecords() {
                 <td class="font-mono small">${vb.sector_1 || '--'}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_1_driver}</span></td>
                 <td class="font-mono small">${vb.sector_2 || '--'}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_2_driver}</span></td>
                 <td class="font-mono small">${vb.sector_3 || '--'}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_3_driver}</span></td>
+                ${trackFilter ? '' : '<td class="text-muted">--</td>'}
                 <td class="text-muted">--</td>
                 <td></td>
             </tr>`;
@@ -689,6 +710,7 @@ async function loadTrackRecords() {
                 <td class="font-mono small">${r.sector_1 || '--'}</td>
                 <td class="font-mono small">${r.sector_2 || '--'}</td>
                 <td class="font-mono small">${r.sector_3 || '--'}</td>
+                ${trackFilter ? '' : `<td class="text-muted small">${r.track_name || '--'}</td>`}
                 <td class="text-muted">${r.created_at ? new Date(r.created_at).toLocaleDateString('de-DE') : '--'}</td>
                 <td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteTrackRecord(${r.id})" title="Loeschen"><i class="fas fa-trash-alt" style="font-size:0.7rem"></i></button></td>
             </tr>`).join('');
@@ -714,19 +736,22 @@ async function deleteTrackRecord(id) {
 
 async function loadPersonalRecords() {
     const container = document.getElementById('personalRecordsList');
+    const trackFilter = document.getElementById('dbTrackFilter').value;
     try {
-        const res = await fetch('/api/personal-records');
+        const params = trackFilter ? '?track=' + encodeURIComponent(trackFilter) : '';
+        const res = await fetch('/api/personal-records' + params);
         if (!res.ok) throw new Error('Fehler');
         const records = await res.json();
         if (records.length === 0) {
-            container.innerHTML = '<span class="text-muted">Keine persoenlichen Rekorde</span>';
+            container.innerHTML = '<span class="text-muted">Keine persoenlichen Rekorde' + (trackFilter ? ' fuer ' + trackFilter : '') + '</span>';
             return;
         }
-        container.innerHTML = '<table class="table table-sm mb-0"><thead><tr><th>Fahrer</th><th>Zeit</th><th>Auto</th><th></th></tr></thead><tbody>' +
+        container.innerHTML = '<table class="table table-sm mb-0"><thead><tr><th>Fahrer</th><th>Zeit</th><th>Auto</th>' + (trackFilter ? '' : '<th>Strecke</th>') + '<th></th></tr></thead><tbody>' +
             records.map(r => `<tr>
                 <td class="fw-bold">${r.driver_name || '--'}</td>
                 <td class="font-mono">${r.laptime_formatted}</td>
                 <td class="text-muted">${r.car_name || '--'}</td>
+                ${trackFilter ? '' : `<td class="text-muted small">${r.track_name || '--'}</td>`}
                 <td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deletePersonalRecord(${r.id})" title="Loeschen"><i class="fas fa-trash-alt" style="font-size:0.7rem"></i></button></td>
             </tr>`).join('') + '</tbody></table>';
     } catch (e) {
@@ -745,5 +770,7 @@ async function deletePersonalRecord(id) {
         showStatus('Fehler: ' + e.message, 'danger');
     }
 }
+
+loadDbTrackFilter();
 </script>
 {% endblock %}
