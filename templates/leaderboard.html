@@ -59,6 +59,12 @@
                         <i class="fas fa-draw-polygon text-info"></i> Streckenlayout
                     </label>
                 </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="heatmap" checked>
+                        <i class="fas fa-th text-danger"></i> Rundenzeit-Heatmap
+                    </label>
+                </li>
             </ul>
         </div>
         <span class="badge bg-danger pulse" id="liveBadge">LIVE</span>
@@ -135,6 +141,16 @@
             </div>
         </div>
     </div>
+    <div class="col-12 lb-widget-col" data-widget="heatmap" draggable="true">
+        <div class="card stat-card stat-card-heatmap h-100">
+            <div class="card-body py-2 px-3">
+                <div class="stat-label mb-1"><i class="fas fa-th me-1"></i> Rundenzeit-Heatmap</div>
+                <div id="lbHeatmap" class="heatmap-container">
+                    <span class="text-muted small">Warte auf Rundendaten...</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Live Ticker -->
@@ -172,12 +188,13 @@
                         <th class="text-center" style="width:110px;">Trend</th>
                         <th class="text-center">Sektoren</th>
                         <th class="text-center" style="width:70px;">Tank</th>
+                        <th class="text-center" style="width:40px;">Pit</th>
                         <th class="text-center">Abstand</th>
                         <th class="text-center">Status</th>
                     </tr>
                 </thead>
                 <tbody id="leaderboardBody">
-                    <tr><td colspan="12" class="text-center text-muted py-5">
+                    <tr><td colspan="13" class="text-center text-muted py-5">
                         <i class="fas fa-flag-checkered fa-2x mb-2 d-block"></i>
                         Warte auf Rennstart...
                     </td></tr>
@@ -283,6 +300,7 @@ function updateLeaderboard() {
             lastSector2: lastLap.sector_2 || null,
             lastSector3: lastLap.sector_3 || null,
             penalties: cd.penalties || 0,
+            pitstops: cd.pitstops || 0,
             retired: cd.retired || false,
             disqualified: cd.disqualified || false,
             fuel: lbFuelLevels[cid] !== undefined ? lbFuelLevels[cid] : -1,
@@ -337,7 +355,7 @@ function updateLeaderboard() {
     // Leaderboard Tabelle
     const tbody = document.getElementById('leaderboardBody');
     if (drivers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-5"><i class="fas fa-flag-checkered fa-2x mb-2 d-block"></i>Warte auf Rennstart...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" class="text-center text-muted py-5"><i class="fas fa-flag-checkered fa-2x mb-2 d-block"></i>Warte auf Rennstart...</td></tr>';
         return;
     }
 
@@ -436,6 +454,7 @@ function updateLeaderboard() {
             <td class="text-center"><canvas id="spark-${d.cid}" width="100" height="28" class="sparkline-canvas"></canvas></td>
             <td class="text-center font-mono small">${sectors}</td>
             <td class="text-center small">${fuelHtml}</td>
+            <td class="text-center small font-mono">${d.pitstops > 0 ? '<i class="fas fa-gas-pump text-muted me-1" style="font-size:0.6rem"></i>' + d.pitstops : '<span class="text-muted">--</span>'}</td>
             <td class="text-center small">${gap}</td>
             <td class="text-center small">${status}</td>
         </tr>`;
@@ -443,6 +462,94 @@ function updateLeaderboard() {
 
     renderSparklines();
     updateSectorAnalysis();
+    updateHeatmap();
+}
+
+// ---- Rundenzeit-Heatmap ----
+function updateHeatmap() {
+    const container = document.getElementById('lbHeatmap');
+    if (!container) return;
+
+    const driverEntries = [];
+    Object.entries(lbData).forEach(([cid, cd]) => {
+        const laps = getSessionLaps(cd);
+        if (laps.length === 0) return;
+        const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
+        const sorted = [...laps].filter(l => l.lap > 0 && l.laptime_raw > 0)
+            .sort((a, b) => (a.lap || 0) - (b.lap || 0));
+        if (sorted.length === 0) return;
+        driverEntries.push({
+            cid, name: cd.name || 'C' + cid, color, laps: sorted
+        });
+    });
+
+    if (driverEntries.length === 0) {
+        container.innerHTML = '<span class="text-muted small">Warte auf Rundendaten...</span>';
+        return;
+    }
+
+    const allTimes = driverEntries.flatMap(d => d.laps.map(l => l.laptime_raw));
+    const minTime = Math.min(...allTimes);
+    const maxTime = Math.max(...allTimes);
+    const range = maxTime - minTime || 1;
+    const median = allTimes.sort((a, b) => a - b)[Math.floor(allTimes.length / 2)];
+    const cap = median * 1.5;
+
+    function heatColor(ms) {
+        const clamped = Math.min(ms, cap);
+        const ratio = Math.min((clamped - minTime) / (cap - minTime || 1), 1);
+        if (ratio <= 0.5) {
+            const t = ratio * 2;
+            const r = Math.round(40 + t * 215);
+            const g = Math.round(200 - t * 100);
+            const b = Math.round(80 - t * 50);
+            return `rgb(${r},${g},${b})`;
+        } else {
+            const t = (ratio - 0.5) * 2;
+            const r = Math.round(255 - t * 50);
+            const g = Math.round(100 - t * 70);
+            const b = Math.round(30);
+            return `rgb(${r},${g},${b})`;
+        }
+    }
+
+    const maxLapNum = Math.max(...driverEntries.flatMap(d => d.laps.map(l => l.lap)));
+    const lapCols = [];
+    for (let i = 1; i <= maxLapNum; i++) lapCols.push(i);
+
+    let html = '<div class="heatmap-scroll"><table class="heatmap-table"><thead><tr>';
+    html += '<th class="heatmap-driver-col"></th>';
+    lapCols.forEach(n => {
+        html += `<th class="heatmap-lap-header">${n}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    driverEntries.forEach(d => {
+        html += `<tr><td class="heatmap-driver-label" style="color:${d.color}"><span class="heatmap-driver-dot" style="background:${d.color}"></span>${d.name}</td>`;
+        const lapMap = {};
+        d.laps.forEach(l => { lapMap[l.lap] = l; });
+        lapCols.forEach(n => {
+            const lap = lapMap[n];
+            if (lap) {
+                const bg = heatColor(lap.laptime_raw);
+                html += `<td class="heatmap-cell" style="background:${bg}" title="R${n}: ${formatTime(lap.laptime_raw)}"></td>`;
+            } else {
+                html += '<td class="heatmap-cell heatmap-empty"></td>';
+            }
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+
+    const legendHtml = `<div class="heatmap-legend">
+        <span class="small text-muted me-2">Schnell</span>
+        <div class="heatmap-legend-bar"></div>
+        <span class="small text-muted ms-2">Langsam</span>
+        <span class="small text-muted ms-3 font-mono">${formatTime(minTime)} - ${formatTime(Math.min(maxTime, cap))}</span>
+    </div>`;
+
+    container.innerHTML = legendHtml + html;
 }
 
 // ---- Sparklines (Mini-Trend-Chart pro Fahrer) ----
