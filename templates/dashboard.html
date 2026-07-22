@@ -165,6 +165,16 @@
             </div>
         </div>
     </div>
+    <div class="col-md-6 col-lg-3 widget-col" data-widget="sectors" draggable="true">
+        <div class="card stat-card stat-card-sectors h-100">
+            <div class="card-body py-2 px-3">
+                <div class="stat-label mb-1"><i class="fas fa-chart-bar me-1"></i> Sektoren</div>
+                <div id="dashSectorAnalysis">
+                    <span class="text-muted small">Warte auf Sektordaten...</span>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="col-md-6 col-lg-3 widget-col" data-widget="tracklayout" draggable="true">
         <div class="card stat-card stat-card-track h-100">
             <div class="card-body py-2 px-3">
@@ -480,6 +490,7 @@ async function updateDashboard() {
         renderStats();
         renderControllers();
         updateControllerNames();
+        updateDashSectors();
     } catch (e) {
         console.error('Dashboard-Update fehlgeschlagen:', e);
     }
@@ -1149,6 +1160,84 @@ function initWidgetResize() {
 }
 
 initWidgetResize();
+
+// ---- Sektorenanalyse Widget ----
+function dashParseSectorMs(val) {
+    if (!val) return null;
+    const s = String(val).trim();
+    if (s.includes(':')) {
+        const [minPart, secPart] = s.split(':');
+        const mins = parseInt(minPart, 10) || 0;
+        const secs = parseFloat(secPart.replace(',', '.'));
+        if (isNaN(secs)) return null;
+        return (mins * 60 + secs) * 1000;
+    }
+    const num = parseFloat(s.replace(',', '.'));
+    return isNaN(num) || num === 0 ? null : num * 1000;
+}
+
+function updateDashSectors() {
+    const container = document.getElementById('dashSectorAnalysis');
+    if (!container) return;
+
+    const drivers = [];
+    Object.entries(dashboardData).forEach(([cid, cd]) => {
+        const laps = getSessionLaps(cd);
+        const s1s = [], s2s = [], s3s = [];
+        laps.forEach(l => {
+            const v1 = dashParseSectorMs(l.sector_1);
+            const v2 = dashParseSectorMs(l.sector_2);
+            const v3 = dashParseSectorMs(l.sector_3);
+            if (v1) s1s.push(v1);
+            if (v2) s2s.push(v2);
+            if (v3) s3s.push(v3);
+        });
+        if (!s1s.length && !s2s.length && !s3s.length) return;
+        const best = arr => arr.length ? Math.min(...arr) : null;
+        const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
+        drivers.push({
+            name: cd.name || 'Fahrer ' + cid, color,
+            bestS1: best(s1s), bestS2: best(s2s), bestS3: best(s3s),
+        });
+    });
+
+    if (!drivers.length) {
+        container.innerHTML = '<span class="text-muted small">Warte auf Sektordaten...</span>';
+        return;
+    }
+
+    const gS1 = Math.min(...drivers.map(d => d.bestS1).filter(Boolean));
+    const gS2 = Math.min(...drivers.map(d => d.bestS2).filter(Boolean));
+    const gS3 = Math.min(...drivers.map(d => d.bestS3).filter(Boolean));
+    const s1D = drivers.find(d => d.bestS1 === gS1);
+    const s2D = drivers.find(d => d.bestS2 === gS2);
+    const s3D = drivers.find(d => d.bestS3 === gS3);
+    const vTotal = (gS1 || 0) + (gS2 || 0) + (gS3 || 0);
+    const fs = ms => ms ? (ms / 1000).toFixed(3) : '--';
+
+    let html = '<table class="sector-table"><thead><tr><th>Fahrer</th><th>S1</th><th>S2</th><th>S3</th><th>Ges.</th></tr></thead><tbody>';
+    if (vTotal > 0) {
+        html += `<tr style="border-left:2px solid #9b59b6;background:rgba(155,89,182,0.08)">
+            <td style="color:#9b59b6;font-weight:700"><i class="fas fa-bolt me-1"></i>Virtuell</td>
+            <td class="font-mono sector-best" style="font-size:0.65rem">${fs(gS1)}<br><span style="font-size:0.5rem;color:${s1D?s1D.color:'#999'}">${s1D?s1D.name:''}</span></td>
+            <td class="font-mono sector-best" style="font-size:0.65rem">${fs(gS2)}<br><span style="font-size:0.5rem;color:${s2D?s2D.color:'#999'}">${s2D?s2D.name:''}</span></td>
+            <td class="font-mono sector-best" style="font-size:0.65rem">${fs(gS3)}<br><span style="font-size:0.5rem;color:${s3D?s3D.color:'#999'}">${s3D?s3D.name:''}</span></td>
+            <td class="font-mono fw-bold" style="color:#9b59b6">${formatTime(vTotal)}</td></tr>`;
+    }
+    drivers.forEach(d => {
+        const b1 = d.bestS1 === gS1 ? ' sector-best' : '';
+        const b2 = d.bestS2 === gS2 ? ' sector-best' : '';
+        const b3 = d.bestS3 === gS3 ? ' sector-best' : '';
+        const t = (d.bestS1||0)+(d.bestS2||0)+(d.bestS3||0);
+        html += `<tr><td style="color:${d.color};font-weight:600">${d.name}</td>
+            <td class="font-mono${b1}">${fs(d.bestS1)}</td>
+            <td class="font-mono${b2}">${fs(d.bestS2)}</td>
+            <td class="font-mono${b3}">${fs(d.bestS3)}</td>
+            <td class="font-mono text-muted">${t>0?formatTime(t):'--'}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
 
 // Fallback: alle 10 Sekunden aktualisieren
 setInterval(() => { updateDashboard(); loadTickerFeed(); }, 10000);

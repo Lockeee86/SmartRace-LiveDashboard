@@ -536,18 +536,36 @@ function updateSectorAnalysis() {
     const globalBestS2 = Math.min(...driverSectors.map(d => d.bestS2).filter(Boolean));
     const globalBestS3 = Math.min(...driverSectors.map(d => d.bestS3).filter(Boolean));
 
+    const s1Driver = driverSectors.find(d => d.bestS1 === globalBestS1);
+    const s2Driver = driverSectors.find(d => d.bestS2 === globalBestS2);
+    const s3Driver = driverSectors.find(d => d.bestS3 === globalBestS3);
+    const virtualTotal = (globalBestS1 || 0) + (globalBestS2 || 0) + (globalBestS3 || 0);
+
     const fmtSec = ms => ms ? (ms / 1000).toFixed(3) : '--';
 
-    let html = '<table class="sector-table"><thead><tr><th>Fahrer</th><th>S1</th><th>S2</th><th>S3</th></tr></thead><tbody>';
+    let html = '<table class="sector-table"><thead><tr><th>Fahrer</th><th>S1</th><th>S2</th><th>S3</th><th>Gesamt</th></tr></thead><tbody>';
+
+    if (virtualTotal > 0) {
+        html += `<tr style="border-left: 2px solid #9b59b6; background: rgba(155,89,182,0.08);">
+            <td style="color:#9b59b6; font-weight:700;"><i class="fas fa-bolt me-1"></i>Virtuell</td>
+            <td class="font-mono sector-best" style="font-size:0.7rem">${fmtSec(globalBestS1)}<br><span style="font-size:0.55rem;color:${s1Driver ? s1Driver.color : '#999'}">${s1Driver ? s1Driver.name : ''}</span></td>
+            <td class="font-mono sector-best" style="font-size:0.7rem">${fmtSec(globalBestS2)}<br><span style="font-size:0.55rem;color:${s2Driver ? s2Driver.color : '#999'}">${s2Driver ? s2Driver.name : ''}</span></td>
+            <td class="font-mono sector-best" style="font-size:0.7rem">${fmtSec(globalBestS3)}<br><span style="font-size:0.55rem;color:${s3Driver ? s3Driver.color : '#999'}">${s3Driver ? s3Driver.name : ''}</span></td>
+            <td class="font-mono fw-bold" style="color:#9b59b6">${formatTime(virtualTotal)}</td>
+        </tr>`;
+    }
+
     driverSectors.forEach(d => {
         const b1 = d.bestS1 === globalBestS1 ? ' sector-best' : '';
         const b2 = d.bestS2 === globalBestS2 ? ' sector-best' : '';
         const b3 = d.bestS3 === globalBestS3 ? ' sector-best' : '';
+        const total = (d.bestS1 || 0) + (d.bestS2 || 0) + (d.bestS3 || 0);
         html += `<tr>
             <td style="color:${d.color}; font-weight:600;">${d.name}</td>
             <td class="font-mono${b1}">${fmtSec(d.bestS1)}</td>
             <td class="font-mono${b2}">${fmtSec(d.bestS2)}</td>
             <td class="font-mono${b3}">${fmtSec(d.bestS3)}</td>
+            <td class="font-mono text-muted">${total > 0 ? formatTime(total) : '--'}</td>
         </tr>`;
     });
     html += '</tbody></table>';
