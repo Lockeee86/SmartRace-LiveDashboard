@@ -574,6 +574,34 @@ body {
     border-bottom-color: #dee2e6 !important;
 }
 
+[data-bs-theme="light"] .btn-outline-light {
+    color: #495057;
+    border-color: #adb5bd;
+}
+
+[data-bs-theme="light"] .btn-outline-light:hover,
+[data-bs-theme="light"] .btn-outline-light:focus {
+    color: #212529;
+    background-color: #e9ecef;
+    border-color: #6c757d;
+}
+
+[data-bs-theme="light"] .btn-outline-light.active {
+    color: #fff;
+    background-color: #495057;
+    border-color: #495057;
+}
+
+[data-bs-theme="light"] .btn-close-white {
+    filter: none;
+}
+
+[data-bs-theme="light"] .modal-content {
+    background-color: #fff;
+    color: #212529;
+    border-color: #dee2e6;
+}
+
 [data-bs-theme="light"] .nav-link:hover {
     background-color: rgba(0, 0, 0, 0.05);
 }

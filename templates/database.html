@@ -67,6 +67,12 @@
             </select>
         </div>
         <div class="col-md-2">
+            <label class="form-label small text-muted mb-1">Strecke</label>
+            <select id="trackFilter" class="form-select form-select-sm">
+                <option value="">Alle Strecken</option>
+            </select>
+        </div>
+        <div class="col-md-2">
             <label class="form-label small text-muted mb-1">Datum von</label>
             <input type="date" id="dateFrom" class="form-control form-control-sm">
         </div>
@@ -154,6 +160,7 @@
                     <tr>
                         <th class="sortable" data-col="session_id">Session <i class="fas fa-sort sort-icon"></i></th>
                         <th class="sortable" data-col="session_type">Typ <i class="fas fa-sort sort-icon"></i></th>
+                        <th class="d-none d-xl-table-cell">Strecke</th>
                         <th class="sortable" data-col="driver_name">Fahrer <i class="fas fa-sort sort-icon"></i></th>
                         <th class="sortable" data-col="car_name">Auto <i class="fas fa-sort sort-icon"></i></th>
                         <th class="sortable text-center" data-col="lap">Runde <i class="fas fa-sort sort-icon"></i></th>
@@ -168,7 +175,7 @@
                     </tr>
                 </thead>
                 <tbody id="dataBody">
-                    <tr><td colspan="13" class="text-center text-muted py-4">Lade Daten...</td></tr>
+                    <tr><td colspan="14" class="text-center text-muted py-4">Lade Daten...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -259,6 +266,30 @@ async function loadFilters() {
     } catch (e) {
         console.error('Filter-Fehler:', e);
     }
+
+    try {
+        const tRes = await fetch('/api/tracks');
+        if (tRes.ok) {
+            const tData = await tRes.json();
+            const trackSel = document.getElementById('trackFilter');
+            const currentTrack = trackSel.value;
+            trackSel.innerHTML = '<option value="">Alle Strecken</option>';
+            (tData.tracks || []).forEach(t => {
+                trackSel.innerHTML += `<option value="${t.name}">${t.name}</option>`;
+            });
+            trackSel.value = currentTrack;
+
+            const dbTrackSel = document.getElementById('dbTrackFilter');
+            if (dbTrackSel) {
+                const cur = dbTrackSel.value;
+                dbTrackSel.innerHTML = '<option value="">Alle Strecken</option>';
+                (tData.tracks || []).forEach(t => {
+                    dbTrackSel.innerHTML += `<option value="${t.name}">${t.name}</option>`;
+                });
+                dbTrackSel.value = cur;
+            }
+        }
+    } catch (e) {}
 }
 
 function buildParams() {
@@ -269,6 +300,8 @@ function buildParams() {
     if (driver) params.append('driver', driver);
     const car = document.getElementById('carFilter').value;
     if (car) params.append('car', car);
+    const track = document.getElementById('trackFilter').value;
+    if (track) params.append('track', track);
     const dateFrom = document.getElementById('dateFrom').value;
     if (dateFrom) params.append('date_from', dateFrom);
     const dateTo = document.getElementById('dateTo').value;
@@ -323,7 +356,7 @@ function renderTable(data) {
     const tbody = document.getElementById('dataBody');
 
     if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="13" class="text-center text-muted py-4"><i class="fas fa-search me-2"></i>Keine Daten gefunden</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-4"><i class="fas fa-search me-2"></i>Keine Daten gefunden</td></tr>';
         return;
     }
 
@@ -365,6 +398,7 @@ function renderTable(data) {
         return `<tr class="${rowClass}">
             <td><span class="badge ${typeBadge} small">${lap.session_id || '--'}</span></td>
             <td class="small">${lap.session_type || '--'}</td>
+            <td class="small text-muted d-none d-xl-table-cell">${lap.track_name || '--'}</td>
             <td>${lap.driver_name || '--'}</td>
             <td class="small text-muted">${lap.car_name || '--'}</td>
             <td class="text-center">${lap.lap || '--'}</td>
@@ -515,6 +549,7 @@ function clearFilters() {
     document.getElementById('sessionSelect').value = 'all';
     document.getElementById('driverFilter').value = '';
     document.getElementById('carFilter').value = '';
+    document.getElementById('trackFilter').value = '';
     document.getElementById('dateFrom').value = '';
     document.getElementById('dateTo').value = '';
     currentSessionFilter = 'all';
@@ -656,19 +691,6 @@ document.addEventListener('keydown', e => {
 });
 
 // ---- Rekord-Verwaltung ----
-async function loadDbTrackFilter() {
-    try {
-        const res = await fetch('/api/tracks');
-        if (!res.ok) return;
-        const data = await res.json();
-        const select = document.getElementById('dbTrackFilter');
-        const current = select.value;
-        select.innerHTML = '<option value="">Alle Strecken</option>' +
-            (data.tracks || []).map(t => `<option value="${t.name}">${t.name}</option>`).join('');
-        if (current) select.value = current;
-    } catch (e) {}
-}
-
 async function loadTrackRecords() {
     const container = document.getElementById('trackRecordsList');
     const trackFilter = document.getElementById('dbTrackFilter').value;
@@ -771,6 +793,5 @@ async function deletePersonalRecord(id) {
     }
 }
 
-loadDbTrackFilter();
 </script>
 {% endblock %}
