@@ -813,18 +813,15 @@
                 const footer = document.getElementById('versionFooter');
 
                 const ver = v.version || '?';
-                const shortHash = v.git_short || '';
-                const buildDate = v.build_date && v.build_date !== 'unknown'
-                    ? v.build_date.substring(0, 10) : '';
+                const buildDate = v.build_date || '';
 
-                icon.className = 'fas fa-code-branch text-success';
+                icon.className = 'fas fa-check-circle text-success';
                 icon.style.width = '16px';
-                const hashPart = shortHash ? ` <span class="text-muted">(${shortHash})</span>` : '';
-                label.innerHTML = `v${ver}${hashPart}`;
+                const datePart = buildDate ? ` <span class="text-muted">(${buildDate})</span>` : '';
+                label.innerHTML = `v${ver}${datePart}`;
 
                 if (footer) {
-                    const datePart = buildDate ? ` &middot; ${buildDate}` : '';
-                    footer.innerHTML = `v${ver}${hashPart}${datePart}`;
+                    footer.innerHTML = `v${ver}${datePart}`;
                     footer.classList.remove('d-none');
                 }
             })

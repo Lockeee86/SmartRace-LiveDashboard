@@ -2,12 +2,7 @@ version: "3.8"
 
 services:
   web:
-    build:
-      context: .
-      args:
-        GIT_HASH: "${GIT_HASH:-unknown}"
-        GIT_BRANCH: "${GIT_BRANCH:-unknown}"
-        BUILD_DATE: "${BUILD_DATE:-unknown}"
+    build: .
     container_name: smartrace-dashboard
     ports:
       - "5000:5000"

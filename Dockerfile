@@ -1,9 +1,5 @@
 FROM python:3.12-slim
 
-ARG GIT_HASH=unknown
-ARG GIT_BRANCH=unknown
-ARG BUILD_DATE=unknown
-
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -14,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN echo "{\"git_hash\": \"${GIT_HASH}\", \"git_branch\": \"${GIT_BRANCH}\", \"build_date\": \"${BUILD_DATE}\"}" > /app/build-info.json
+RUN date -Iseconds > /app/build-date.txt
 
 EXPOSE 5000
 

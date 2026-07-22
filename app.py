@@ -2154,32 +2154,24 @@ def api_health():
 
 @app.route('/api/version')
 def api_version():
-    """Versionsinformationen aus VERSION-Datei und Build-Info."""
+    """Versionsinformationen aus VERSION-Datei und Build-Datum."""
     app_dir = os.path.dirname(os.path.abspath(__file__))
-    version = 'unknown'
+    version = '?'
     try:
         with open(os.path.join(app_dir, 'VERSION')) as f:
             version = f.read().strip()
     except FileNotFoundError:
         pass
 
-    build_info = {}
+    build_date = ''
     try:
-        with open(os.path.join(app_dir, 'build-info.json')) as f:
-            build_info = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+        with open(os.path.join(app_dir, 'build-date.txt')) as f:
+            build_date = f.read().strip()[:10]
+    except FileNotFoundError:
         pass
-
-    git_hash = build_info.get('git_hash', 'unknown')
-    git_branch = build_info.get('git_branch', 'unknown')
-    build_date = build_info.get('build_date', 'unknown')
-    short_hash = git_hash[:7] if git_hash and git_hash != 'unknown' else ''
 
     return jsonify({
         'version': version,
-        'git_hash': git_hash,
-        'git_short': short_hash,
-        'git_branch': git_branch,
         'build_date': build_date,
     })
 
