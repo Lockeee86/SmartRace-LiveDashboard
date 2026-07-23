@@ -72,6 +72,7 @@ class Lap(db.Model):
     car_color = db.Column(db.String(20))
     controller_color = db.Column(db.String(20))
     is_personal_best = db.Column(db.Boolean, default=False)
+    track_name = db.Column(db.String(200), index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
@@ -183,6 +184,7 @@ def init_db():
     _add_column_if_missing('sr_results', 'pitstops', 'INTEGER DEFAULT 0')
     _add_column_if_missing('sr_penalties', 'penalty_seconds', 'INTEGER DEFAULT 0')
     _add_column_if_missing('sr_tracks', 'svg_layout', 'TEXT')
+    _add_column_if_missing('sr_laps', 'track_name', 'VARCHAR(200)')
     _add_column_if_missing('sr_track_records', 'track_name', 'VARCHAR(200)')
     _add_column_if_missing('sr_personal_records', 'track_name', 'VARCHAR(200)')
 
@@ -700,6 +702,7 @@ def _save_lap(sid, ed):
         car_color=rgb_to_hex(cd.get('color')),
         controller_color=rgb_to_hex(ctrl.get('color_bg')),
         is_personal_best=bool(ed.get('lap_pb', False)),
+        track_name=_get_active_track_name(),
     ))
 
     # Streckenrekord pruefen (Minimum 1000ms = 1s als Plausibilitaetsfilter)
@@ -1073,6 +1076,10 @@ def api_laps():
         if car:
             q = q.filter(Lap.car_name.ilike(f'%{car}%'))
 
+        track = request.args.get('track')
+        if track:
+            q = q.filter(Lap.track_name == track)
+
         df = request.args.get('date_from')
         if df:
             try:
@@ -1129,6 +1136,7 @@ def api_laps():
                 'car_color': l.car_color,
                 'controller_color': l.controller_color,
                 'is_pb': l.is_personal_best,
+                'track_name': l.track_name,
                 'timestamp': l.created_at.isoformat() if l.created_at else None,
             } for l in laps],
             'total': total,
@@ -1541,17 +1549,7 @@ def api_virtual_best():
             Lap.sector_3.isnot(None), Lap.sector_3 != '',
         )
         if track:
-            track_sessions = db.session.query(Event.session_id).filter(
-                Event.event_type == 'util.set_active_track',
-                db.or_(
-                    Event.raw_json.contains(f'"name": "{track}"'),
-                    Event.raw_json.contains(f'"name":"{track}"'),
-                ),
-            ).distinct().all()
-            sids = [s[0] for s in track_sessions]
-            if not sids:
-                return jsonify(None)
-            q = q.filter(Lap.session_id.in_(sids))
+            q = q.filter(Lap.track_name == track)
         laps = q.all()
 
         if not laps:
@@ -1780,6 +1778,7 @@ def api_backup():
                         'sector_3': l.sector_3, 'car_color': l.car_color,
                         'controller_color': l.controller_color,
                         'is_personal_best': l.is_personal_best,
+                        'track_name': l.track_name,
                         'created_at': l.created_at.isoformat() if l.created_at else None,
                     }, ensure_ascii=False)
                     yield ('  ' if first else ',\n  ') + row
@@ -1884,6 +1883,7 @@ def api_restore():
                     sector_3=l.get('sector_3'), car_color=l.get('car_color'),
                     controller_color=l.get('controller_color'),
                     is_personal_best=l.get('is_personal_best', False),
+                    track_name=l.get('track_name'),
                     created_at=datetime.fromisoformat(l['created_at']) if l.get('created_at') else None,
                 ))
             counts['laps'] = len(data['laps'])
