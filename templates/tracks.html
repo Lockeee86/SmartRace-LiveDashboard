@@ -153,9 +153,10 @@
                                     <th>Fahrer</th>
                                     <th>Auto</th>
                                     <th class="text-center">Zeit</th>
-                                    <th class="text-center">S1</th>
-                                    <th class="text-center">S2</th>
-                                    <th class="text-center">S3</th>
+                                    <!-- Sektorfarben passend zur Streckenkarte (SECTOR_COLORS) -->
+                                    <th class="text-center" style="color:#ef5350">S1</th>
+                                    <th class="text-center" style="color:#ffca28">S2</th>
+                                    <th class="text-center" style="color:#42a5f5">S3</th>
                                     <th class="text-center d-none d-md-table-cell">Datum</th>
                                 </tr>
                             </thead>
@@ -197,6 +198,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/track-positions.js') }}"></script>
 <script>
 let tracksData = [];
 let selectedTrackName = null;
@@ -317,6 +319,11 @@ function renderTracks(tracks) {
             </div>
         </div>`;
     }).join('');
+
+    // Sektoren in allen Streckenkarten einfaerben
+    if (typeof colorTrackSectors === 'function') {
+        container.querySelectorAll('.track-svg-container svg').forEach(svg => colorTrackSectors(svg));
+    }
 }
 
 function renderRecords(records, vb) {

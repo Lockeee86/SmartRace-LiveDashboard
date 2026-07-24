@@ -194,6 +194,7 @@
                 <div id="dashTrackLayout" class="text-center track-layout-widget">
                     <span class="text-muted small">Kein Layout</span>
                 </div>
+                <div id="dashTrackRecordBar"></div>
             </div>
         </div>
     </div>
@@ -263,6 +264,7 @@ async function loadTrackRecord() {
 
 // Aktives Streckenlayout laden
 let dashTrackMap = null;
+let dashActiveTrackName = null;
 
 async function loadActiveTrackLayout() {
     try {
@@ -272,6 +274,7 @@ async function loadActiveTrackLayout() {
         const container = document.getElementById('dashTrackLayout');
         const nameEl = document.getElementById('dashTrackLayoutName');
         if (data.name) nameEl.textContent = data.name;
+        dashActiveTrackName = data.name || null;
         if (data.svg_layout) {
             // Bestehende Map zerstoeren
             if (dashTrackMap) { dashTrackMap.destroy(); dashTrackMap = null; }
@@ -281,11 +284,17 @@ async function loadActiveTrackLayout() {
                 svg.style.width = '100%';
                 svg.style.height = 'auto';
             }
+            // Sektoren einfaerben (falls init() keine Sektorpfade findet)
+            colorTrackSectors(container);
             // Position-Map initialisieren
             dashTrackMap = new TrackPositionMap('dashTrackLayout', () => dashboardData);
             dashTrackMap.init();
+            // Streckenrekord mit Sektoren unter der Karte anzeigen
+            renderTrackRecordBar('dashTrackRecordBar', data.name);
         } else {
             container.innerHTML = '<span class="text-muted small">Kein Layout</span>';
+            const bar = document.getElementById('dashTrackRecordBar');
+            if (bar) bar.innerHTML = '';
         }
     } catch (e) {}
 }
@@ -973,6 +982,7 @@ socket.on('track_record', (data) => {
         trackRecord = { time: data.laptime_ms, driver: data.driver_name };
         document.getElementById('recordTime').textContent = data.laptime_formatted;
         document.getElementById('recordDriver').textContent = `${data.driver_name} (${data.car_name || '--'})`;
+        renderTrackRecordBar('dashTrackRecordBar', dashActiveTrackName);
     }
 });
 

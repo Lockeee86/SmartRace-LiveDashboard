@@ -138,6 +138,7 @@
                 <div id="lbTrackLayout" class="text-center track-layout-widget">
                     <span class="text-muted small">Kein Layout</span>
                 </div>
+                <div id="lbTrackRecordBar"></div>
             </div>
         </div>
     </div>
@@ -837,6 +838,7 @@ window.addEventListener('resize', () => rebuildTicker());
 
 // Aktives Streckenlayout laden
 let lbTrackMap = null;
+let lbActiveTrackName = null;
 
 async function loadLbTrackLayout() {
     try {
@@ -846,6 +848,7 @@ async function loadLbTrackLayout() {
         const container = document.getElementById('lbTrackLayout');
         const nameEl = document.getElementById('lbTrackLayoutName');
         if (data.name) nameEl.textContent = data.name;
+        lbActiveTrackName = data.name || null;
         if (data.svg_layout) {
             if (lbTrackMap) { lbTrackMap.destroy(); lbTrackMap = null; }
             container.innerHTML = data.svg_layout;
@@ -854,10 +857,16 @@ async function loadLbTrackLayout() {
                 svg.style.width = '100%';
                 svg.style.height = 'auto';
             }
+            // Sektoren einfaerben (falls init() keine Sektorpfade findet)
+            colorTrackSectors(container);
             lbTrackMap = new TrackPositionMap('lbTrackLayout', () => lbData);
             lbTrackMap.init();
+            // Streckenrekord mit Sektoren unter der Karte anzeigen
+            renderTrackRecordBar('lbTrackRecordBar', data.name);
         } else {
             container.innerHTML = '<span class="text-muted small">Kein Layout</span>';
+            const bar = document.getElementById('lbTrackRecordBar');
+            if (bar) bar.innerHTML = '';
         }
     } catch (e) {}
 }
@@ -952,6 +961,7 @@ socket.on('track_record', (data) => {
             laptime_ms: data.laptime_ms,
             laptime_formatted: data.laptime_formatted,
         });
+        renderTrackRecordBar('lbTrackRecordBar', lbActiveTrackName);
     }
 });
 
