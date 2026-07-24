@@ -28,6 +28,7 @@ def init_db():
     _add_column_if_missing('sr_results', 'pitstops', 'INTEGER DEFAULT 0')
     _add_column_if_missing('sr_penalties', 'penalty_seconds', 'INTEGER DEFAULT 0')
     _add_column_if_missing('sr_tracks', 'svg_layout', 'TEXT')
+    _add_column_if_missing('sr_tracks', 'is_active', 'BOOLEAN DEFAULT FALSE')
     _add_column_if_missing('sr_laps', 'track_name', 'VARCHAR(200)')
     _add_column_if_missing('sr_track_records', 'track_name', 'VARCHAR(200)')
     _add_column_if_missing('sr_personal_records', 'track_name', 'VARCHAR(200)')

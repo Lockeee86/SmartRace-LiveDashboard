@@ -7,27 +7,45 @@ from .extensions import db, log
 from .models import Event, Lap, RaceStatus, SessionName, Track
 
 # =============================================================================
-# Aktive Strecke (wird von util.set_active_track gesetzt)
+# Aktive Strecke
+#
+# Quelle der Wahrheit ist das DB-Feld Track.is_active. Zusaetzlich gibt es
+# einen prozess-lokalen Override fuer sofortige Zuordnung neuer Runden:
+#   _UNSET  -> kein Override, DB entscheidet (is_active -> zuletzt benutzt)
+#   None    -> erzwungen KEINE aktive Strecke (nach "Deaktivieren")
+#   "Name"  -> erzwungen diese Strecke (SmartRace / "Aktivieren")
 # =============================================================================
 
-_active_track_name = None
+_UNSET = object()
+_active_track_name = _UNSET
 
 
 def set_active_track_name(name):
-    """Aktive Strecke setzen (aus util.set_active_track)."""
+    """Aktive Strecke (Override) setzen. name=None erzwingt 'keine aktive'."""
     global _active_track_name
     _active_track_name = name
 
 
-def _get_active_track_name():
-    """Aktive Strecke ermitteln — Modul-Variable oder zuletzt benutzte aus DB."""
+def reset_active_track_override():
+    """Override aufheben — DB (is_active / zuletzt benutzt) entscheidet wieder."""
     global _active_track_name
-    if _active_track_name:
-        return _active_track_name
+    _active_track_name = _UNSET
+
+
+def _get_active_track_name():
+    """Aktive Strecke ermitteln.
+
+    Reihenfolge: prozess-lokaler Override -> DB is_active -> zuletzt benutzt.
+    """
+    if _active_track_name is not _UNSET:
+        return _active_track_name  # str (Name) oder None (erzwungen inaktiv)
     try:
+        active = Track.query.filter_by(is_active=True).order_by(
+            Track.last_used.desc()).first()
+        if active:
+            return active.name
         track = Track.query.order_by(Track.last_used.desc()).first()
         if track:
-            _active_track_name = track.name
             return track.name
     except Exception:
         pass
