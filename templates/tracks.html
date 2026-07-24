@@ -121,7 +121,16 @@
                 <div class="mb-3">
                     <label class="form-label">SVG-Layout (optional)</label>
                     <textarea class="form-control" id="newTrackSvg" rows="4" placeholder="SVG-Code hier einfuegen...&#10;&lt;svg viewBox=&quot;...&quot;&gt;...&lt;/svg&gt;"></textarea>
-                    <div class="form-text">Den kompletten &lt;svg&gt;...&lt;/svg&gt; Code einfuegen</div>
+                    <div class="form-text">Den kompletten &lt;svg&gt;...&lt;/svg&gt; Code einfuegen — mit den Pfad-IDs <code>sector_1</code>, <code>sector_2</code>, <code>sector_3</code> werden die Sektoren farbig dargestellt.</div>
+                    <div class="alert alert-info d-flex align-items-start gap-2 mt-2 mb-0 py-2 px-3 small">
+                        <i class="fas fa-lightbulb mt-1"></i>
+                        <div>
+                            SVG noch nicht erstellt? Mit dem <strong>SmartRace Sektor-Widget</strong> kannst du deine Strecke ganz einfach online zeichnen und den SVG-Code exportieren:<br>
+                            <a href="https://sites.google.com/view/smartrace-sektor-widget/startseite" target="_blank" rel="noopener">
+                                <i class="fas fa-up-right-from-square me-1"></i>sites.google.com/view/smartrace-sektor-widget
+                            </a>
+                        </div>
+                    </div>
                 </div>
                 <div id="newTrackSvgPreview" class="track-svg-container d-none mb-3" style="min-height: 80px;"></div>
             </div>
@@ -292,6 +301,10 @@ function renderTracks(tracks) {
                 ondrop="handleSvgDrop(event, ${t.id})">
                 <i class="fas fa-draw-polygon text-muted mb-1"></i>
                 <div class="small text-muted">SVG-Layout hier ablegen oder klicken</div>
+                <a href="https://sites.google.com/view/smartrace-sektor-widget/startseite" target="_blank" rel="noopener"
+                   class="small d-block mt-1" onclick="event.stopPropagation()" title="Strecke online zeichnen">
+                    <i class="fas fa-wand-magic-sparkles me-1"></i>Strecke zeichnen (Sektor-Widget)
+                </a>
             </div>`;
         }
 
@@ -391,7 +404,7 @@ socket.on('track_record', () => loadTracks());
 // ---- SVG Layout Upload ----
 
 function promptSvgUpload(trackId) {
-    const svg = prompt('SVG-Code hier einfuegen:\n(Den gesamten <svg>...</svg> Code kopieren und einfuegen)');
+    const svg = prompt('SVG-Code hier einfuegen:\n(Den gesamten <svg>...</svg> Code kopieren und einfuegen)\n\nStrecke online zeichnen: https://sites.google.com/view/smartrace-sektor-widget/startseite');
     if (svg && svg.trim()) {
         saveSvgLayout(trackId, svg.trim());
     }
@@ -404,7 +417,7 @@ function editTrackSvg(trackId) {
 
     const action = confirm('Streckenlayout aendern?\n\nOK = Neues SVG einfuegen\nAbbrechen = Layout loeschen');
     if (action) {
-        const svg = prompt('Neuen SVG-Code einfuegen:', currentSvg);
+        const svg = prompt('Neuen SVG-Code einfuegen:\n(Strecke online zeichnen: https://sites.google.com/view/smartrace-sektor-widget/startseite)', currentSvg);
         if (svg !== null) {
             saveSvgLayout(trackId, svg.trim());
         }
