@@ -99,8 +99,20 @@
                 </li>
                 <li>
                     <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="sectors" checked>
+                        <i class="fas fa-chart-bar text-success"></i> Sektoren
+                    </label>
+                </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
                         <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="tracklayout" checked>
                         <i class="fas fa-draw-polygon text-info"></i> Streckenlayout
+                    </label>
+                </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="heatmap" checked>
+                        <i class="fas fa-th text-danger"></i> Rundenzeit-Heatmap
                     </label>
                 </li>
             </ul>
@@ -181,6 +193,16 @@
                 <div class="stat-label mb-1"><i class="fas fa-draw-polygon me-1"></i> Strecke <span class="fw-normal text-muted ms-1" id="dashTrackLayoutName">--</span></div>
                 <div id="dashTrackLayout" class="text-center track-layout-widget">
                     <span class="text-muted small">Kein Layout</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 widget-col" data-widget="heatmap" draggable="true">
+        <div class="card stat-card stat-card-heatmap h-100">
+            <div class="card-body py-2 px-3">
+                <div class="stat-label mb-1"><i class="fas fa-th me-1"></i> Rundenzeit-Heatmap</div>
+                <div id="dashHeatmap" class="heatmap-container">
+                    <span class="text-muted small">Warte auf Rundendaten...</span>
                 </div>
             </div>
         </div>
@@ -491,6 +513,7 @@ async function updateDashboard() {
         renderControllers();
         updateControllerNames();
         updateDashSectors();
+        updateDashHeatmap();
     } catch (e) {
         console.error('Dashboard-Update fehlgeschlagen:', e);
     }
@@ -915,6 +938,7 @@ socket.on('new_data', (data) => {
         renderStats();
         renderControllers();
         updateControllerNames();
+        updateDashHeatmap();
         addTickerEvent({
             type: 'lap',
             driver_name: lap.driver_name,
@@ -1240,6 +1264,89 @@ function updateDashSectors() {
     });
     html += '</tbody></table>';
     container.innerHTML = html;
+}
+
+// ---- Rundenzeit-Heatmap ----
+function updateDashHeatmap() {
+    const container = document.getElementById('dashHeatmap');
+    if (!container) return;
+
+    const driverEntries = [];
+    Object.entries(dashboardData).forEach(([cid, cd]) => {
+        if (!visibleControllers.has(cid)) return;
+        const laps = getSessionLaps(cd);
+        if (laps.length === 0) return;
+        const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
+        const sorted = [...laps].filter(l => l.lap > 0 && l.laptime_raw > 0)
+            .sort((a, b) => (a.lap || 0) - (b.lap || 0));
+        if (sorted.length === 0) return;
+        driverEntries.push({ cid, name: cd.name || 'C' + cid, color, laps: sorted });
+    });
+
+    if (driverEntries.length === 0) {
+        container.innerHTML = '<span class="text-muted small">Warte auf Rundendaten...</span>';
+        return;
+    }
+
+    const allTimes = driverEntries.flatMap(d => d.laps.map(l => l.laptime_raw));
+    const minTime = Math.min(...allTimes);
+    const maxTime = Math.max(...allTimes);
+    const median = [...allTimes].sort((a, b) => a - b)[Math.floor(allTimes.length / 2)];
+    const cap = median * 1.5;
+
+    function heatColor(ms) {
+        const clamped = Math.min(ms, cap);
+        const ratio = Math.min((clamped - minTime) / (cap - minTime || 1), 1);
+        if (ratio <= 0.5) {
+            const t = ratio * 2;
+            const r = Math.round(40 + t * 215);
+            const g = Math.round(200 - t * 100);
+            const b = Math.round(80 - t * 50);
+            return `rgb(${r},${g},${b})`;
+        } else {
+            const t = (ratio - 0.5) * 2;
+            const r = Math.round(255 - t * 50);
+            const g = Math.round(100 - t * 70);
+            const b = Math.round(30);
+            return `rgb(${r},${g},${b})`;
+        }
+    }
+
+    const maxLapNum = Math.max(...driverEntries.flatMap(d => d.laps.map(l => l.lap)));
+    const lapCols = [];
+    for (let i = 1; i <= maxLapNum; i++) lapCols.push(i);
+
+    let html = '<div class="heatmap-scroll"><table class="heatmap-table"><thead><tr>';
+    html += '<th class="heatmap-driver-col"></th>';
+    lapCols.forEach(n => { html += `<th class="heatmap-lap-header">${n}</th>`; });
+    html += '</tr></thead><tbody>';
+
+    driverEntries.forEach(d => {
+        html += `<tr><td class="heatmap-driver-label" style="color:${d.color}"><span class="heatmap-driver-dot" style="background:${d.color}"></span>${d.name}</td>`;
+        const lapMap = {};
+        d.laps.forEach(l => { lapMap[l.lap] = l; });
+        lapCols.forEach(n => {
+            const lap = lapMap[n];
+            if (lap) {
+                const bg = heatColor(lap.laptime_raw);
+                html += `<td class="heatmap-cell" style="background:${bg}" title="R${n}: ${formatTime(lap.laptime_raw)}"></td>`;
+            } else {
+                html += '<td class="heatmap-cell heatmap-empty"></td>';
+            }
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+
+    const legendHtml = `<div class="heatmap-legend">
+        <span class="small text-muted me-2">Schnell</span>
+        <div class="heatmap-legend-bar"></div>
+        <span class="small text-muted ms-2">Langsam</span>
+        <span class="small text-muted ms-3 font-mono">${formatTime(minTime)} - ${formatTime(Math.min(maxTime, cap))}</span>
+    </div>`;
+
+    container.innerHTML = legendHtml + html;
 }
 
 // Fallback: alle 10 Sekunden aktualisieren
