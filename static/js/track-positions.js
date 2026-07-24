@@ -41,6 +41,9 @@ class TrackPositionMap {
 
         if (this.sectorPaths.length === 0) return false;
 
+        // Sektoren einfaerben (S1/S2/S3 in unterschiedlichen Farben)
+        colorTrackSectors(this.svg);
+
         // Overlay-Gruppe fuer Punkte erstellen
         this.dotsGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         this.dotsGroup.setAttribute('id', 'driver-dots');
@@ -190,4 +193,66 @@ class TrackPositionMap {
             driverIdx++;
         });
     }
+}
+
+// =============================================================================
+// Sektorfarben — gemeinsam fuer Streckenkarte + Rekord-Anzeige
+// S1 = rot, S2 = gelb, S3 = blau
+// =============================================================================
+const SECTOR_COLORS = ['#ef5350', '#ffca28', '#42a5f5'];
+const SECTOR_LABELS = ['S1', 'S2', 'S3'];
+
+/**
+ * Faerbt die Sektor-Pfade (id="sector_1/2/3") eines Track-SVG ein.
+ * @param {Element} root - SVG-Element oder Container mit SVG
+ */
+function colorTrackSectors(root) {
+    if (!root) return;
+    const svg = (root.tagName && root.tagName.toLowerCase() === 'svg')
+        ? root : root.querySelector('svg');
+    if (!svg) return;
+    for (let i = 1; i <= 3; i++) {
+        const path = svg.getElementById
+            ? svg.getElementById('sector_' + i)
+            : svg.querySelector('#sector_' + i);
+        if (path) {
+            path.style.stroke = SECTOR_COLORS[i - 1];
+            path.style.transition = 'stroke 0.3s';
+        }
+    }
+}
+
+/**
+ * Rendert den aktuellen Streckenrekord inkl. Sektorzeiten (farbcodiert)
+ * unter der Streckenkarte.
+ * @param {string} containerId - Ziel-Element fuer die Rekord-Leiste
+ * @param {string} trackName   - Streckenname (optional, sonst aktive Strecke)
+ */
+function renderTrackRecordBar(containerId, trackName) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    const url = trackName
+        ? '/api/track-records?track=' + encodeURIComponent(trackName)
+        : '/api/track-records';
+    fetch(url)
+        .then(r => r.ok ? r.json() : [])
+        .then(recs => {
+            if (!recs || !recs.length) { el.innerHTML = ''; return; }
+            const r = recs[0];
+            const chip = (val, i) =>
+                `<span class="trk-sector-chip" style="--sc:${SECTOR_COLORS[i]}">` +
+                `<b>${SECTOR_LABELS[i]}</b> ${val || '--'}</span>`;
+            el.innerHTML =
+                `<div class="trk-record-bar">
+                    <div class="trk-record-head">
+                        <i class="fas fa-trophy"></i>
+                        <span class="font-mono fw-bold">${r.laptime_formatted || '--'}</span>
+                        <span class="text-muted">${r.driver_name || ''}</span>
+                    </div>
+                    <div class="trk-sectors">
+                        ${chip(r.sector_1, 0)}${chip(r.sector_2, 1)}${chip(r.sector_3, 2)}
+                    </div>
+                </div>`;
+        })
+        .catch(() => { el.innerHTML = ''; });
 }
