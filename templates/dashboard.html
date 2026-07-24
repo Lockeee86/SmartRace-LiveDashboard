@@ -1313,8 +1313,14 @@ function updateDashHeatmap() {
     }
 
     const maxLapNum = Math.max(...driverEntries.flatMap(d => d.laps.map(l => l.lap)));
+    // Nur so viele (aktuellste) Runden zeigen, wie in die Breite passen
+    const CELL_W = 20;   // 18px Zelle + 2px Abstand
+    const LABEL_W = 130; // Fahrer-Spalte
+    const availWidth = (container.clientWidth || 600) - LABEL_W;
+    const fitCols = Math.max(5, Math.floor(availWidth / CELL_W));
+    const startLap = Math.max(1, maxLapNum - fitCols + 1);
     const lapCols = [];
-    for (let i = 1; i <= maxLapNum; i++) lapCols.push(i);
+    for (let i = startLap; i <= maxLapNum; i++) lapCols.push(i);
 
     let html = '<div class="heatmap-scroll"><table class="heatmap-table"><thead><tr>';
     html += '<th class="heatmap-driver-col"></th>';
@@ -1339,15 +1345,26 @@ function updateDashHeatmap() {
 
     html += '</tbody></table></div>';
 
+    const rangeNote = startLap > 1
+        ? `<span class="small text-muted ms-3">Runden ${startLap}–${maxLapNum} (${maxLapNum} gesamt)</span>`
+        : '';
     const legendHtml = `<div class="heatmap-legend">
         <span class="small text-muted me-2">Schnell</span>
         <div class="heatmap-legend-bar"></div>
         <span class="small text-muted ms-2">Langsam</span>
         <span class="small text-muted ms-3 font-mono">${formatTime(minTime)} - ${formatTime(Math.min(maxTime, cap))}</span>
+        ${rangeNote}
     </div>`;
 
     container.innerHTML = legendHtml + html;
 }
+
+// Heatmap bei Fenstergroesse-Aenderung neu berechnen (Anzahl Runden anpassen)
+let dashHeatmapResizeTimer = null;
+window.addEventListener('resize', () => {
+    clearTimeout(dashHeatmapResizeTimer);
+    dashHeatmapResizeTimer = setTimeout(updateDashHeatmap, 200);
+});
 
 // Fallback: alle 10 Sekunden aktualisieren
 setInterval(() => { updateDashboard(); loadTickerFeed(); }, 10000);
