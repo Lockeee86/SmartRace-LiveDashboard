@@ -1257,6 +1257,17 @@ def api_active_track_layout():
         return jsonify({'name': None, 'svg_layout': None})
 
 
+@api_bp.route('/api/active-track')
+def api_active_track():
+    """Nur der Name der aktuell aktiven Strecke (leicht, fuer Navbar)."""
+    try:
+        track = _resolve_active_track()
+        return jsonify({'name': track.name if track else None})
+    except Exception as e:
+        log.error(f"active-track: {e}")
+        return jsonify({'name': None})
+
+
 @api_bp.route('/api/tracks/<int:track_id>/activate', methods=['POST'])
 def api_activate_track(track_id):
     """Strecke manuell als aktiv markieren (nur eine ist aktiv)."""
