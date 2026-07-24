@@ -473,9 +473,13 @@ def _save_active_track(sid, ed):
     log.info(f"Aktive Strecke: {name} (Laenge: {length})")
 
     try:
+        # Andere Strecken deaktivieren (nur eine ist aktiv)
+        Track.query.filter(Track.name != name).update(
+            {'is_active': False}, synchronize_session=False)
         track = Track.query.filter_by(name=name).first()
         if track:
             track.last_used = datetime.utcnow()
+            track.is_active = True
             if length:
                 track.length = float(length)
             if pitstop_delta:
@@ -485,6 +489,7 @@ def _save_active_track(sid, ed):
                 name=name,
                 length=float(length) if length else None,
                 pitstop_delta=float(pitstop_delta) if pitstop_delta else None,
+                is_active=True,
             )
             db.session.add(track)
         db.session.commit()

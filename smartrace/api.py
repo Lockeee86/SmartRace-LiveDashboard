@@ -17,8 +17,21 @@ from .models import (
 )
 from .utils import (
     _calc_stddev, _get_active_track_name, _parse_sector_ms,
-    _session_display_name, fmt_ms,
+    _session_display_name, fmt_ms, reset_active_track_override,
+    set_active_track_name,
 )
+
+
+def _resolve_active_track():
+    """Aktuell aktive Strecke als Track-Objekt (oder None).
+
+    Nutzt dieselbe Logik wie die Runden-Zuordnung (Override -> is_active ->
+    zuletzt benutzt), damit UI und Zuordnung immer konsistent sind.
+    """
+    name = _get_active_track_name()
+    if not name:
+        return None
+    return Track.query.filter_by(name=name).first()
 
 api_bp = Blueprint('api', __name__)
 
@@ -1081,6 +1094,8 @@ def api_tracks():
     """Alle Strecken mit per-Track Rekorden und Statistiken."""
     try:
         tracks = Track.query.order_by(Track.last_used.desc()).all()
+        active_track = _resolve_active_track()
+        active_name = active_track.name if active_track else None
         result = []
         for t in tracks:
             track_records = TrackRecord.query.filter_by(
@@ -1121,6 +1136,7 @@ def api_tracks():
                 'length': t.length,
                 'pitstop_delta': t.pitstop_delta,
                 'svg_layout': t.svg_layout,
+                'is_active': (t.name == active_name),
                 'last_used': t.last_used.isoformat() if t.last_used else None,
                 'created_at': t.created_at.isoformat() if t.created_at else None,
                 'records': recs_data,
@@ -1227,7 +1243,7 @@ def api_track_layout(track_id):
 def api_active_track_layout():
     """SVG-Layout der aktuell aktiven Strecke zurueckgeben."""
     try:
-        track = Track.query.order_by(Track.last_used.desc()).first()
+        track = _resolve_active_track()
         if track and track.svg_layout:
             return jsonify({
                 'name': track.name,
@@ -1239,6 +1255,72 @@ def api_active_track_layout():
         log.error(f"active track layout: {e}")
         db.session.rollback()
         return jsonify({'name': None, 'svg_layout': None})
+
+
+@api_bp.route('/api/tracks/<int:track_id>/activate', methods=['POST'])
+def api_activate_track(track_id):
+    """Strecke manuell als aktiv markieren (nur eine ist aktiv)."""
+    try:
+        track = Track.query.get(track_id)
+        if not track:
+            return jsonify({'error': 'Strecke nicht gefunden'}), 404
+        Track.query.update({'is_active': False}, synchronize_session=False)
+        track.is_active = True
+        track.last_used = datetime.utcnow()
+        db.session.commit()
+        set_active_track_name(track.name)
+        socketio.emit('active_track', {
+            'name': track.name,
+            'length': track.length or '',
+            'pitstop_delta': track.pitstop_delta or '',
+        })
+        return jsonify({'ok': True, 'track_id': track_id, 'active': True})
+    except Exception as e:
+        db.session.rollback()
+        log.error(f"activate track: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/tracks/<int:track_id>/deactivate', methods=['POST'])
+def api_deactivate_track(track_id):
+    """Strecke deaktivieren — danach ist keine Strecke aktiv."""
+    try:
+        track = Track.query.get(track_id)
+        if not track:
+            return jsonify({'error': 'Strecke nicht gefunden'}), 404
+        Track.query.update({'is_active': False}, synchronize_session=False)
+        db.session.commit()
+        set_active_track_name(None)  # erzwungen: keine aktive Strecke
+        socketio.emit('active_track', {'name': '', 'deactivated': True})
+        return jsonify({'ok': True, 'track_id': track_id, 'active': False})
+    except Exception as e:
+        db.session.rollback()
+        log.error(f"deactivate track: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/tracks/<int:track_id>', methods=['DELETE'])
+def api_delete_track(track_id):
+    """Strecke loeschen. Rundendaten/Rekorde bleiben erhalten (per Name zugeordnet)."""
+    try:
+        track = Track.query.get(track_id)
+        if not track:
+            return jsonify({'error': 'Strecke nicht gefunden'}), 404
+        was_active = track.is_active
+        db.session.delete(track)
+        db.session.commit()
+        # War es die aktive Strecke, Override aufheben und Clients informieren
+        if was_active:
+            reset_active_track_override()
+            new_active = _resolve_active_track()
+            socketio.emit('active_track', {
+                'name': new_active.name if new_active else '',
+            })
+        return jsonify({'ok': True, 'deleted_id': track_id})
+    except Exception as e:
+        db.session.rollback()
+        log.error(f"delete track: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @api_bp.route('/api/driver-profile')

@@ -308,10 +308,21 @@ function renderTracks(tracks) {
             </div>`;
         }
 
+        const nameEsc = t.name.replace(/'/g, "\\'");
+        const toggleBtn = t.is_active
+            ? `<button class="btn btn-sm btn-outline-warning py-0 px-2" onclick="event.stopPropagation(); deactivateTrack(${t.id})" title="Deaktivieren"><i class="fas fa-toggle-on"></i></button>`
+            : `<button class="btn btn-sm btn-outline-success py-0 px-2" onclick="event.stopPropagation(); activateTrack(${t.id})" title="Als aktive Strecke setzen"><i class="fas fa-toggle-off"></i></button>`;
+
         return `<div class="col-md-6 col-lg-4">
-            <div class="card track-card h-100${selectedClass}" data-track-name="${t.name}" onclick="selectTrack('${t.name.replace(/'/g, "\\'")}')" style="cursor:pointer">
+            <div class="card track-card h-100${selectedClass}" data-track-name="${t.name}" onclick="selectTrack('${nameEsc}')" style="cursor:pointer">
                 <div class="card-body">
-                    <h6 class="fw-bold mb-3"><i class="fas fa-road me-2 text-muted"></i>${t.name}${idx === 0 ? '<span class="badge bg-success ms-2">Aktiv</span>' : ''}</h6>
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h6 class="fw-bold mb-0"><i class="fas fa-road me-2 text-muted"></i>${t.name}${t.is_active ? '<span class="badge bg-success ms-2">Aktiv</span>' : ''}</h6>
+                        <div class="d-flex gap-1 flex-shrink-0 ms-2">
+                            ${toggleBtn}
+                            <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="event.stopPropagation(); deleteTrack(${t.id}, '${nameEsc}')" title="Strecke loeschen"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
                     ${bestRec ? `<div class="small mb-2"><i class="fas fa-trophy text-warning me-1"></i><span class="font-mono fw-bold">${bestRec.laptime_formatted}</span> <span class="text-muted">${bestRec.driver_name}</span></div>` : ''}
                     ${layoutHtml}
                     <div class="row g-2 mt-2">
@@ -538,6 +549,59 @@ async function saveSvgLayout(trackId, svgContent) {
             loadTracks();
         } else {
             showToast(data.error || 'Fehler beim Speichern', 'danger');
+        }
+    } catch (e) {
+        showToast('Fehler: ' + e.message, 'danger');
+    }
+}
+
+async function activateTrack(trackId) {
+    try {
+        const res = await fetch(`/api/tracks/${trackId}/activate`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('Strecke aktiviert', 'success', 2500);
+            loadTracks();
+        } else {
+            showToast(data.error || 'Fehler', 'danger');
+        }
+    } catch (e) {
+        showToast('Fehler: ' + e.message, 'danger');
+    }
+}
+
+async function deactivateTrack(trackId) {
+    try {
+        const res = await fetch(`/api/tracks/${trackId}/deactivate`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('Strecke deaktiviert', 'success', 2500);
+            loadTracks();
+        } else {
+            showToast(data.error || 'Fehler', 'danger');
+        }
+    } catch (e) {
+        showToast('Fehler: ' + e.message, 'danger');
+    }
+}
+
+async function deleteTrack(trackId, trackName) {
+    if (!confirm(`Strecke "${trackName}" wirklich loeschen?\n\n`
+        + `Die Streckendaten (Layout, Laenge) werden entfernt.\n`
+        + `Gefahrene Runden und Rekorde bleiben erhalten.`)) return;
+    try {
+        const res = await fetch(`/api/tracks/${trackId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+            showToast(`Strecke "${trackName}" geloescht`, 'success', 3000);
+            // Falls die geloeschte Strecke gerade ausgewaehlt war, Rekord-Bereich schliessen
+            if (selectedTrackName === trackName) {
+                selectedTrackName = null;
+                document.getElementById('trackRecordsSection').classList.add('d-none');
+            }
+            loadTracks();
+        } else {
+            showToast(data.error || 'Fehler beim Loeschen', 'danger');
         }
     } catch (e) {
         showToast('Fehler: ' + e.message, 'danger');

@@ -110,6 +110,7 @@ class Track(db.Model):
     length = db.Column(db.Float, nullable=True)
     pitstop_delta = db.Column(db.Float, nullable=True)
     svg_layout = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=False)
     last_used = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
