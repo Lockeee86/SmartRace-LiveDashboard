@@ -46,11 +46,13 @@ def create_app():
     # Modelle registrieren (fuer create_all)
     from . import models  # noqa: F401
 
+    # Seiten-Routen direkt registrieren (unpraefixierte Endpoint-Namen)
+    from .pages import register_pages
+    register_pages(app)
+
     # Blueprints registrieren
     from .api import api_bp
     from .ingest import ingest_bp
-    from .pages import pages_bp
-    app.register_blueprint(pages_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(ingest_bp)
 
