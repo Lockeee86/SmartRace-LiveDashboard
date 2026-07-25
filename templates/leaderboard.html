@@ -16,6 +16,10 @@
                 <i class="fas fa-stopwatch me-1"></i><span class="d-none d-sm-inline">Training</span>
             </button>
         </div>
+        <!-- Ticker-Ausrichtung horizontal/vertikal -->
+        <button id="lbTickerOrientBtn" class="btn btn-sm btn-outline-light" title="Live-Ticker horizontal / vertikal">
+            <i class="fas fa-grip-lines" id="lbTickerOrientIcon"></i>
+        </button>
         <!-- Widget Visibility Toggle -->
         <div class="dropdown" id="lbWidgetToggleDropdown">
             <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Widgets ein/ausblenden">
@@ -154,6 +158,8 @@
     </div>
 </div>
 
+<!-- Ticker + Tabelle (Ticker wahlweise horizontal oben oder vertikal rechts) -->
+<div id="lbTickerLayout">
 <!-- Live Ticker -->
 <div class="card mb-3 ticker-card" id="tickerCard">
     <div class="card-body p-0 d-flex align-items-center overflow-hidden ticker-body">
@@ -173,7 +179,7 @@
 </div>
 
 <!-- Leaderboard Tabelle -->
-<div class="card">
+<div class="card lb-table-card">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table mb-0">
@@ -203,6 +209,7 @@
             </table>
         </div>
     </div>
+</div>
 </div>
 
 {% endblock %}
@@ -706,6 +713,18 @@ function formatTickerItem(item) {
     return null;
 }
 
+// Ticker-Ausrichtung: horizontal (oben) oder vertikal (rechts)
+let tickerVertical = localStorage.getItem('sr-lb-ticker-vertical') === '1';
+const TICKER_VERT_MAX = 20;
+
+function applyTickerOrientation() {
+    const layout = document.getElementById('lbTickerLayout');
+    if (layout) layout.classList.toggle('ticker-side', tickerVertical);
+    const icon = document.getElementById('lbTickerOrientIcon');
+    if (icon) icon.className = tickerVertical ? 'fas fa-grip-lines-vertical' : 'fas fa-grip-lines';
+    rebuildTicker();
+}
+
 function rebuildTicker() {
     const strip = document.getElementById('tickerStrip');
     const viewport = document.getElementById('tickerViewport');
@@ -713,6 +732,18 @@ function rebuildTicker() {
 
     if (tickerQueue.length === 0) {
         strip.innerHTML = '<span class="ticker-entry text-muted">Warte auf Events...</span>';
+        return;
+    }
+
+    if (tickerVertical) {
+        // Vertikal: neueste oben gestapelt (keine Breitenmessung)
+        const slice = tickerQueue.slice(-TICKER_VERT_MAX);
+        for (let i = slice.length - 1; i >= 0; i--) {
+            const el = document.createElement('div');
+            el.className = 'ticker-entry';
+            el.innerHTML = slice[i];
+            strip.appendChild(el);
+        }
         return;
     }
 
@@ -742,9 +773,11 @@ function addTickerEvent(item) {
     tickerQueue.push(html);
     if (tickerQueue.length > TICKER_HISTORY) tickerQueue.shift();
 
-    // Neues Element links mit Slide-Animation einfuegen
+    // Platzhalter entfernen falls vorhanden
     const strip = document.getElementById('tickerStrip');
-    const viewport = document.getElementById('tickerViewport');
+    if (strip.children.length === 1 && strip.firstChild.classList && strip.firstChild.classList.contains('text-muted')) {
+        strip.innerHTML = '';
+    }
     const newEl = document.createElement('div');
     newEl.className = 'ticker-entry ticker-entry-new';
     newEl.innerHTML = html;
@@ -757,8 +790,13 @@ function addTickerEvent(item) {
         });
     });
 
-    // Ueberlauf rechts entfernen
-    trimTicker();
+    if (tickerVertical) {
+        // Vertikal: nach Anzahl begrenzen
+        while (strip.children.length > TICKER_VERT_MAX) strip.lastElementChild.remove();
+    } else {
+        // Horizontal: Ueberlauf rechts entfernen
+        trimTicker();
+    }
 }
 
 function trimTicker() {
@@ -778,6 +816,14 @@ function trimTicker() {
 
 // Bei Fenstergroessenaenderung neu berechnen
 window.addEventListener('resize', () => rebuildTicker());
+
+// Ticker-Ausrichtung umschalten (horizontal/vertikal)
+document.getElementById('lbTickerOrientBtn').addEventListener('click', () => {
+    tickerVertical = !tickerVertical;
+    localStorage.setItem('sr-lb-ticker-vertical', tickerVertical ? '1' : '0');
+    applyTickerOrientation();
+});
+applyTickerOrientation();
 
 // Aktives Streckenlayout laden
 let lbTrackMap = null;
