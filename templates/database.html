@@ -110,6 +110,14 @@
             <input type="file" id="restoreFile" accept=".json" class="d-none" onchange="restoreBackup(this)">
         </div>
     </div>
+    <div class="mt-2">
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" id="hideOutliers">
+            <label class="form-check-label small text-muted" for="hideOutliers">
+                <i class="fas fa-filter me-1"></i>Ausreisser ausblenden
+            </label>
+        </div>
+    </div>
 </div>
 
 <!-- Statistik Cards -->
@@ -306,6 +314,7 @@ function buildParams() {
     if (dateFrom) params.append('date_from', dateFrom);
     const dateTo = document.getElementById('dateTo').value;
     if (dateTo) params.append('date_to', dateTo);
+    if (document.getElementById('hideOutliers').checked) params.append('hide_outliers', '1');
     return params;
 }
 
@@ -361,7 +370,7 @@ function renderTable(data) {
     }
 
     tbody.innerHTML = data.map(lap => {
-        const rowClass = lap.is_pb ? 'row-pb' : '';
+        const rowClass = (lap.is_pb ? 'row-pb' : '') + (lap.is_outlier ? ' row-outlier' : '');
 
         let typeBadge = 'bg-secondary';
         const et = (lap.session_type || '').toLowerCase();
@@ -408,7 +417,7 @@ function renderTable(data) {
             <td class="text-center font-mono small d-none d-lg-table-cell">${lap.sector_2 || '--'}</td>
             <td class="text-center font-mono small d-none d-lg-table-cell">${lap.sector_3 || '--'}</td>
             <td class="text-center small">${ts}</td>
-            <td class="text-center">${lap.is_pb ? '<i class="fas fa-trophy text-warning"></i>' : ''}</td>
+            <td class="text-center">${lap.is_pb ? '<i class="fas fa-trophy text-warning"></i>' : ''}${lap.is_outlier ? '<i class="fas fa-filter text-danger ms-1" title="Ausreisser — ausserhalb Strecken-Fenster, aus Rekorden/Statistiken ausgeschlossen"></i>' : ''}</td>
             <td class="text-center">
                 <button class="btn btn-link btn-sm text-danger p-0 opacity-50 delete-lap-btn"
                         data-id="${lap.id}" data-driver="${lap.driver_name || ''}"
@@ -587,6 +596,7 @@ document.getElementById('carFilter').addEventListener('change', () => { currentP
 document.getElementById('dateFrom').addEventListener('change', () => { currentPage = 1; loadData(); });
 document.getElementById('dateTo').addEventListener('change', () => { currentPage = 1; loadData(); });
 document.getElementById('perPageSelect').addEventListener('change', () => { currentPage = 1; loadData(); });
+document.getElementById('hideOutliers').addEventListener('change', () => { currentPage = 1; loadData(); });
 
 document.getElementById('refreshBtn').addEventListener('click', async function() {
     this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';

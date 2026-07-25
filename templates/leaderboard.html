@@ -807,6 +807,7 @@ const scheduleLbRender = coalesceFrame(updateLeaderboard);
 socket.on('new_data', (data) => {
     if (data.lap && data.event_type === 'ui.lap_update') {
         const lap = data.lap;
+        if (lap.is_outlier) return;  // Ausreisser ignorieren (ausserhalb Strecken-Fenster)
         const cid = lap.controller_id;
         if (!lbData[cid]) {
             lbData[cid] = {
