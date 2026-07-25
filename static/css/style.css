@@ -1437,7 +1437,6 @@ footer {
     border-collapse: separate;
     border-spacing: 2px;
     width: auto;
-    min-width: 100%;
 }
 
 .heatmap-table th,
@@ -1508,6 +1507,29 @@ footer {
     height: 10px;
     border-radius: 5px;
     background: linear-gradient(to right, rgb(40,200,80), rgb(255,200,30), rgb(230,60,30));
+}
+
+/* Schnellste Runde (F1-Style Violett) im Leaderboard */
+.time-fastest {
+    color: #c084fc !important;
+}
+.time-fastest .fa-trophy {
+    color: #c084fc;
+}
+
+/* Delta der letzten Runde zur eigenen Bestzeit */
+.lb-last-delta {
+    font-size: 0.68rem;
+    line-height: 1;
+    margin-top: 2px;
+}
+
+/* Leeres Sektoren-Widget schlank zusammenklappen */
+.stat-card-sectors.sector-collapsed {
+    height: auto !important;
+}
+.stat-card-sectors.sector-collapsed .sector-empty-hint {
+    padding: 2px 0;
 }
 
 /* Ausreisser-Runden (ausserhalb Strecken-Fenster) in der Datenbank-Tabelle */

@@ -186,10 +186,10 @@
                         <th class="text-center">Runden</th>
                         <th class="text-center">Beste Zeit</th>
                         <th class="text-center">Letzte Zeit</th>
-                        <th class="text-center" style="width:110px;">Trend</th>
-                        <th class="text-center">Sektoren</th>
-                        <th class="text-center" style="width:70px;">Tank</th>
-                        <th class="text-center" style="width:40px;">Pit</th>
+                        <th class="text-center lb-col-trend" style="width:110px;">Trend</th>
+                        <th class="text-center lb-col-sektoren">Sektoren</th>
+                        <th class="text-center lb-col-tank" style="width:70px;">Tank</th>
+                        <th class="text-center lb-col-pit" style="width:40px;">Pit</th>
                         <th class="text-center">Abstand</th>
                         <th class="text-center">Status</th>
                     </tr>
@@ -270,6 +270,13 @@ async function fetchLeaderboard() {
     }
 }
 
+// Leere Tabellenspalte ein-/ausblenden (Kopf + Zellen via .lb-col-<key>)
+function setLbColumnVisible(key, visible) {
+    document.querySelectorAll('.lb-col-' + key).forEach(el => {
+        el.classList.toggle('d-none', !visible);
+    });
+}
+
 function updateLeaderboard() {
     const drivers = [];
     let totalLaps = 0;
@@ -306,6 +313,7 @@ function updateLeaderboard() {
             retired: cd.retired || false,
             disqualified: cd.disqualified || false,
             fuel: lbFuelLevels[cid] !== undefined ? lbFuelLevels[cid] : -1,
+            timesCount: laps.filter(l => l.laptime_raw > 0).length,
         });
 
         if (cd.best_time_raw && (!fastest || cd.best_time_raw < fastest.time)) {
@@ -363,6 +371,16 @@ function updateLeaderboard() {
 
     const leader = drivers.find(d => !d.retired && !d.disqualified) || drivers[0];
 
+    // Schnellste "letzte Zeit" (fuer Purple-Highlight)
+    const lastTimes = drivers.map(d => d.lastTime).filter(t => t > 0);
+    const fastestLast = lastTimes.length ? Math.min(...lastTimes) : null;
+
+    // Welche Spalten haben ueberhaupt Daten? (leere ausblenden)
+    const hasSectors = drivers.some(d => d.lastSector1 || d.lastSector2 || d.lastSector3);
+    const hasFuel = drivers.some(d => d.fuel >= 0);
+    const hasPit = drivers.some(d => d.pitstops > 0);
+    const hasTrend = drivers.some(d => d.timesCount >= 2);
+
     // Konsistenz aktualisieren
     updateConsistency();
 
@@ -407,6 +425,20 @@ function updateLeaderboard() {
         }
 
         const isFastest = fastest && d.bestTime === fastest.time;
+        const isFastestLast = fastestLast && d.lastTime === fastestLast;
+
+        // Delta der letzten Runde zur eigenen Bestzeit
+        let lastDelta = '';
+        if (d.lastTime && d.bestTime) {
+            const diff = d.lastTime - d.bestTime;
+            if (diff <= 0) {
+                lastDelta = '<div class="lb-last-delta text-success"><i class="fas fa-bolt"></i> Best</div>';
+            } else {
+                const sec = (diff / 1000).toFixed(3);
+                const cls = diff < 500 ? 'text-success' : diff < 1500 ? 'text-warning' : 'text-danger';
+                lastDelta = `<div class="lb-last-delta ${cls}">+${sec}s</div>`;
+            }
+        }
 
         // Status
         let status = '';
@@ -451,16 +483,22 @@ function updateLeaderboard() {
             <td class="text-muted">${d.car}</td>
             <td class="text-center"><span class="controller-badge" style="background: ${d.color}">C${d.cid}</span></td>
             <td class="text-center fw-bold">${d.totalLaps}</td>
-            <td class="text-center font-mono ${isFastest ? 'text-warning fw-bold' : ''}">${formatTime(d.bestTime)}${isFastest ? ' <i class="fas fa-trophy"></i>' : ''}</td>
-            <td class="text-center font-mono">${formatTime(d.lastTime)}</td>
-            <td class="text-center"><canvas id="spark-${d.cid}" width="100" height="28" class="sparkline-canvas"></canvas></td>
-            <td class="text-center font-mono small">${sectors}</td>
-            <td class="text-center small">${fuelHtml}</td>
-            <td class="text-center small font-mono">${d.pitstops > 0 ? '<i class="fas fa-gas-pump text-muted me-1" style="font-size:0.6rem"></i>' + d.pitstops : '<span class="text-muted">--</span>'}</td>
+            <td class="text-center font-mono ${isFastest ? 'time-fastest fw-bold' : ''}">${formatTime(d.bestTime)}${isFastest ? ' <i class="fas fa-trophy"></i>' : ''}</td>
+            <td class="text-center font-mono ${isFastestLast ? 'time-fastest' : ''}">${formatTime(d.lastTime)}${lastDelta}</td>
+            <td class="text-center lb-col-trend"><canvas id="spark-${d.cid}" width="100" height="28" class="sparkline-canvas"></canvas></td>
+            <td class="text-center font-mono small lb-col-sektoren">${sectors}</td>
+            <td class="text-center small lb-col-tank">${fuelHtml}</td>
+            <td class="text-center small font-mono lb-col-pit">${d.pitstops > 0 ? '<i class="fas fa-gas-pump text-muted me-1" style="font-size:0.6rem"></i>' + d.pitstops : '<span class="text-muted">--</span>'}</td>
             <td class="text-center small">${gap}</td>
             <td class="text-center small">${status}</td>
         </tr>`;
     }).join('');
+
+    // Leere Spalten ausblenden
+    setLbColumnVisible('trend', hasTrend);
+    setLbColumnVisible('sektoren', hasSectors);
+    setLbColumnVisible('tank', hasFuel);
+    setLbColumnVisible('pit', hasPit);
 
     renderSparklines();
     updateSectorAnalysis();
@@ -553,10 +591,14 @@ function updateSectorAnalysis() {
         });
     });
 
+    const card = container.closest('.card');
     if (driverSectors.length === 0) {
-        container.innerHTML = '<span class="text-muted small">Keine Sektordaten</span>';
+        // Leeres Widget schlank zusammenklappen
+        if (card) card.classList.add('sector-collapsed');
+        container.innerHTML = '<div class="sector-empty-hint text-muted small"><i class="fas fa-chart-bar me-1 opacity-50"></i>Noch keine Sektordaten</div>';
         return;
     }
+    if (card) card.classList.remove('sector-collapsed');
 
     const globalBestS1 = Math.min(...driverSectors.map(d => d.bestS1).filter(Boolean));
     const globalBestS2 = Math.min(...driverSectors.map(d => d.bestS2).filter(Boolean));
