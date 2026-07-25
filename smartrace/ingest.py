@@ -10,8 +10,9 @@ from .models import (
     Track, TrackRecord,
 )
 from .utils import (
-    _get_active_track_name, _get_current_race_type, _get_session_id,
-    fmt_ms, rgb_to_hex, set_active_track_name,
+    _get_active_track, _get_active_track_name, _get_current_race_type,
+    _get_session_id, fmt_ms, is_outlier_laptime, rgb_to_hex,
+    set_active_track_name,
 )
 
 ingest_bp = Blueprint('ingest', __name__)
@@ -81,6 +82,7 @@ def receive_smartrace():
                 'sector_2': ed.get('sector_2'),
                 'sector_3': ed.get('sector_3'),
                 'is_pb': bool(ed.get('lap_pb', False)),
+                'is_outlier': is_outlier_laptime(ed.get('laptime_raw'), _get_active_track()),
                 'color': rgb_to_hex((ed.get('controller_data') or {}).get('color_bg'))
                          or rgb_to_hex((ed.get('car_data') or {}).get('color')),
                 'timestamp': datetime.utcnow().isoformat(),
@@ -268,6 +270,10 @@ def _save_lap(sid, ed):
             })
             log.info(f"Self-heal: session {sid} corrected to Training (no event.start found)")
 
+    track_obj = _get_active_track()
+    track_name = track_obj.name if track_obj else _get_active_track_name()
+    outlier = is_outlier_laptime(laptime_ms, track_obj)
+
     db.session.add(Lap(
         session_id=sid,
         session_type=_get_current_race_type(sid),
@@ -283,12 +289,12 @@ def _save_lap(sid, ed):
         car_color=rgb_to_hex(cd.get('color')),
         controller_color=rgb_to_hex(ctrl.get('color_bg')),
         is_personal_best=bool(ed.get('lap_pb', False)),
-        track_name=_get_active_track_name(),
+        is_outlier=outlier,
+        track_name=track_name,
     ))
 
-    # Streckenrekord pruefen (Minimum 1000ms = 1s als Plausibilitaetsfilter)
-    if laptime_ms and laptime_ms > 1000:
-        track_name = _get_active_track_name()
+    # Streckenrekord pruefen (Minimum 1000ms + innerhalb Strecken-Fenster)
+    if laptime_ms and laptime_ms > 1000 and not outlier:
 
         rec_q = TrackRecord.query
         if track_name:

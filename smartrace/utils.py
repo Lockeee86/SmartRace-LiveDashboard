@@ -52,6 +52,28 @@ def _get_active_track_name():
     return None
 
 
+def _get_active_track():
+    """Aktives Track-Objekt (oder None) — konsistent zu _get_active_track_name."""
+    name = _get_active_track_name()
+    if not name:
+        return None
+    try:
+        return Track.query.filter_by(name=name).first()
+    except Exception:
+        return None
+
+
+def is_outlier_laptime(laptime_ms, track):
+    """True, wenn die Rundenzeit ausserhalb des Strecken-Fensters liegt."""
+    if not track or not laptime_ms:
+        return False
+    if track.min_laptime_ms and laptime_ms < track.min_laptime_ms:
+        return True
+    if track.max_laptime_ms and laptime_ms > track.max_laptime_ms:
+        return True
+    return False
+
+
 # =============================================================================
 # Formatierung / Parsing
 # =============================================================================

@@ -33,6 +33,80 @@ def _resolve_active_track():
         return None
     return Track.query.filter_by(name=name).first()
 
+
+def _apply_track_window(track):
+    """Plausibilitaets-Fenster einer Strecke anwenden.
+
+    1. is_outlier fuer alle Runden der Strecke neu berechnen.
+    2. Fehlerhafte Streckenrekorde (ausserhalb Fenster) loeschen.
+    3. Persoenliche Rekorde der Strecke aus gueltigen Runden neu berechnen.
+    Gibt die Anzahl markierter Ausreisser zurueck.
+    """
+    name = track.name
+    lo = track.min_laptime_ms
+    hi = track.max_laptime_ms
+
+    # 1. is_outlier zuruecksetzen, dann Ausreisser markieren
+    Lap.query.filter(Lap.track_name == name).update(
+        {'is_outlier': False}, synchronize_session=False)
+    if lo:
+        Lap.query.filter(Lap.track_name == name, Lap.laptime_ms < lo).update(
+            {'is_outlier': True}, synchronize_session=False)
+    if hi:
+        Lap.query.filter(Lap.track_name == name, Lap.laptime_ms > hi).update(
+            {'is_outlier': True}, synchronize_session=False)
+
+    # 2. Streckenrekorde ausserhalb des Fensters entfernen
+    if lo:
+        TrackRecord.query.filter(
+            TrackRecord.track_name == name, TrackRecord.laptime_ms < lo
+        ).delete(synchronize_session=False)
+    if hi:
+        TrackRecord.query.filter(
+            TrackRecord.track_name == name, TrackRecord.laptime_ms > hi
+        ).delete(synchronize_session=False)
+
+    # 3. Persoenliche Rekorde der Strecke aus gueltigen Runden neu aufbauen
+    PersonalRecord.query.filter(PersonalRecord.track_name == name).delete(
+        synchronize_session=False)
+    best_rows = db.session.query(
+        Lap.driver_name, func.min(Lap.laptime_ms).label('best'),
+    ).filter(
+        Lap.track_name == name,
+        Lap.is_outlier.isnot(True),
+        Lap.laptime_ms > 1000,
+        Lap.driver_name.isnot(None),
+    ).group_by(Lap.driver_name).all()
+    for drv, best in best_rows:
+        best_lap = Lap.query.filter_by(
+            track_name=name, driver_name=drv, laptime_ms=best).first()
+        db.session.add(PersonalRecord(
+            driver_name=drv, laptime_ms=best, track_name=name,
+            car_name=best_lap.car_name if best_lap else None,
+            session_id=best_lap.session_id if best_lap else None,
+            controller_id=best_lap.controller_id if best_lap else None,
+        ))
+
+    db.session.commit()
+
+    outliers = Lap.query.filter(
+        Lap.track_name == name, Lap.is_outlier.is_(True)).count()
+    return outliers
+
+
+def _parse_laptime_to_ms(val):
+    """Eingabe (Sekunden '8.5' oder 'M:SS.mmm') -> Millisekunden (int) oder None."""
+    if val is None or val == '':
+        return None
+    s = str(val).strip().replace(',', '.')
+    try:
+        if ':' in s:
+            mins, secs = s.split(':')
+            return int((int(mins) * 60 + float(secs)) * 1000)
+        return int(float(s) * 1000)
+    except (ValueError, IndexError):
+        return None
+
 api_bp = Blueprint('api', __name__)
 
 
@@ -56,7 +130,7 @@ def api_live_data():
                 cutoff = datetime.utcnow() - timedelta(hours=2)
                 q = q.filter(Lap.created_at >= cutoff)
 
-        laps = q.order_by(Lap.created_at.desc()).all()
+        laps = q.filter(Lap.is_outlier.isnot(True)).order_by(Lap.created_at.desc()).all()
         if not laps:
             return jsonify({})
 
@@ -185,6 +259,9 @@ def api_laps():
         if track:
             q = q.filter(Lap.track_name == track)
 
+        if request.args.get('hide_outliers') in ('1', 'true', 'yes'):
+            q = q.filter(Lap.is_outlier.isnot(True))
+
         df = request.args.get('date_from')
         if df:
             try:
@@ -241,6 +318,7 @@ def api_laps():
                 'car_color': l.car_color,
                 'controller_color': l.controller_color,
                 'is_pb': l.is_personal_best,
+                'is_outlier': bool(l.is_outlier),
                 'track_name': l.track_name,
                 'timestamp': l.created_at.isoformat() if l.created_at else None,
             } for l in laps],
@@ -282,7 +360,8 @@ def api_analytics():
             func.count(Lap.id).label('total_laps'),
             func.min(Lap.laptime_ms).label('best_time'),
             func.avg(Lap.laptime_ms).label('avg_time'),
-        ).filter(Lap.laptime_ms > 0, Lap.driver_name.isnot(None))
+        ).filter(Lap.laptime_ms > 0, Lap.driver_name.isnot(None),
+                 Lap.is_outlier.isnot(True))
 
         if sid and sid != 'all':
             q = q.filter(Lap.session_id == sid)
@@ -301,7 +380,8 @@ def api_analytics():
                 partition_by=Lap.driver_name,
                 order_by=Lap.created_at.desc(),
             ).label('rn'),
-        ).filter(Lap.laptime_ms > 0, Lap.driver_name.isnot(None))
+        ).filter(Lap.laptime_ms > 0, Lap.driver_name.isnot(None),
+                 Lap.is_outlier.isnot(True))
 
         if sid and sid != 'all':
             ranked = ranked.filter(Lap.session_id == sid)
@@ -404,6 +484,7 @@ def api_driver_stats():
             Lap.laptime_ms > 0,
             Lap.driver_name.isnot(None),
             Lap.driver_name != '',
+            Lap.is_outlier.isnot(True),
         ).group_by(Lap.driver_name).all()
 
         # Siege und Podien aus Ergebnissen
@@ -485,6 +566,7 @@ def api_car_stats():
             Lap.laptime_ms > 0,
             Lap.car_name.isnot(None),
             Lap.car_name != '',
+            Lap.is_outlier.isnot(True),
         ).group_by(Lap.car_name).all()
 
         cars = []
@@ -649,6 +731,7 @@ def api_virtual_best():
         track = request.args.get('track')
         q = Lap.query.filter(
             Lap.laptime_ms > 1000,
+            Lap.is_outlier.isnot(True),
             Lap.sector_1.isnot(None), Lap.sector_1 != '',
             Lap.sector_2.isnot(None), Lap.sector_2 != '',
             Lap.sector_3.isnot(None), Lap.sector_3 != '',
@@ -778,8 +861,9 @@ def api_live_feed():
         limit = min(int(request.args.get('limit', 30)), 100)
         items = []
 
-        # Letzte Runden
-        for lap in Lap.query.order_by(Lap.created_at.desc()).limit(limit).all():
+        # Letzte Runden (ohne Ausreisser)
+        for lap in Lap.query.filter(Lap.is_outlier.isnot(True)).order_by(
+                Lap.created_at.desc()).limit(limit).all():
             items.append({
                 'type': 'lap',
                 'timestamp': lap.created_at.isoformat() if lap.created_at else None,
@@ -954,6 +1038,8 @@ def api_backup():
                 'name': t.name, 'length': t.length,
                 'pitstop_delta': t.pitstop_delta, 'svg_layout': t.svg_layout,
                 'is_active': t.is_active,
+                'min_laptime_ms': t.min_laptime_ms,
+                'max_laptime_ms': t.max_laptime_ms,
                 'last_used': t.last_used.isoformat() if t.last_used else None,
                 'created_at': t.created_at.isoformat() if t.created_at else None,
             } for t in Track.query.all()], ensure_ascii=False) + ',\n'
@@ -1093,6 +1179,10 @@ def api_restore():
                         existing.length = t.get('length')
                     if existing.pitstop_delta is None and t.get('pitstop_delta') is not None:
                         existing.pitstop_delta = t.get('pitstop_delta')
+                    if existing.min_laptime_ms is None and t.get('min_laptime_ms') is not None:
+                        existing.min_laptime_ms = t.get('min_laptime_ms')
+                    if existing.max_laptime_ms is None and t.get('max_laptime_ms') is not None:
+                        existing.max_laptime_ms = t.get('max_laptime_ms')
                 else:
                     db.session.add(Track(
                         name=name,
@@ -1100,6 +1190,8 @@ def api_restore():
                         pitstop_delta=t.get('pitstop_delta'),
                         svg_layout=t.get('svg_layout'),
                         is_active=False,  # aktiv-Status nicht wiederherstellen
+                        min_laptime_ms=t.get('min_laptime_ms'),
+                        max_laptime_ms=t.get('max_laptime_ms'),
                         last_used=datetime.fromisoformat(t['last_used']) if t.get('last_used') else None,
                         created_at=datetime.fromisoformat(t['created_at']) if t.get('created_at') else None,
                     ))
@@ -1174,6 +1266,8 @@ def api_tracks():
                 'pitstop_delta': t.pitstop_delta,
                 'svg_layout': t.svg_layout,
                 'is_active': (t.name == active_name),
+                'min_laptime_ms': t.min_laptime_ms,
+                'max_laptime_ms': t.max_laptime_ms,
                 'last_used': t.last_used.isoformat() if t.last_used else None,
                 'created_at': t.created_at.isoformat() if t.created_at else None,
                 'records': recs_data,
@@ -1245,13 +1339,76 @@ def api_create_track():
             length=float(length) if length else None,
             pitstop_delta=float(pitstop_delta) if pitstop_delta else None,
             svg_layout=svg_layout,
+            min_laptime_ms=_parse_laptime_to_ms(data.get('min_laptime')),
+            max_laptime_ms=_parse_laptime_to_ms(data.get('max_laptime')),
         )
         db.session.add(track)
         db.session.commit()
+        if track.min_laptime_ms or track.max_laptime_ms:
+            _apply_track_window(track)
         return jsonify({'ok': True, 'track_id': track.id}), 201
     except Exception as e:
         log.error(f"create track: {e}")
         db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/tracks/<int:track_id>', methods=['PUT'])
+def api_update_track(track_id):
+    """Strecken-Einstellungen aktualisieren (Laenge, Pitstop-Delta, Fenster).
+
+    min_laptime/max_laptime als Sekunden ('8.5') oder 'M:SS.mmm'.
+    Bei Aenderung des Fensters werden Ausreisser + Rekorde neu berechnet.
+    """
+    try:
+        track = Track.query.get(track_id)
+        if not track:
+            return jsonify({'error': 'Strecke nicht gefunden'}), 404
+        data = request.get_json(silent=True) or {}
+
+        if 'length' in data:
+            track.length = float(data['length']) if data.get('length') else None
+        if 'pitstop_delta' in data:
+            track.pitstop_delta = float(data['pitstop_delta']) if data.get('pitstop_delta') else None
+
+        window_changed = False
+        if 'min_laptime' in data:
+            new_min = _parse_laptime_to_ms(data.get('min_laptime'))
+            if new_min != track.min_laptime_ms:
+                track.min_laptime_ms = new_min
+                window_changed = True
+        if 'max_laptime' in data:
+            new_max = _parse_laptime_to_ms(data.get('max_laptime'))
+            if new_max != track.max_laptime_ms:
+                track.max_laptime_ms = new_max
+                window_changed = True
+
+        # Plausibilitaet: min < max
+        if (track.min_laptime_ms and track.max_laptime_ms
+                and track.min_laptime_ms >= track.max_laptime_ms):
+            return jsonify({'error': 'Min muss kleiner als Max sein'}), 400
+
+        db.session.commit()
+
+        outliers = None
+        if window_changed:
+            outliers = _apply_track_window(track)
+            # Aktualisierten Streckenrekord verteilen
+            new_best = TrackRecord.query.filter_by(track_name=track.name).order_by(
+                TrackRecord.laptime_ms.asc()).first()
+            if new_best:
+                socketio.emit('track_record', {
+                    'laptime_ms': new_best.laptime_ms,
+                    'laptime_formatted': fmt_ms(new_best.laptime_ms),
+                    'driver_name': new_best.driver_name,
+                    'car_name': new_best.car_name,
+                    'track_name': new_best.track_name,
+                })
+
+        return jsonify({'ok': True, 'track_id': track_id, 'outliers': outliers})
+    except Exception as e:
+        db.session.rollback()
+        log.error(f"update track: {e}")
         return jsonify({'error': str(e)}), 500
 
 
