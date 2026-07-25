@@ -315,3 +315,44 @@ body.tv-mode {
     .tv-brand { font-size: 1rem; }
     .tv-view { padding: 1rem; }
 }
+
+/* ===== Grid-Modus (alle Views gleichzeitig, frei anordbar) ===== */
+.tv-grid-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    border-radius: 6px;
+    padding: 2px 9px;
+    margin-left: 0.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+.tv-grid-btn:hover { border-color: rgba(255, 255, 255, 0.6); }
+.tv-grid-btn.active { background: #3498db; border-color: #3498db; }
+
+/* Rotationsmodus: GridStack-Content-Positionierung neutralisieren */
+.tv-viewport:not(.grid-stack) .grid-stack-item-content {
+    position: static;
+    height: 100%;
+    overflow: visible;
+}
+
+/* Grid-Modus: alle Views sichtbar, GridStack positioniert die Kacheln */
+.tv-viewport.grid-stack { overflow: visible; }
+.tv-viewport.tv-grid-mode .tv-view {
+    opacity: 1 !important;
+    transition: none !important;
+    padding: 0;
+}
+.tv-viewport.tv-grid-mode .grid-stack-item-content {
+    overflow: auto;
+    padding: 0.75rem 1rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+}
+.tv-viewport.tv-grid-mode.grid-editing .grid-stack-item-content {
+    outline: 2px dashed #3498db;
+    cursor: move;
+}
