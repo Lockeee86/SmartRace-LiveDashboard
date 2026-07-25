@@ -801,6 +801,9 @@ fetch('/api/race-status').then(r => r.ok ? r.json() : null).then(data => {
 }).catch(() => {});
 
 // WebSocket: Live-Updates — Delta wenn Lap-Daten vorhanden, sonst Full-Fetch
+// Render pro Frame bündeln (bei Event-Bursts nur 1x rendern)
+const scheduleLbRender = coalesceFrame(updateLeaderboard);
+
 socket.on('new_data', (data) => {
     if (data.lap && data.event_type === 'ui.lap_update') {
         const lap = data.lap;
@@ -835,7 +838,7 @@ socket.on('new_data', (data) => {
                 lbData[cid].best_time_raw = lap.laptime_ms;
             }
         }
-        updateLeaderboard();
+        scheduleLbRender();
         addTickerEvent({
             type: 'lap',
             driver_name: lap.driver_name,

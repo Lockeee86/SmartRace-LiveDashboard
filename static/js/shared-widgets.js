@@ -3,6 +3,22 @@
  * Benoetigt globale Helfer aus base.html: formatTime(), getControllerColor().
  */
 
+/**
+ * Bündelt mehrere Aufrufe innerhalb eines Frames zu EINEM Aufruf (via
+ * requestAnimationFrame). Bei Event-Bursts (viele Runden schnell
+ * hintereinander) wird so nur einmal pro Frame gerendert statt pro Event.
+ * @param {Function} fn  Render-Funktion ohne Argumente (nutzt globalen State)
+ * @returns {Function}   Geplante Variante von fn
+ */
+function coalesceFrame(fn) {
+    let scheduled = false;
+    return function () {
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(() => { scheduled = false; fn(); });
+    };
+}
+
 // Sektor-Zeitstring ("15.234" oder "1:05.234", auch mit Komma) -> Millisekunden
 function parseSectorMs(val) {
     if (!val) return null;

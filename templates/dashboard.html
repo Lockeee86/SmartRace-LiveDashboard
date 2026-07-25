@@ -905,6 +905,14 @@ document.getElementById('refreshBtn').addEventListener('click', async () => {
     btn.disabled = false;
 });
 
+// Render-Aufrufe pro Frame bündeln (bei Event-Bursts nur 1x rendern)
+const scheduleDashRender = coalesceFrame(() => {
+    renderStats();
+    renderControllers();
+    updateControllerNames();
+    updateDashHeatmap();
+});
+
 // WebSocket: Live-Updates — Delta wenn Lap-Daten vorhanden, sonst Full-Fetch
 socket.on('new_data', (data) => {
     if (data && data.lap && data.event_type === 'ui.lap_update' && (currentSession === 'current' || currentSession === data.session_id)) {
@@ -945,10 +953,7 @@ socket.on('new_data', (data) => {
             detectOvertakes(previousRanking, newRanking);
         }
         previousRanking = newRanking;
-        renderStats();
-        renderControllers();
-        updateControllerNames();
-        updateDashHeatmap();
+        scheduleDashRender();
         addTickerEvent({
             type: 'lap',
             driver_name: lap.driver_name,
