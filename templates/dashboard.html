@@ -237,6 +237,7 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/track-positions.js') }}"></script>
+<script src="{{ url_for('static', filename='js/shared-widgets.js') }}"></script>
 <script>
 let dashboardData = {};
 let trackRecord = null;
@@ -1198,21 +1199,7 @@ function initWidgetResize() {
 
 initWidgetResize();
 
-// ---- Sektorenanalyse Widget ----
-function dashParseSectorMs(val) {
-    if (!val) return null;
-    const s = String(val).trim();
-    if (s.includes(':')) {
-        const [minPart, secPart] = s.split(':');
-        const mins = parseInt(minPart, 10) || 0;
-        const secs = parseFloat(secPart.replace(',', '.'));
-        if (isNaN(secs)) return null;
-        return (mins * 60 + secs) * 1000;
-    }
-    const num = parseFloat(s.replace(',', '.'));
-    return isNaN(num) || num === 0 ? null : num * 1000;
-}
-
+// ---- Sektorenanalyse Widget ---- (parseSectorMs aus shared-widgets.js)
 function updateDashSectors() {
     const container = document.getElementById('dashSectorAnalysis');
     if (!container) return;
@@ -1222,9 +1209,9 @@ function updateDashSectors() {
         const laps = getSessionLaps(cd);
         const s1s = [], s2s = [], s3s = [];
         laps.forEach(l => {
-            const v1 = dashParseSectorMs(l.sector_1);
-            const v2 = dashParseSectorMs(l.sector_2);
-            const v3 = dashParseSectorMs(l.sector_3);
+            const v1 = parseSectorMs(l.sector_1);
+            const v2 = parseSectorMs(l.sector_2);
+            const v3 = parseSectorMs(l.sector_3);
             if (v1) s1s.push(v1);
             if (v2) s2s.push(v2);
             if (v3) s3s.push(v3);
@@ -1276,97 +1263,15 @@ function updateDashSectors() {
     container.innerHTML = html;
 }
 
-// ---- Rundenzeit-Heatmap ----
+// ---- Rundenzeit-Heatmap ---- (Render via shared-widgets.js)
 function updateDashHeatmap() {
-    const container = document.getElementById('dashHeatmap');
-    if (!container) return;
-
-    const driverEntries = [];
-    Object.entries(dashboardData).forEach(([cid, cd]) => {
-        if (!visibleControllers.has(cid)) return;
-        const laps = getSessionLaps(cd);
-        if (laps.length === 0) return;
-        const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
-        const sorted = [...laps].filter(l => l.lap > 0 && l.laptime_raw > 0)
-            .sort((a, b) => (a.lap || 0) - (b.lap || 0));
-        if (sorted.length === 0) return;
-        driverEntries.push({ cid, name: cd.name || 'C' + cid, color, laps: sorted });
+    renderLapHeatmap({
+        containerId: 'dashHeatmap',
+        data: dashboardData,
+        getLaps: getSessionLaps,
+        includeController: (cid) => visibleControllers.has(cid),
+        fallbackWidth: 600,
     });
-
-    if (driverEntries.length === 0) {
-        container.innerHTML = '<span class="text-muted small">Warte auf Rundendaten...</span>';
-        return;
-    }
-
-    const allTimes = driverEntries.flatMap(d => d.laps.map(l => l.laptime_raw));
-    const minTime = Math.min(...allTimes);
-    const maxTime = Math.max(...allTimes);
-    const median = [...allTimes].sort((a, b) => a - b)[Math.floor(allTimes.length / 2)];
-    const cap = median * 1.5;
-
-    function heatColor(ms) {
-        const clamped = Math.min(ms, cap);
-        const ratio = Math.min((clamped - minTime) / (cap - minTime || 1), 1);
-        if (ratio <= 0.5) {
-            const t = ratio * 2;
-            const r = Math.round(40 + t * 215);
-            const g = Math.round(200 - t * 100);
-            const b = Math.round(80 - t * 50);
-            return `rgb(${r},${g},${b})`;
-        } else {
-            const t = (ratio - 0.5) * 2;
-            const r = Math.round(255 - t * 50);
-            const g = Math.round(100 - t * 70);
-            const b = Math.round(30);
-            return `rgb(${r},${g},${b})`;
-        }
-    }
-
-    const maxLapNum = Math.max(...driverEntries.flatMap(d => d.laps.map(l => l.lap)));
-    // Nur so viele (aktuellste) Runden zeigen, wie in die Breite passen
-    const CELL_W = 20;   // 18px Zelle + 2px Abstand
-    const LABEL_W = 130; // Fahrer-Spalte
-    const availWidth = (container.clientWidth || 600) - LABEL_W;
-    const fitCols = Math.max(5, Math.floor(availWidth / CELL_W));
-    const startLap = Math.max(1, maxLapNum - fitCols + 1);
-    const lapCols = [];
-    for (let i = startLap; i <= maxLapNum; i++) lapCols.push(i);
-
-    let html = '<div class="heatmap-scroll"><table class="heatmap-table"><thead><tr>';
-    html += '<th class="heatmap-driver-col"></th>';
-    lapCols.forEach(n => { html += `<th class="heatmap-lap-header">${n}</th>`; });
-    html += '</tr></thead><tbody>';
-
-    driverEntries.forEach(d => {
-        html += `<tr><td class="heatmap-driver-label" style="color:${d.color}"><span class="heatmap-driver-dot" style="background:${d.color}"></span>${d.name}</td>`;
-        const lapMap = {};
-        d.laps.forEach(l => { lapMap[l.lap] = l; });
-        lapCols.forEach(n => {
-            const lap = lapMap[n];
-            if (lap) {
-                const bg = heatColor(lap.laptime_raw);
-                html += `<td class="heatmap-cell" style="background:${bg}" title="R${n}: ${formatTime(lap.laptime_raw)}"></td>`;
-            } else {
-                html += '<td class="heatmap-cell heatmap-empty"></td>';
-            }
-        });
-        html += '</tr>';
-    });
-
-    html += '</tbody></table></div>';
-
-    const rangeNote = startLap > 1
-        ? `<span class="small text-muted ms-3">Runden ${startLap}–${maxLapNum} (${maxLapNum} gesamt)</span>`
-        : '';
-    const legendHtml = `<div class="heatmap-legend">
-        <span class="small text-muted me-2">Schnell</span>
-        <div class="heatmap-legend-bar"></div>
-        <span class="small text-muted ms-2">Langsam</span>
-        <span class="small text-muted ms-3 font-mono">${formatTime(minTime)} - ${formatTime(Math.min(maxTime, cap))}</span>
-        ${rangeNote}
-    </div>`;
-
-    container.innerHTML = legendHtml + html;
 }
 
 // Heatmap bei Fenstergroesse-Aenderung neu berechnen (Anzahl Runden anpassen)
