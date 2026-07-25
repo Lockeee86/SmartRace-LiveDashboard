@@ -917,6 +917,7 @@ const scheduleDashRender = coalesceFrame(() => {
 socket.on('new_data', (data) => {
     if (data && data.lap && data.event_type === 'ui.lap_update' && (currentSession === 'current' || currentSession === data.session_id)) {
         const lap = data.lap;
+        if (lap.is_outlier) return;  // Ausreisser ignorieren (ausserhalb Strecken-Fenster)
         const cid = lap.controller_id;
         if (!dashboardData[cid]) {
             dashboardData[cid] = {

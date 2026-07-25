@@ -38,6 +38,7 @@ class Lap(db.Model):
     car_color = db.Column(db.String(20))
     controller_color = db.Column(db.String(20))
     is_personal_best = db.Column(db.Boolean, default=False)
+    is_outlier = db.Column(db.Boolean, default=False, index=True)
     track_name = db.Column(db.String(200), index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
@@ -111,6 +112,9 @@ class Track(db.Model):
     pitstop_delta = db.Column(db.Float, nullable=True)
     svg_layout = db.Column(db.Text, nullable=True)
     is_active = db.Column(db.Boolean, default=False)
+    # Plausibilitaets-Fenster fuer Rundenzeiten (Ausreisser-Filter), in ms
+    min_laptime_ms = db.Column(db.Integer, nullable=True)
+    max_laptime_ms = db.Column(db.Integer, nullable=True)
     last_used = db.Column(db.DateTime, default=datetime.utcnow)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

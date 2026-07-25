@@ -1510,6 +1510,14 @@ footer {
     background: linear-gradient(to right, rgb(40,200,80), rgb(255,200,30), rgb(230,60,30));
 }
 
+/* Ausreisser-Runden (ausserhalb Strecken-Fenster) in der Datenbank-Tabelle */
+.row-outlier {
+    opacity: 0.5;
+}
+.row-outlier .font-mono {
+    text-decoration: line-through;
+}
+
 /* Streckenrekord-Leiste unter der Streckenkarte */
 .trk-record-bar {
     margin-top: 8px;

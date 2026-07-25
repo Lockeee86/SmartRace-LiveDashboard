@@ -119,6 +119,18 @@
                     </div>
                 </div>
                 <div class="mb-3">
+                    <label class="form-label">Runden-Fenster (s) <span class="text-muted small">— filtert Ausreisser</span></label>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <input type="number" class="form-control" id="newTrackMin" placeholder="Min z.B. 5.0" step="0.001">
+                        </div>
+                        <div class="col-6">
+                            <input type="number" class="form-control" id="newTrackMax" placeholder="Max z.B. 20.0" step="0.001">
+                        </div>
+                    </div>
+                    <div class="form-text">Runden ausserhalb dieses Fensters werden als Ausreisser markiert und aus Rekorden &amp; Statistiken ausgeschlossen.</div>
+                </div>
+                <div class="mb-3">
                     <label class="form-label">SVG-Layout (optional)</label>
                     <textarea class="form-control" id="newTrackSvg" rows="4" placeholder="SVG-Code hier einfuegen...&#10;&lt;svg viewBox=&quot;...&quot;&gt;...&lt;/svg&gt;"></textarea>
                     <div class="form-text">Den kompletten &lt;svg&gt;...&lt;/svg&gt; Code einfuegen — mit den Pfad-IDs <code>sector_1</code>, <code>sector_2</code>, <code>sector_3</code> werden die Sektoren farbig dargestellt.</div>
@@ -137,6 +149,49 @@
             <div class="modal-footer border-0">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button>
                 <button type="button" class="btn btn-primary" id="saveNewTrackBtn">
+                    <i class="fas fa-save me-1"></i>Speichern
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Strecken-Einstellungen -->
+<div class="modal fade" id="editTrackModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background: var(--sr-card); border: 1px solid var(--sr-border);">
+            <div class="modal-header border-0">
+                <h5 class="modal-title"><i class="fas fa-sliders me-2"></i>Einstellungen: <span id="editTrackName" class="text-info"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editTrackId">
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label class="form-label">Laenge (m)</label>
+                        <input type="number" class="form-control" id="editTrackLength" placeholder="optional" step="0.1">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Pitstop Delta (s)</label>
+                        <input type="number" class="form-control" id="editTrackPitstop" placeholder="optional" step="0.1">
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label">Runden-Fenster (s) <span class="text-muted small">— filtert Ausreisser</span></label>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <input type="number" class="form-control" id="editTrackMin" placeholder="Min z.B. 5.0" step="0.001">
+                        </div>
+                        <div class="col-6">
+                            <input type="number" class="form-control" id="editTrackMax" placeholder="Max z.B. 20.0" step="0.001">
+                        </div>
+                    </div>
+                    <div class="form-text">Aenderung markiert bestehende Runden neu und bereinigt fehlerhafte Rekorde. Leer lassen = keine Grenze.</div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <button type="button" class="btn btn-primary" id="saveEditTrackBtn">
                     <i class="fas fa-save me-1"></i>Speichern
                 </button>
             </div>
@@ -312,6 +367,11 @@ function renderTracks(tracks) {
         const toggleBtn = t.is_active
             ? `<button class="btn btn-sm btn-outline-warning py-0 px-2" onclick="event.stopPropagation(); deactivateTrack(${t.id})" title="Deaktivieren"><i class="fas fa-toggle-on"></i></button>`
             : `<button class="btn btn-sm btn-outline-success py-0 px-2" onclick="event.stopPropagation(); activateTrack(${t.id})" title="Als aktive Strecke setzen"><i class="fas fa-toggle-off"></i></button>`;
+        const fmtWin = (ms) => ms ? (ms / 1000).toFixed(3).replace(/0+$/, '').replace(/\.$/, '') + 's' : '∞';
+        const hasWindow = t.min_laptime_ms || t.max_laptime_ms;
+        const windowHtml = hasWindow
+            ? `<div class="small text-muted mb-2"><i class="fas fa-filter me-1"></i>Fenster: <span class="font-mono">${fmtWin(t.min_laptime_ms)} – ${fmtWin(t.max_laptime_ms)}</span></div>`
+            : '';
 
         return `<div class="col-md-6 col-lg-4">
             <div class="card track-card h-100${selectedClass}" data-track-name="${t.name}" onclick="selectTrack('${nameEsc}')" style="cursor:pointer">
@@ -320,10 +380,12 @@ function renderTracks(tracks) {
                         <h6 class="fw-bold mb-0"><i class="fas fa-road me-2 text-muted"></i>${t.name}${t.is_active ? '<span class="badge bg-success ms-2">Aktiv</span>' : ''}</h6>
                         <div class="d-flex gap-1 flex-shrink-0 ms-2">
                             ${toggleBtn}
+                            <button class="btn btn-sm btn-outline-light py-0 px-2" onclick="event.stopPropagation(); openTrackSettings(${t.id})" title="Einstellungen (Fenster, Laenge, ...)"><i class="fas fa-sliders"></i></button>
                             <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="event.stopPropagation(); deleteTrack(${t.id}, '${nameEsc}')" title="Strecke loeschen"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>
                     ${bestRec ? `<div class="small mb-2"><i class="fas fa-trophy text-warning me-1"></i><span class="font-mono fw-bold">${bestRec.laptime_formatted}</span> <span class="text-muted">${bestRec.driver_name}</span></div>` : ''}
+                    ${windowHtml}
                     ${layoutHtml}
                     <div class="row g-2 mt-2">
                         <div class="col-4 track-stat">
@@ -496,6 +558,8 @@ document.getElementById('saveNewTrackBtn').addEventListener('click', async () =>
     }
     const length = document.getElementById('newTrackLength').value || null;
     const pitstop = document.getElementById('newTrackPitstop').value || null;
+    const minLap = document.getElementById('newTrackMin').value || null;
+    const maxLap = document.getElementById('newTrackMax').value || null;
     const svg = document.getElementById('newTrackSvg').value.trim() || null;
 
     const btn = document.getElementById('saveNewTrackBtn');
@@ -510,6 +574,8 @@ document.getElementById('saveNewTrackBtn').addEventListener('click', async () =>
                 name: name,
                 length: length,
                 pitstop_delta: pitstop,
+                min_laptime: minLap,
+                max_laptime: maxLap,
                 svg_layout: svg,
             }),
         });
@@ -521,6 +587,8 @@ document.getElementById('saveNewTrackBtn').addEventListener('click', async () =>
             document.getElementById('newTrackName').value = '';
             document.getElementById('newTrackLength').value = '';
             document.getElementById('newTrackPitstop').value = '';
+            document.getElementById('newTrackMin').value = '';
+            document.getElementById('newTrackMax').value = '';
             document.getElementById('newTrackSvg').value = '';
             document.getElementById('newTrackSvgPreview').innerHTML = '';
             document.getElementById('newTrackSvgPreview').classList.add('d-none');
@@ -554,6 +622,55 @@ async function saveSvgLayout(trackId, svgContent) {
         showToast('Fehler: ' + e.message, 'danger');
     }
 }
+
+function openTrackSettings(trackId) {
+    const t = tracksData.find(x => x.id === trackId);
+    if (!t) return;
+    const toSec = (ms) => ms ? (ms / 1000) : '';
+    document.getElementById('editTrackId').value = t.id;
+    document.getElementById('editTrackName').textContent = t.name;
+    document.getElementById('editTrackLength').value = t.length ?? '';
+    document.getElementById('editTrackPitstop').value = t.pitstop_delta ?? '';
+    document.getElementById('editTrackMin').value = toSec(t.min_laptime_ms);
+    document.getElementById('editTrackMax').value = toSec(t.max_laptime_ms);
+    new bootstrap.Modal(document.getElementById('editTrackModal')).show();
+}
+
+document.getElementById('saveEditTrackBtn').addEventListener('click', async () => {
+    const id = document.getElementById('editTrackId').value;
+    const body = {
+        length: document.getElementById('editTrackLength').value || null,
+        pitstop_delta: document.getElementById('editTrackPitstop').value || null,
+        min_laptime: document.getElementById('editTrackMin').value || null,
+        max_laptime: document.getElementById('editTrackMax').value || null,
+    };
+    const btn = document.getElementById('saveEditTrackBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Speichern...';
+    try {
+        const res = await fetch(`/api/tracks/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            const note = (data.outliers !== null && data.outliers !== undefined)
+                ? ` — ${data.outliers} Ausreisser markiert` : '';
+            showToast('Einstellungen gespeichert' + note, 'success', 3500);
+            bootstrap.Modal.getInstance(document.getElementById('editTrackModal')).hide();
+            loadTracks();
+            if (selectedTrackName) selectTrack(selectedTrackName);
+        } else {
+            showToast(data.error || 'Fehler', 'danger');
+        }
+    } catch (e) {
+        showToast('Fehler: ' + e.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save me-1"></i>Speichern';
+    }
+});
 
 async function activateTrack(trackId) {
     try {
