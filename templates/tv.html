@@ -7,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/gridstack/gridstack.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/tv.css') }}" rel="stylesheet">
 </head>
 <body class="tv-mode">
@@ -25,6 +26,7 @@
             <div class="tv-nav-dot active" data-view="0" title="Leaderboard"></div>
             <div class="tv-nav-dot" data-view="1" title="Strecke"></div>
             <div class="tv-nav-dot" data-view="2" title="Statistiken"></div>
+            <button class="tv-grid-btn" id="tvGridBtn" title="Grid-Ansicht (alles gleichzeitig, frei anordbar)"><i class="fas fa-table-cells-large"></i></button>
             <span class="tv-pause-indicator d-none" id="tvPauseIndicator"><i class="fas fa-pause"></i> PAUSE</span>
         </div>
     </div>
@@ -35,9 +37,10 @@
     </div>
 
     <!-- Views -->
-    <div class="tv-viewport">
+    <div class="tv-viewport" id="tvViewport">
         <!-- View 0: Leaderboard -->
-        <div class="tv-view active" id="tvView0">
+        <div class="tv-view active grid-stack-item" id="tvView0" gs-id="lb" gs-x="0" gs-y="0" gs-w="8" gs-h="12">
+          <div class="grid-stack-item-content">
             <table class="tv-leaderboard">
                 <thead>
                     <tr>
@@ -52,17 +55,21 @@
                 </thead>
                 <tbody id="tvLeaderboardBody"></tbody>
             </table>
+          </div>
         </div>
 
         <!-- View 1: Track Map -->
-        <div class="tv-view" id="tvView1">
+        <div class="tv-view grid-stack-item" id="tvView1" gs-id="track" gs-x="8" gs-y="0" gs-w="4" gs-h="7">
+          <div class="grid-stack-item-content">
             <div class="tv-track-container" id="tvTrackContainer">
                 <span class="text-muted" style="font-size:1.5rem;">Kein Streckenlayout verfuegbar</span>
             </div>
+          </div>
         </div>
 
         <!-- View 2: Stats -->
-        <div class="tv-view" id="tvView2">
+        <div class="tv-view grid-stack-item" id="tvView2" gs-id="stats" gs-x="8" gs-y="7" gs-w="4" gs-h="5">
+          <div class="grid-stack-item-content">
             <div class="tv-stats-grid" id="tvStatsGrid">
                 <div class="tv-stat-card">
                     <div class="tv-stat-label"><i class="fas fa-bolt me-1"></i>Schnellste Runde</div>
@@ -86,11 +93,13 @@
                     </div>
                 </div>
             </div>
+          </div>
         </div>
     </div>
 </div>
 
 <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='vendor/gridstack/gridstack-all.js') }}"></script>
 <script src="{{ url_for('static', filename='js/track-positions.js') }}"></script>
 <script>
 // ---- Helpers ----
@@ -172,7 +181,54 @@ document.addEventListener('keydown', (e) => {
     else if (e.key === ' ') { e.preventDefault(); togglePause(); }
 });
 
-startRotation();
+// ---- Grid-Modus (alle Views gleichzeitig, frei anordbar) ----
+let tvGrid = null;
+let tvGridMode = localStorage.getItem('sr-tv-grid') === '1';
+const TV_GRID_LS = 'sr-tv-grid-layout';
+
+function enterTvGridMode() {
+    stopRotation();
+    rotationPaused = true;
+    const vp = document.getElementById('tvViewport');
+    vp.classList.add('grid-stack', 'tv-grid-mode');
+    if (typeof GridStack === 'undefined') return;
+    if (!tvGrid) {
+        tvGrid = GridStack.init({
+            column: 12,
+            cellHeight: Math.max(40, Math.floor(vp.offsetHeight / 12)),
+            margin: 6,
+            float: true,
+            draggable: { cancel: 'button, a, input, select, .tv-nav-dot' },
+        }, vp);
+        const saved = localStorage.getItem(TV_GRID_LS);
+        if (saved) { try { tvGrid.load(JSON.parse(saved), false); } catch (e) {} }
+        tvGrid.on('change', () => localStorage.setItem(TV_GRID_LS, JSON.stringify(tvGrid.save(false))));
+    } else {
+        tvGrid.setStatic(false);
+    }
+    document.getElementById('tvGridBtn').classList.add('active');
+    document.getElementById('tvPauseIndicator').classList.add('d-none');
+}
+
+function exitTvGridMode() {
+    const vp = document.getElementById('tvViewport');
+    if (tvGrid) { tvGrid.destroy(false); tvGrid = null; }
+    vp.classList.remove('grid-stack', 'tv-grid-mode');
+    vp.querySelectorAll('.tv-view').forEach(el => { el.style.cssText = ''; });
+    document.getElementById('tvGridBtn').classList.remove('active');
+    showView(0);
+    startRotation();
+}
+
+function setTvGridMode(on) {
+    tvGridMode = on;
+    localStorage.setItem('sr-tv-grid', on ? '1' : '0');
+    if (on) enterTvGridMode(); else exitTvGridMode();
+}
+
+document.getElementById('tvGridBtn').addEventListener('click', () => setTvGridMode(!tvGridMode));
+
+if (tvGridMode) { enterTvGridMode(); } else { startRotation(); }
 
 // ---- Data Fetching ----
 async function fetchData() {
