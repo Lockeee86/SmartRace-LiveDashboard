@@ -1509,6 +1509,46 @@ footer {
     background: linear-gradient(to right, rgb(40,200,80), rgb(255,200,30), rgb(230,60,30));
 }
 
+/* ===== GridStack Dashboard-Layout ===== */
+.grid-stack {
+    background: transparent;
+}
+.grid-stack-item-content {
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 8px;
+}
+.grid-stack-item-content > .card {
+    height: 100%;
+    width: 100%;
+    margin-bottom: 0;
+    overflow: auto;
+}
+.grid-stack-item-content > #controllerGrid,
+.grid-stack-item-content > .controller-grid {
+    height: 100%;
+    overflow: auto;
+    padding: 2px;
+}
+/* Bearbeitungsmodus: Umriss + Verschiebe-Cursor + sichtbarer Resize-Griff */
+.grid-editing .grid-stack-item-content {
+    outline: 2px dashed var(--sr-accent, #3498db);
+    outline-offset: -2px;
+    cursor: move;
+}
+.grid-editing .grid-stack-item > .ui-resizable-se {
+    background: var(--sr-accent, #3498db);
+    width: 16px;
+    height: 16px;
+    right: 2px;
+    bottom: 2px;
+    border-radius: 4px 0 6px 0;
+    opacity: 0.85;
+    z-index: 40;
+}
+
 /* Schnellste Runde (F1-Style Violett) im Leaderboard */
 .time-fastest {
     color: #c084fc !important;
