@@ -950,6 +950,14 @@ def api_backup():
                 'updated_at': r.updated_at.isoformat() if r.updated_at else None,
             } for r in PersonalRecord.query.all()], ensure_ascii=False) + ',\n'
 
+            yield '"tracks": ' + json.dumps([{
+                'name': t.name, 'length': t.length,
+                'pitstop_delta': t.pitstop_delta, 'svg_layout': t.svg_layout,
+                'is_active': t.is_active,
+                'last_used': t.last_used.isoformat() if t.last_used else None,
+                'created_at': t.created_at.isoformat() if t.created_at else None,
+            } for t in Track.query.all()], ensure_ascii=False) + ',\n'
+
             yield '"session_names": ' + json.dumps([{
                 'session_id': s.session_id, 'display_name': s.display_name,
                 'created_at': s.created_at.isoformat() if s.created_at else None,
@@ -1068,6 +1076,35 @@ def api_restore():
                         updated_at=datetime.fromisoformat(r['updated_at']) if r.get('updated_at') else None,
                     ))
             counts['personal_records'] = len(data['personal_records'])
+
+        if data.get('tracks'):
+            restored = 0
+            for t in data['tracks']:
+                name = (t.get('name') or '').strip()
+                if not name:
+                    continue
+                existing = Track.query.filter_by(name=name).first()
+                if existing:
+                    # Vorhandene Strecke: fehlende Felder auffuellen, is_active
+                    # und bestehendes Layout NICHT ueberschreiben
+                    if not existing.svg_layout and t.get('svg_layout'):
+                        existing.svg_layout = t.get('svg_layout')
+                    if existing.length is None and t.get('length') is not None:
+                        existing.length = t.get('length')
+                    if existing.pitstop_delta is None and t.get('pitstop_delta') is not None:
+                        existing.pitstop_delta = t.get('pitstop_delta')
+                else:
+                    db.session.add(Track(
+                        name=name,
+                        length=t.get('length'),
+                        pitstop_delta=t.get('pitstop_delta'),
+                        svg_layout=t.get('svg_layout'),
+                        is_active=False,  # aktiv-Status nicht wiederherstellen
+                        last_used=datetime.fromisoformat(t['last_used']) if t.get('last_used') else None,
+                        created_at=datetime.fromisoformat(t['created_at']) if t.get('created_at') else None,
+                    ))
+                    restored += 1
+            counts['tracks'] = restored
 
         if data.get('session_names'):
             for s in data['session_names']:
