@@ -77,7 +77,7 @@ def receive_smartrace():
                 'car_name': (ed.get('car_data') or {}).get('name', ''),
                 'lap_number': ed.get('lap'),
                 'laptime_ms': ed.get('laptime_raw'),
-                'laptime_formatted': ed.get('laptime') or fmt_ms(ed.get('laptime_raw')),
+                'laptime_formatted': fmt_ms(ed.get('laptime_raw')) or ed.get('laptime'),
                 'sector_1': ed.get('sector_1'),
                 'sector_2': ed.get('sector_2'),
                 'sector_3': ed.get('sector_3'),
