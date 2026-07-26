@@ -127,6 +127,7 @@ function renderRecentLaps(opts) {
 
     // Alle Runden aller (sichtbaren) Controller einsammeln
     const all = [];
+    let seq = 0; // Einsammel-Reihenfolge als Tiebreaker (falls Zeitstempel gleich/fehlen)
     Object.entries(opts.data).forEach(([cid, cd]) => {
         if (opts.includeController && !opts.includeController(cid)) return;
         const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
@@ -137,7 +138,7 @@ function renderRecentLaps(opts) {
                 name, color,
                 lap: l.lap, tf: l.laptime_formatted || formatTime(l.laptime_raw),
                 s1: l.sector_1, s2: l.sector_2, s3: l.sector_3,
-                ts: l.timestamp || '', pb: l.is_pb,
+                ts: Date.parse(l.timestamp) || 0, seq: seq++, pb: l.is_pb,
             });
         });
     });
@@ -147,8 +148,8 @@ function renderRecentLaps(opts) {
         return;
     }
 
-    // Neueste zuerst
-    all.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+    // Neueste zuerst: nach Zeitstempel, bei Gleichstand nach Einsammel-Reihenfolge
+    all.sort((a, b) => (b.ts - a.ts) || (b.seq - a.seq));
     const current = all[0];
     const rest = all.slice(1, limit);
 
