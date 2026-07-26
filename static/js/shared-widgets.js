@@ -35,6 +35,80 @@ function parseSectorMs(val) {
 }
 
 /**
+ * "Positionen" rendern: kompakte Rangliste (P1, P2, ...) mit Fahrer,
+ * Controller, Runden, Bestzeit und Abstand zum Fuehrenden.
+ * @param {Object} opts
+ * @param {string} opts.containerId
+ * @param {Object} opts.data
+ * @param {Function} [opts.getLaps]
+ * @param {Function} [opts.includeController]
+ * @param {string} [opts.mode]  'race' (nach Runden) oder 'training' (nach Bestzeit)
+ */
+function renderStandings(opts) {
+    const container = document.getElementById(opts.containerId);
+    if (!container) return;
+    const getLaps = opts.getLaps || (cd => cd.laps || []);
+    const mode = opts.mode || 'race';
+
+    const drivers = [];
+    Object.entries(opts.data).forEach(([cid, cd]) => {
+        if (opts.includeController && !opts.includeController(cid)) return;
+        const laps = getLaps(cd);
+        if (laps.length === 0) return;
+        const lapNums = laps.map(l => l.lap || 0).filter(n => n > 0);
+        const maxLap = lapNums.length ? Math.max(...lapNums) : 0;
+        const times = laps.map(l => l.laptime_raw).filter(t => t > 0);
+        const best = cd.best_time_raw || (times.length ? Math.min(...times) : null);
+        const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
+        drivers.push({
+            cid, name: cd.name || 'Fahrer ' + cid, color, laps: maxLap, best,
+            retired: !!cd.retired, disqualified: !!cd.disqualified,
+        });
+    });
+
+    if (drivers.length === 0) {
+        container.innerHTML = '<span class="text-muted small">Warte auf Daten...</span>';
+        return;
+    }
+
+    drivers.sort((a, b) => {
+        if (a.disqualified !== b.disqualified) return a.disqualified ? 1 : -1;
+        if (a.retired !== b.retired) return a.retired ? 1 : -1;
+        if (mode === 'race' && a.laps !== b.laps) return b.laps - a.laps;
+        if (a.best && b.best) return a.best - b.best;
+        if (a.best) return -1;
+        if (b.best) return 1;
+        return 0;
+    });
+
+    const leader = drivers.find(d => !d.retired && !d.disqualified) || drivers[0];
+
+    let html = '<div class="st-list">';
+    drivers.forEach((d, i) => {
+        const pos = i + 1;
+        const posCls = (!d.retired && !d.disqualified)
+            ? (pos === 1 ? 'gold' : pos === 2 ? 'silver' : pos === 3 ? 'bronze' : '') : '';
+        let gap;
+        if (d.disqualified) gap = '<span class="text-danger">DQ</span>';
+        else if (d.retired) gap = '<span class="text-warning">DNF</span>';
+        else if (d === leader) gap = '<span class="text-warning">' + (mode === 'training' ? 'P1' : 'Leader') + '</span>';
+        else if (mode === 'race' && d.laps < leader.laps) gap = '+' + (leader.laps - d.laps) + ' Rd';
+        else if (d.best && leader.best) gap = '+' + formatTime(d.best - leader.best);
+        else gap = '';
+        html += `<div class="st-row">
+            <span class="st-pos ${posCls}">${pos}</span>
+            <span class="controller-badge st-cbadge" style="background:${d.color}">C${d.cid}</span>
+            <span class="st-name" style="color:${d.color}">${d.name}</span>
+            <span class="st-laps">${d.laps}</span>
+            <span class="st-best font-mono">${d.best ? formatTime(d.best) : '--'}</span>
+            <span class="st-gap font-mono">${gap}</span>
+        </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+/**
  * "Letzte Runden" rendern: oben die aktuellste Runde prominent inkl.
  * farbiger Sektoren, darunter die davor gefahrenen Runden als Liste.
  * @param {Object} opts

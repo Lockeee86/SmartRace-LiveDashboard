@@ -121,6 +121,12 @@
                 </li>
                 <li>
                     <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="standings" checked>
+                        <i class="fas fa-ranking-star text-warning"></i> Positionen
+                    </label>
+                </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
                         <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="recentlaps" checked>
                         <i class="fas fa-stopwatch text-warning"></i> Letzte Runden
                     </label>
@@ -251,7 +257,19 @@
             </div>
         </div>
     </div>
-    <div class="grid-stack-item" gs-id="recentlaps" gs-x="0" gs-y="6" gs-w="4" gs-h="5">
+    <div class="grid-stack-item" gs-id="standings" gs-x="0" gs-y="6" gs-w="4" gs-h="5">
+        <div class="grid-stack-item-content">
+            <div class="card stat-card stat-card-standings h-100">
+                <div class="card-body py-2 px-3">
+                    <div class="stat-label mb-1"><i class="fas fa-ranking-star me-1"></i> Positionen</div>
+                    <div id="dashStandings" class="standings-container">
+                        <span class="text-muted small">Warte auf Daten...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="grid-stack-item" gs-id="recentlaps" gs-x="4" gs-y="6" gs-w="4" gs-h="5">
         <div class="grid-stack-item-content">
             <div class="card stat-card stat-card-recentlaps h-100">
                 <div class="card-body py-2 px-3">
@@ -585,6 +603,7 @@ async function updateDashboard() {
         updateDashSectors();
         updateDashHeatmap();
         updateRecentLaps();
+        updateStandings();
     } catch (e) {
         console.error('Dashboard-Update fehlgeschlagen:', e);
     }
@@ -973,6 +992,7 @@ const scheduleDashRender = coalesceFrame(() => {
     updateControllerNames();
     updateDashHeatmap();
     updateRecentLaps();
+    updateStandings();
 });
 
 // WebSocket: Live-Updates — Delta wenn Lap-Daten vorhanden, sonst Full-Fetch
@@ -1298,6 +1318,17 @@ function updateRecentLaps() {
         getLaps: getSessionLaps,
         includeController: (cid) => visibleControllers.has(cid),
         limit: 8,
+    });
+}
+
+// ---- Positionen ---- (Render via shared-widgets.js)
+function updateStandings() {
+    renderStandings({
+        containerId: 'dashStandings',
+        data: dashboardData,
+        getLaps: getSessionLaps,
+        includeController: (cid) => visibleControllers.has(cid),
+        mode: 'race',
     });
 }
 

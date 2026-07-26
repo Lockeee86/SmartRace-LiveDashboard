@@ -71,6 +71,12 @@
                 </li>
                 <li>
                     <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="standings" checked>
+                        <i class="fas fa-ranking-star text-warning"></i> Positionen
+                    </label>
+                </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
                         <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="recentlaps" checked>
                         <i class="fas fa-stopwatch text-warning"></i> Letzte Runden
                     </label>
@@ -158,6 +164,16 @@
                 <div class="stat-label mb-1"><i class="fas fa-th me-1"></i> Rundenzeit-Heatmap</div>
                 <div id="lbHeatmap" class="heatmap-container">
                     <span class="text-muted small">Warte auf Rundendaten...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-4 lb-widget-col" data-widget="standings" draggable="true">
+        <div class="card stat-card stat-card-standings h-100">
+            <div class="card-body py-2 px-3">
+                <div class="stat-label mb-1"><i class="fas fa-ranking-star me-1"></i> Positionen</div>
+                <div id="lbStandings" class="standings-container">
+                    <span class="text-muted small">Warte auf Daten...</span>
                 </div>
             </div>
         </div>
@@ -527,6 +543,17 @@ function updateLeaderboard() {
     updateSectorAnalysis();
     updateHeatmap();
     updateLbRecentLaps();
+    updateLbStandings();
+}
+
+// ---- Positionen ---- (Render via shared-widgets.js)
+function updateLbStandings() {
+    renderStandings({
+        containerId: 'lbStandings',
+        data: lbData,
+        getLaps: getSessionLaps,
+        mode: lbMode,
+    });
 }
 
 // ---- Letzte Runden ---- (Render via shared-widgets.js)
