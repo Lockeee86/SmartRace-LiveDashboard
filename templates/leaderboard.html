@@ -69,6 +69,12 @@
                         <i class="fas fa-th text-danger"></i> Rundenzeit-Heatmap
                     </label>
                 </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="recentlaps" checked>
+                        <i class="fas fa-stopwatch text-warning"></i> Letzte Runden
+                    </label>
+                </li>
             </ul>
         </div>
         <span class="badge bg-danger pulse" id="liveBadge">LIVE</span>
@@ -151,6 +157,16 @@
             <div class="card-body py-2 px-3">
                 <div class="stat-label mb-1"><i class="fas fa-th me-1"></i> Rundenzeit-Heatmap</div>
                 <div id="lbHeatmap" class="heatmap-container">
+                    <span class="text-muted small">Warte auf Rundendaten...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-4 lb-widget-col" data-widget="recentlaps" draggable="true">
+        <div class="card stat-card stat-card-recentlaps h-100">
+            <div class="card-body py-2 px-3">
+                <div class="stat-label mb-1"><i class="fas fa-stopwatch me-1"></i> Letzte Runden</div>
+                <div id="lbRecentLaps" class="recent-laps-container">
                     <span class="text-muted small">Warte auf Rundendaten...</span>
                 </div>
             </div>
@@ -510,6 +526,17 @@ function updateLeaderboard() {
     renderSparklines();
     updateSectorAnalysis();
     updateHeatmap();
+    updateLbRecentLaps();
+}
+
+// ---- Letzte Runden ---- (Render via shared-widgets.js)
+function updateLbRecentLaps() {
+    renderRecentLaps({
+        containerId: 'lbRecentLaps',
+        data: lbData,
+        getLaps: getSessionLaps,
+        limit: 8,
+    });
 }
 
 // ---- Rundenzeit-Heatmap ---- (Render via shared-widgets.js)
