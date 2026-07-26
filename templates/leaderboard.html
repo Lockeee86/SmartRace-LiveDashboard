@@ -81,6 +81,12 @@
                         <i class="fas fa-stopwatch text-warning"></i> Letzte Runden
                     </label>
                 </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="ticker" checked>
+                        <i class="fas fa-broadcast-tower text-info"></i> Live-Ticker
+                    </label>
+                </li>
             </ul>
         </div>
         <span class="badge bg-danger pulse" id="liveBadge">LIVE</span>
@@ -1094,6 +1100,9 @@ function applyLbWidgetVisibility() {
             col.classList.remove('d-none');
         }
     });
+    // Live-Ticker (kein lb-widget-col) separat ein-/ausblenden
+    const ticker = document.getElementById('tickerCard');
+    if (ticker) ticker.classList.toggle('d-none', hidden.includes('ticker'));
     document.querySelectorAll('.lb-widget-vis-cb').forEach(cb => {
         cb.checked = !hidden.includes(cb.value);
     });
@@ -1172,7 +1181,9 @@ lbWidgetRow.addEventListener('drop', (e) => {
 })();
 
 // ---- Widget Groesse (S/M/L, immer sichtbar, auch auf Touch) ----
+// S/M/L aendert BREITE der Kachel UND skaliert den Inhalt/Schrift (wie der Ticker)
 const LB_SIZE_COLS = { S: '3', M: '6', L: '12' };
+const WIDGET_ZOOM = { S: 0.8, M: 1, L: 1.3 };
 // alte numerische Werte (3/6/12) auf S/M/L abbilden
 const LB_SIZE_NORM = { '3': 'S', '6': 'M', '12': 'L', S: 'S', M: 'M', L: 'L' };
 
@@ -1185,6 +1196,8 @@ function applyLbWidgetSize(col, key) {
     col.className = col.className.replace(/col-lg-\d+/g, '');
     col.classList.add('col-lg-' + cols);
     col.dataset.size = key;
+    const body = col.querySelector('.card-body');
+    if (body) body.style.zoom = WIDGET_ZOOM[key] || 1;
     col.querySelectorAll('.widget-size-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.size === key));
 }
