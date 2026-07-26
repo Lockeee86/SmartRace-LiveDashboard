@@ -1167,6 +1167,45 @@ footer {
     color: var(--sr-text);
 }
 
+/* Immer sichtbare S/M/L-Groessenbuttons pro Widget (auch auf Touch) */
+.widget-size-ctrl {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: flex;
+    gap: 2px;
+    z-index: 6;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+    padding: 2px;
+}
+.widget-size-btn {
+    width: 19px;
+    height: 19px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1;
+    border: none;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--sr-text-muted, #adb5bd);
+    cursor: pointer;
+    padding: 0;
+}
+.widget-size-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+}
+.widget-size-btn.active {
+    background: var(--sr-accent, #3498db);
+    color: #fff;
+}
+[data-bs-theme="light"] .widget-size-ctrl { background: rgba(0, 0, 0, 0.12); }
+[data-bs-theme="light"] .widget-size-btn { background: rgba(0, 0, 0, 0.06); color: #495057; }
+
 .widget-col,
 .lb-widget-col {
     transition: flex 0.3s ease, max-width 0.3s ease;

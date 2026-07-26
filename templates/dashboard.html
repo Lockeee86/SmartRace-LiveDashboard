@@ -1233,7 +1233,46 @@ document.getElementById('gridResetBtn').addEventListener('click', () => {
     location.reload();
 });
 
+// ---- S/M/L Groessen-Presets pro Widget (immer sichtbar, auch auf Touch) ----
+const DASH_SIZES = { S: { w: 3, h: 3 }, M: { w: 6, h: 4 }, L: { w: 12, h: 7 } };
+
+function dashSizeKey(node) {
+    const w = (node && node.w) || 3;
+    return w <= 4 ? 'S' : w <= 8 ? 'M' : 'L';
+}
+
+function initDashWidgetSizes() {
+    if (!dashGrid) return;
+    document.querySelectorAll('#dashGrid .grid-stack-item').forEach(item => {
+        if (item.getAttribute('gs-id') === 'ticker') return; // Ticker hat eigene S/M/L
+        const content = item.querySelector('.grid-stack-item-content');
+        if (!content || content.querySelector('.widget-size-ctrl')) return;
+        const grp = document.createElement('div');
+        grp.className = 'widget-size-ctrl';
+        ['S', 'M', 'L'].forEach(k => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'widget-size-btn';
+            btn.dataset.size = k;
+            btn.textContent = k;
+            btn.title = { S: 'Klein', M: 'Mittel', L: 'Gross' }[k];
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!dashGrid) return;
+                dashGrid.update(item, DASH_SIZES[k]);
+                grp.querySelectorAll('.widget-size-btn').forEach(b => b.classList.toggle('active', b === btn));
+                saveDashGrid();
+            });
+            grp.appendChild(btn);
+        });
+        content.appendChild(grp);
+        const key = dashSizeKey(item.gridstackNode);
+        grp.querySelectorAll('.widget-size-btn').forEach(b => b.classList.toggle('active', b.dataset.size === key));
+    });
+}
+
 initDashGrid();
+initDashWidgetSizes();
 
 // ---- Sektorenanalyse Widget ---- (parseSectorMs aus shared-widgets.js)
 function updateDashSectors() {
