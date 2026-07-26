@@ -506,7 +506,7 @@ function updateLeaderboard() {
         // Sektoren
         let sectors = '--';
         if (d.lastSector1 || d.lastSector2 || d.lastSector3) {
-            sectors = `<span class="sector-mini">${d.lastSector1 || '--'}</span> <span class="sector-mini">${d.lastSector2 || '--'}</span> <span class="sector-mini">${d.lastSector3 || '--'}</span>`;
+            sectors = `<span class="sector-mini">${formatSector(d.lastSector1)}</span> <span class="sector-mini">${formatSector(d.lastSector2)}</span> <span class="sector-mini">${formatSector(d.lastSector3)}</span>`;
         }
 
         // Fuel
