@@ -425,9 +425,9 @@ function renderRecords(records, vb) {
             <td class="fw-bold" style="color:#9b59b6">Virtuelle Beste</td>
             <td class="text-muted small">Theoretisch</td>
             <td class="text-center font-mono fw-bold" style="color:#9b59b6">${vb.laptime_formatted}</td>
-            <td class="text-center font-mono small">${vb.sector_1 || '--'}<br><span class="text-muted" style="font-size:0.6rem">${vb.sector_1_driver}</span></td>
-            <td class="text-center font-mono small">${vb.sector_2 || '--'}<br><span class="text-muted" style="font-size:0.6rem">${vb.sector_2_driver}</span></td>
-            <td class="text-center font-mono small">${vb.sector_3 || '--'}<br><span class="text-muted" style="font-size:0.6rem">${vb.sector_3_driver}</span></td>
+            <td class="text-center font-mono small">${formatSector(vb.sector_1)}<br><span class="text-muted" style="font-size:0.6rem">${vb.sector_1_driver}</span></td>
+            <td class="text-center font-mono small">${formatSector(vb.sector_2)}<br><span class="text-muted" style="font-size:0.6rem">${vb.sector_2_driver}</span></td>
+            <td class="text-center font-mono small">${formatSector(vb.sector_3)}<br><span class="text-muted" style="font-size:0.6rem">${vb.sector_3_driver}</span></td>
             <td class="text-center text-muted d-none d-md-table-cell">--</td>
         </tr>`;
     }
@@ -440,9 +440,9 @@ function renderRecords(records, vb) {
             <td class="fw-bold">${r.driver_name}</td>
             <td class="text-muted">${r.car_name || '--'}</td>
             <td class="text-center font-mono fw-bold">${r.laptime_formatted}</td>
-            <td class="text-center font-mono small">${r.sector_1 || '--'}</td>
-            <td class="text-center font-mono small">${r.sector_2 || '--'}</td>
-            <td class="text-center font-mono small">${r.sector_3 || '--'}</td>
+            <td class="text-center font-mono small">${formatSector(r.sector_1)}</td>
+            <td class="text-center font-mono small">${formatSector(r.sector_2)}</td>
+            <td class="text-center font-mono small">${formatSector(r.sector_3)}</td>
             <td class="text-center text-muted d-none d-md-table-cell">${date}</td>
         </tr>`;
     }).join('');

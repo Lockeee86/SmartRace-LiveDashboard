@@ -230,7 +230,7 @@ function renderRecentLaps(opts) {
             <span class="rl-time font-mono">${current.tf}</span>
             ${current.pb ? '<i class="fas fa-trophy text-warning ms-1"></i>' : ''}
         </div>
-        <div class="rl-sectors">${chip('S1', current.s1, 0)}${chip('S2', current.s2, 1)}${chip('S3', current.s3, 2)}</div>
+        <div class="rl-sectors">${chip('S1', formatSector(current.s1), 0)}${chip('S2', formatSector(current.s2), 1)}${chip('S3', formatSector(current.s3), 2)}</div>
     </div>`;
 
     if (rest.length) {
@@ -241,7 +241,7 @@ function renderRecentLaps(opts) {
                 <span class="rl-name-sm" style="color:${l.color}">${l.name}</span>
                 <span class="rl-lapnum-sm">Rd ${l.lap || '-'}</span>
                 <span class="rl-time-sm font-mono">${l.tf}</span>
-                <span class="rl-sectors-sm font-mono">${l.s1 || '--'} · ${l.s2 || '--'} · ${l.s3 || '--'}</span>
+                <span class="rl-sectors-sm font-mono">${formatSector(l.s1)} · ${formatSector(l.s2)} · ${formatSector(l.s3)}</span>
             </div>`;
         });
         html += '</div>';

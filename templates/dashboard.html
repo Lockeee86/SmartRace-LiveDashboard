@@ -736,9 +736,9 @@ function renderControllers() {
         let sectorHtml = '';
         if (latestLap.sector_1 || latestLap.sector_2 || latestLap.sector_3) {
             sectorHtml = `<div class="sector-row">
-                <span class="sector-badge" title="Sektor 1">S1: ${latestLap.sector_1 || '--'}</span>
-                <span class="sector-badge" title="Sektor 2">S2: ${latestLap.sector_2 || '--'}</span>
-                <span class="sector-badge" title="Sektor 3">S3: ${latestLap.sector_3 || '--'}</span>
+                <span class="sector-badge" title="Sektor 1">S1: ${formatSector(latestLap.sector_1)}</span>
+                <span class="sector-badge" title="Sektor 2">S2: ${formatSector(latestLap.sector_2)}</span>
+                <span class="sector-badge" title="Sektor 3">S3: ${formatSector(latestLap.sector_3)}</span>
             </div>`;
         }
 

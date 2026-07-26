@@ -413,9 +413,9 @@ function renderTable(data) {
             <td class="text-center">${lap.lap || '--'}</td>
             <td class="text-center font-mono fw-bold">${lap.laptime_formatted || '--'}</td>
             <td class="text-center font-mono small">${deltaHtml}</td>
-            <td class="text-center font-mono small d-none d-lg-table-cell">${lap.sector_1 || '--'}</td>
-            <td class="text-center font-mono small d-none d-lg-table-cell">${lap.sector_2 || '--'}</td>
-            <td class="text-center font-mono small d-none d-lg-table-cell">${lap.sector_3 || '--'}</td>
+            <td class="text-center font-mono small d-none d-lg-table-cell">${formatSector(lap.sector_1)}</td>
+            <td class="text-center font-mono small d-none d-lg-table-cell">${formatSector(lap.sector_2)}</td>
+            <td class="text-center font-mono small d-none d-lg-table-cell">${formatSector(lap.sector_3)}</td>
             <td class="text-center small">${ts}</td>
             <td class="text-center">${lap.is_pb ? '<i class="fas fa-trophy text-warning"></i>' : ''}${lap.is_outlier ? '<i class="fas fa-filter text-danger ms-1" title="Ausreisser — ausserhalb Strecken-Fenster, aus Rekorden/Statistiken ausgeschlossen"></i>' : ''}</td>
             <td class="text-center">
@@ -726,9 +726,9 @@ async function loadTrackRecords() {
                 <td class="font-mono fw-bold" style="color:#9b59b6">${vb.laptime_formatted}</td>
                 <td style="color:#9b59b6"><i class="fas fa-bolt me-1"></i>Virtuelle Beste</td>
                 <td class="text-muted small">Theoretisch</td>
-                <td class="font-mono small">${vb.sector_1 || '--'}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_1_driver}</span></td>
-                <td class="font-mono small">${vb.sector_2 || '--'}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_2_driver}</span></td>
-                <td class="font-mono small">${vb.sector_3 || '--'}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_3_driver}</span></td>
+                <td class="font-mono small">${formatSector(vb.sector_1)}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_1_driver}</span></td>
+                <td class="font-mono small">${formatSector(vb.sector_2)}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_2_driver}</span></td>
+                <td class="font-mono small">${formatSector(vb.sector_3)}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_3_driver}</span></td>
                 ${trackFilter ? '' : '<td class="text-muted">--</td>'}
                 <td class="text-muted">--</td>
                 <td></td>
@@ -739,9 +739,9 @@ async function loadTrackRecords() {
                 <td class="font-mono fw-bold">${r.laptime_formatted}</td>
                 <td>${r.driver_name || '--'}</td>
                 <td class="text-muted">${r.car_name || '--'}</td>
-                <td class="font-mono small">${r.sector_1 || '--'}</td>
-                <td class="font-mono small">${r.sector_2 || '--'}</td>
-                <td class="font-mono small">${r.sector_3 || '--'}</td>
+                <td class="font-mono small">${formatSector(r.sector_1)}</td>
+                <td class="font-mono small">${formatSector(r.sector_2)}</td>
+                <td class="font-mono small">${formatSector(r.sector_3)}</td>
                 ${trackFilter ? '' : `<td class="text-muted small">${r.track_name || '--'}</td>`}
                 <td class="text-muted">${r.created_at ? new Date(r.created_at).toLocaleDateString('de-DE') : '--'}</td>
                 <td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteTrackRecord(${r.id})" title="Loeschen"><i class="fas fa-trash-alt" style="font-size:0.7rem"></i></button></td>

@@ -201,6 +201,20 @@
         return minutes + ':' + (s % 60).toFixed(3).padStart(6, '0');
     }
 
+    // Sektor-Zeitstring ("0:03.268" / "3.268" / mit Komma) kompakt formatieren
+    function formatSector(val) {
+        if (val === null || val === undefined || val === '' || val === '--') return '--';
+        const s = String(val).trim().replace(',', '.');
+        let ms;
+        if (s.includes(':')) {
+            const [mp, sp] = s.split(':');
+            ms = ((parseInt(mp, 10) || 0) * 60 + parseFloat(sp)) * 1000;
+        } else {
+            ms = parseFloat(s) * 1000;
+        }
+        return (isNaN(ms) || ms <= 0) ? String(val) : formatTime(ms);
+    }
+
     const CONTROLLER_COLORS = {
         '1': '#e74c3c', '2': '#3498db', '3': '#2ecc71',
         '4': '#f1c40f', '5': '#e67e22', '6': '#9b59b6'
