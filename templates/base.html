@@ -102,6 +102,20 @@
                                 </button>
                             </div>
                         </li>
+                        <li><span class="setting-label">Widget-Groesse</span></li>
+                        <li>
+                            <div class="d-flex align-items-center gap-1 px-2 py-1">
+                                <button class="btn btn-sm btn-outline-secondary flex-shrink-0" id="widgetZoomDownBtn" style="font-size:0.65rem; padding:0.15rem 0.4rem;">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary flex-grow-1" id="widgetZoomResetBtn" style="font-size:0.7rem; padding:0.15rem 0.3rem;">
+                                    <span id="widgetZoomLabel">100%</span>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary flex-shrink-0" id="widgetZoomUpBtn" style="font-size:0.65rem; padding:0.15rem 0.4rem;">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </li>
                         <li><hr class="dropdown-divider"></li>
                         <li><span class="setting-label">Benachrichtigungen</span></li>
                         <li>
@@ -580,6 +594,34 @@
     });
 
     applyFontScale(fontScale);
+
+    // =========================================================================
+    // Widget-Groesse (globaler Zoom fuer alle Widget-Karten)
+    // =========================================================================
+    const WIDGET_ZOOM_LEVELS = [80, 90, 100, 115, 130, 150, 175, 200, 250, 300];
+    let widgetZoom = parseInt(localStorage.getItem('sr-widget-zoom')) || 100;
+    const widgetZoomLabel = document.getElementById('widgetZoomLabel');
+
+    function applyWidgetZoom(z) {
+        widgetZoom = z;
+        document.documentElement.style.setProperty('--widget-zoom', (z / 100).toString());
+        if (widgetZoomLabel) widgetZoomLabel.textContent = z + '%';
+        localStorage.setItem('sr-widget-zoom', String(z));
+    }
+
+    const wzUp = document.getElementById('widgetZoomUpBtn');
+    if (wzUp) {
+        wzUp.addEventListener('click', () => {
+            const next = WIDGET_ZOOM_LEVELS.find(s => s > widgetZoom);
+            if (next) applyWidgetZoom(next);
+        });
+        document.getElementById('widgetZoomDownBtn').addEventListener('click', () => {
+            const prev = [...WIDGET_ZOOM_LEVELS].reverse().find(s => s < widgetZoom);
+            if (prev) applyWidgetZoom(prev);
+        });
+        document.getElementById('widgetZoomResetBtn').addEventListener('click', () => applyWidgetZoom(100));
+    }
+    applyWidgetZoom(widgetZoom);
 
     // =========================================================================
     // Sound-Benachrichtigungen

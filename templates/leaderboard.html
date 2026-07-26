@@ -1181,9 +1181,8 @@ lbWidgetRow.addEventListener('drop', (e) => {
 })();
 
 // ---- Widget Groesse (S/M/L, immer sichtbar, auch auf Touch) ----
-// S/M/L aendert BREITE der Kachel UND skaliert den Inhalt/Schrift (wie der Ticker)
+// S/M/L aendert die BREITE der Kachel (Inhalts-Zoom global ueber Settings)
 const LB_SIZE_COLS = { S: '3', M: '6', L: '12' };
-const WIDGET_ZOOM = { S: 0.75, M: 1, L: 1.8 };
 // alte numerische Werte (3/6/12) auf S/M/L abbilden
 const LB_SIZE_NORM = { '3': 'S', '6': 'M', '12': 'L', S: 'S', M: 'M', L: 'L' };
 
@@ -1196,8 +1195,6 @@ function applyLbWidgetSize(col, key) {
     col.className = col.className.replace(/col-lg-\d+/g, '');
     col.classList.add('col-lg-' + cols);
     col.dataset.size = key;
-    const body = col.querySelector('.card-body');
-    if (body) body.style.zoom = WIDGET_ZOOM[key] || 1;
     col.querySelectorAll('.widget-size-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.size === key));
 }
