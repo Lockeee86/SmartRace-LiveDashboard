@@ -19,6 +19,72 @@ function coalesceFrame(fn) {
     };
 }
 
+// =============================================================================
+// Per-Widget-Zoom (eigener Prozent-Regler je Widget, ueberschreibt globalen Zoom)
+// =============================================================================
+const WIDGET_ZOOM_STEPS = [50, 60, 70, 80, 90, 100, 115, 130, 150, 175, 200, 250, 300, 400];
+
+function getWidgetZoomMap(key) {
+    try { return JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) { return {}; }
+}
+
+function applyWidgetZoomOverride(cardEl, wid, key) {
+    const map = getWidgetZoomMap(key);
+    const body = cardEl.querySelector('.card-body');
+    const lbl = cardEl.querySelector('.widget-zoom-lbl');
+    if (map[wid]) {
+        if (body) body.style.zoom = (map[wid] / 100).toString();
+        if (lbl) lbl.textContent = map[wid] + '%';
+    } else {
+        if (body) body.style.removeProperty('zoom'); // faellt auf globalen Zoom zurueck
+        if (lbl) lbl.textContent = 'Auto';
+    }
+}
+
+/**
+ * Fuegt einer Widget-Ecke (.widget-size-ctrl) einen Zoom-Regler (- % +) hinzu.
+ * @param {Element} ctrl   das .widget-size-ctrl-Element
+ * @param {Element} cardEl die Widget-Karte (enthaelt .card-body)
+ * @param {string} wid     Widget-ID
+ * @param {string} key     localStorage-Key der Zoom-Map (pro Seite)
+ */
+function addWidgetZoomControls(ctrl, cardEl, wid, key) {
+    if (ctrl.querySelector('.widget-zoom-btn')) return;
+    const mk = (txt, cls) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = txt; return b; };
+    const sep = document.createElement('span'); sep.className = 'wsc-sep';
+    const down = mk('−', 'widget-zoom-btn'); down.title = 'Kleiner';
+    const lbl = mk('Auto', 'widget-zoom-lbl'); lbl.title = 'Auf globalen Zoom zuruecksetzen';
+    const up = mk('+', 'widget-zoom-btn'); up.title = 'Groesser';
+
+    const globalPct = () => parseInt(localStorage.getItem('sr-widget-zoom')) || 100;
+    const curPct = () => getWidgetZoomMap(key)[wid] || globalPct();
+    const setZoom = (pct) => {
+        const map = getWidgetZoomMap(key);
+        if (pct == null) delete map[wid]; else map[wid] = pct;
+        localStorage.setItem(key, JSON.stringify(map));
+        applyWidgetZoomOverride(cardEl, wid, key);
+    };
+    down.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const c = curPct();
+        const prev = [...WIDGET_ZOOM_STEPS].reverse().find(s => s < c);
+        if (prev) setZoom(prev);
+    });
+    up.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const c = curPct();
+        const next = WIDGET_ZOOM_STEPS.find(s => s > c);
+        if (next) setZoom(next);
+    });
+    lbl.addEventListener('click', (e) => { e.stopPropagation(); setZoom(null); });
+
+    ctrl.appendChild(sep);
+    ctrl.appendChild(down);
+    ctrl.appendChild(lbl);
+    ctrl.appendChild(up);
+    applyWidgetZoomOverride(cardEl, wid, key);
+}
+
 // Sektor-Zeitstring ("15.234" oder "1:05.234", auch mit Komma) -> Millisekunden
 function parseSectorMs(val) {
     if (!val) return null;
@@ -127,6 +193,7 @@ function renderRecentLaps(opts) {
 
     // Alle Runden aller (sichtbaren) Controller einsammeln
     const all = [];
+    let seq = 0; // Einsammel-Reihenfolge als Tiebreaker (falls Zeitstempel gleich/fehlen)
     Object.entries(opts.data).forEach(([cid, cd]) => {
         if (opts.includeController && !opts.includeController(cid)) return;
         const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
@@ -137,7 +204,7 @@ function renderRecentLaps(opts) {
                 name, color,
                 lap: l.lap, tf: l.laptime_formatted || formatTime(l.laptime_raw),
                 s1: l.sector_1, s2: l.sector_2, s3: l.sector_3,
-                ts: l.timestamp || '', pb: l.is_pb,
+                ts: Date.parse(l.timestamp) || 0, seq: seq++, pb: l.is_pb,
             });
         });
     });
@@ -147,8 +214,8 @@ function renderRecentLaps(opts) {
         return;
     }
 
-    // Neueste zuerst
-    all.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+    // Neueste zuerst: nach Zeitstempel, bei Gleichstand nach Einsammel-Reihenfolge
+    all.sort((a, b) => (b.ts - a.ts) || (b.seq - a.seq));
     const current = all[0];
     const rest = all.slice(1, limit);
 

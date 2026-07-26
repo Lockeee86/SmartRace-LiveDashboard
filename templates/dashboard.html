@@ -1228,6 +1228,7 @@ function applyWidgetSize(col, key) {
                 grp.appendChild(btn);
             });
             card.appendChild(grp);
+            addWidgetZoomControls(grp, card, wid, 'sr-widget-zoom-map');
         }
         let key = DASH_SIZE_NORM[saved[wid]];
         if (!key) {
