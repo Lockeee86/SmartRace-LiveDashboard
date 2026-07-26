@@ -1167,6 +1167,11 @@ footer {
     color: var(--sr-text);
 }
 
+/* Globaler Widget-Zoom (Einstellung in den Settings) skaliert Widget-Inhalte */
+.stat-card > .card-body {
+    zoom: var(--widget-zoom, 1);
+}
+
 /* Immer sichtbare S/M/L-Groessenbuttons pro Widget (auch auf Touch) */
 .widget-size-ctrl {
     position: absolute;

@@ -1234,29 +1234,16 @@ document.getElementById('gridResetBtn').addEventListener('click', () => {
 });
 
 // ---- S/M/L pro Widget (immer sichtbar, auch auf Touch) ----
-// S/M/L aendert die Kachelgroesse UND skaliert den Inhalt/Schrift (wie der Ticker)
+// S/M/L aendert nur die Kachelgroesse (Inhalts-Zoom global ueber Settings)
 const DASH_SIZES = { S: { w: 3, h: 3 }, M: { w: 6, h: 4 }, L: { w: 12, h: 7 } };
-const DASH_ZOOM = { S: 0.75, M: 1, L: 1.8 };
-const DASH_SCALE_KEY = 'sr-dash-widget-scale';
 
-function getDashScales() {
-    try { return JSON.parse(localStorage.getItem(DASH_SCALE_KEY) || '{}'); } catch (e) { return {}; }
-}
-
-function setDashWidgetScale(item, k, persist) {
-    const body = item.querySelector('.card-body');
-    if (body) body.style.zoom = DASH_ZOOM[k] || 1;
-    item.querySelectorAll('.widget-size-btn').forEach(b => b.classList.toggle('active', b.dataset.size === k));
-    if (persist) {
-        const s = getDashScales();
-        s[item.getAttribute('gs-id')] = k;
-        localStorage.setItem(DASH_SCALE_KEY, JSON.stringify(s));
-    }
+function dashSizeKey(node) {
+    const w = (node && node.w) || 3;
+    return w <= 4 ? 'S' : w <= 8 ? 'M' : 'L';
 }
 
 function initDashWidgetSizes() {
     if (!dashGrid) return;
-    const scales = getDashScales();
     document.querySelectorAll('#dashGrid .grid-stack-item').forEach(item => {
         if (item.getAttribute('gs-id') === 'ticker') return; // Ticker hat eigene S/M/L
         const content = item.querySelector('.grid-stack-item-content');
@@ -1273,15 +1260,15 @@ function initDashWidgetSizes() {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (!dashGrid) return;
-                dashGrid.update(item, DASH_SIZES[k]);   // Kachelgroesse
-                setDashWidgetScale(item, k, true);       // Inhalt/Schrift skalieren
+                dashGrid.update(item, DASH_SIZES[k]);
+                grp.querySelectorAll('.widget-size-btn').forEach(b => b.classList.toggle('active', b === btn));
                 saveDashGrid();
             });
             grp.appendChild(btn);
         });
         content.appendChild(grp);
-        // gespeicherte Skalierung anwenden (Default M = 100%)
-        setDashWidgetScale(item, scales[item.getAttribute('gs-id')] || 'M', false);
+        const key = dashSizeKey(item.gridstackNode);
+        grp.querySelectorAll('.widget-size-btn').forEach(b => b.classList.toggle('active', b.dataset.size === key));
     });
 }
 
