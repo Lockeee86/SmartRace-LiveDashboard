@@ -121,6 +121,12 @@
                 </li>
                 <li>
                     <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="recentlaps" checked>
+                        <i class="fas fa-stopwatch text-warning"></i> Letzte Runden
+                    </label>
+                </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
                         <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="ticker" checked>
                         <i class="fas fa-broadcast-tower text-info"></i> Live-Ticker
                     </label>
@@ -245,7 +251,19 @@
             </div>
         </div>
     </div>
-    <div class="grid-stack-item" gs-id="ticker" gs-x="0" gs-y="6" gs-w="12" gs-h="1">
+    <div class="grid-stack-item" gs-id="recentlaps" gs-x="0" gs-y="6" gs-w="4" gs-h="5">
+        <div class="grid-stack-item-content">
+            <div class="card stat-card stat-card-recentlaps h-100">
+                <div class="card-body py-2 px-3">
+                    <div class="stat-label mb-1"><i class="fas fa-stopwatch me-1"></i> Letzte Runden</div>
+                    <div id="dashRecentLaps" class="recent-laps-container">
+                        <span class="text-muted small">Warte auf Rundendaten...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="grid-stack-item" gs-id="ticker" gs-x="0" gs-y="11" gs-w="12" gs-h="1">
         <div class="grid-stack-item-content">
             <div class="card ticker-card h-100 mb-0" id="tickerCard">
                 <div class="card-body p-0 d-flex align-items-center overflow-hidden ticker-body">
@@ -266,7 +284,7 @@
             </div>
         </div>
     </div>
-    <div class="grid-stack-item" gs-id="controllers" gs-x="0" gs-y="7" gs-w="12" gs-h="8">
+    <div class="grid-stack-item" gs-id="controllers" gs-x="0" gs-y="12" gs-w="12" gs-h="8">
         <div class="grid-stack-item-content">
             <div class="controller-grid" id="controllerGrid">
                 <!-- Wird per JavaScript gefuellt -->
@@ -566,6 +584,7 @@ async function updateDashboard() {
         updateControllerNames();
         updateDashSectors();
         updateDashHeatmap();
+        updateRecentLaps();
     } catch (e) {
         console.error('Dashboard-Update fehlgeschlagen:', e);
     }
@@ -953,6 +972,7 @@ const scheduleDashRender = coalesceFrame(() => {
     renderControllers();
     updateControllerNames();
     updateDashHeatmap();
+    updateRecentLaps();
 });
 
 // WebSocket: Live-Updates — Delta wenn Lap-Daten vorhanden, sonst Full-Fetch
@@ -1267,6 +1287,17 @@ function updateDashHeatmap() {
         getLaps: getSessionLaps,
         includeController: (cid) => visibleControllers.has(cid),
         fallbackWidth: 600,
+    });
+}
+
+// ---- Letzte Runden ---- (Render via shared-widgets.js)
+function updateRecentLaps() {
+    renderRecentLaps({
+        containerId: 'dashRecentLaps',
+        data: dashboardData,
+        getLaps: getSessionLaps,
+        includeController: (cid) => visibleControllers.has(cid),
+        limit: 8,
     });
 }
 
