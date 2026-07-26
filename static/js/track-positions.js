@@ -216,7 +216,10 @@ function colorTrackSectors(root) {
             ? svg.getElementById('sector_' + i)
             : svg.querySelector('#sector_' + i);
         if (path) {
-            path.style.stroke = SECTOR_COLORS[i - 1];
+            // Inline-!important, damit die Sektorfarbe die CSS-Regel
+            // ".track-layout-widget svg path { stroke: accent !important }" schlaegt
+            path.style.setProperty('stroke', SECTOR_COLORS[i - 1], 'important');
+            path.style.setProperty('stroke-opacity', '0.95', 'important');
             path.style.transition = 'stroke 0.3s';
         }
     }
