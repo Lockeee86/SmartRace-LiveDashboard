@@ -1224,6 +1224,7 @@ function applyLbWidgetSize(col, key) {
                 grp.appendChild(btn);
             });
             card.appendChild(grp);
+            addWidgetZoomControls(grp, card, wid, 'sr-lb-widget-zoom-map');
         }
         let key = LB_SIZE_NORM[saved[wid]];
         if (!key) {
