@@ -71,6 +71,12 @@
                 </li>
                 <li>
                     <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="standings" checked>
+                        <i class="fas fa-ranking-star text-warning"></i> Positionen
+                    </label>
+                </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
                         <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="recentlaps" checked>
                         <i class="fas fa-stopwatch text-warning"></i> Letzte Runden
                     </label>
@@ -158,6 +164,16 @@
                 <div class="stat-label mb-1"><i class="fas fa-th me-1"></i> Rundenzeit-Heatmap</div>
                 <div id="lbHeatmap" class="heatmap-container">
                     <span class="text-muted small">Warte auf Rundendaten...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-4 lb-widget-col" data-widget="standings" draggable="true">
+        <div class="card stat-card stat-card-standings h-100">
+            <div class="card-body py-2 px-3">
+                <div class="stat-label mb-1"><i class="fas fa-ranking-star me-1"></i> Positionen</div>
+                <div id="lbStandings" class="standings-container">
+                    <span class="text-muted small">Warte auf Daten...</span>
                 </div>
             </div>
         </div>
@@ -527,6 +543,17 @@ function updateLeaderboard() {
     updateSectorAnalysis();
     updateHeatmap();
     updateLbRecentLaps();
+    updateLbStandings();
+}
+
+// ---- Positionen ---- (Render via shared-widgets.js)
+function updateLbStandings() {
+    renderStandings({
+        containerId: 'lbStandings',
+        data: lbData,
+        getLaps: getSessionLaps,
+        mode: lbMode,
+    });
 }
 
 // ---- Letzte Runden ---- (Render via shared-widgets.js)
@@ -1144,49 +1171,56 @@ lbWidgetRow.addEventListener('drop', (e) => {
     } catch (e) {}
 })();
 
-// ---- Widget Resize ----
-const LB_SIZES = ['3', '6', '12'];
-const LB_SIZE_ICONS = { '3': 'fa-expand', '6': 'fa-up-right-and-down-left-from-center', '12': 'fa-compress' };
-const LB_SIZE_TITLES = { '3': 'Klein (25%)', '6': 'Mittel (50%)', '12': 'Gross (100%)' };
+// ---- Widget Groesse (S/M/L, immer sichtbar, auch auf Touch) ----
+const LB_SIZE_COLS = { S: '3', M: '6', L: '12' };
+// alte numerische Werte (3/6/12) auf S/M/L abbilden
+const LB_SIZE_NORM = { '3': 'S', '6': 'M', '12': 'L', S: 'S', M: 'M', L: 'L' };
 
 function getLbWidgetSizes() {
     try { return JSON.parse(localStorage.getItem('sr-lb-widget-sizes') || '{}'); } catch (e) { return {}; }
 }
 
-function applyLbWidgetSize(col, size) {
+function applyLbWidgetSize(col, key) {
+    const cols = LB_SIZE_COLS[key] || '3';
     col.className = col.className.replace(/col-lg-\d+/g, '');
-    col.classList.add('col-lg-' + size);
-    col.dataset.size = size;
-    const btn = col.querySelector('.widget-resize-btn');
-    if (btn) {
-        btn.innerHTML = '<i class="fas ' + (LB_SIZE_ICONS[size] || 'fa-expand') + '"></i>';
-        btn.title = LB_SIZE_TITLES[size] || '';
-    }
+    col.classList.add('col-lg-' + cols);
+    col.dataset.size = key;
+    col.querySelectorAll('.widget-size-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.size === key));
 }
 
-(function initLbWidgetResize() {
+(function initLbWidgetSizes() {
     const saved = getLbWidgetSizes();
     document.querySelectorAll('#lbWidgetRow .lb-widget-col').forEach(col => {
         const wid = col.dataset.widget;
         const card = col.querySelector('.card');
-        if (card && !col.querySelector('.widget-resize-btn')) {
-            const btn = document.createElement('button');
-            btn.className = 'widget-resize-btn';
-            btn.type = 'button';
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const cur = col.dataset.size || '3';
-                const idx = LB_SIZES.indexOf(cur);
-                const next = LB_SIZES[(idx + 1) % LB_SIZES.length];
-                applyLbWidgetSize(col, next);
-                const sizes = getLbWidgetSizes();
-                sizes[wid] = next;
-                localStorage.setItem('sr-lb-widget-sizes', JSON.stringify(sizes));
+        if (card && !col.querySelector('.widget-size-ctrl')) {
+            const grp = document.createElement('div');
+            grp.className = 'widget-size-ctrl';
+            ['S', 'M', 'L'].forEach(k => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'widget-size-btn';
+                btn.dataset.size = k;
+                btn.textContent = k;
+                btn.title = { S: 'Klein (25%)', M: 'Mittel (50%)', L: 'Gross (100%)' }[k];
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    applyLbWidgetSize(col, k);
+                    const sizes = getLbWidgetSizes();
+                    sizes[wid] = k;
+                    localStorage.setItem('sr-lb-widget-sizes', JSON.stringify(sizes));
+                });
+                grp.appendChild(btn);
             });
-            card.appendChild(btn);
+            card.appendChild(grp);
         }
-        const size = saved[wid] || (col.className.match(/col-lg-(\d+)/) || [])[1] || '3';
-        applyLbWidgetSize(col, size);
+        let key = LB_SIZE_NORM[saved[wid]];
+        if (!key) {
+            const w = (col.className.match(/col-lg-(\d+)/) || [])[1] || '3';
+            key = LB_SIZE_NORM[w] || 'S';
+        }
+        applyLbWidgetSize(col, key);
     });
 })();
 </script>
