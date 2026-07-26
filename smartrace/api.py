@@ -186,7 +186,7 @@ def api_live_data():
             ctrls[cid]['laps'].append({
                 'lap': lap.lap_number or 0,
                 'laptime_raw': lap.laptime_ms or 0,
-                'laptime_formatted': lap.laptime_display or fmt_ms(lap.laptime_ms) or '--:--.---',
+                'laptime_formatted': fmt_ms(lap.laptime_ms) or lap.laptime_display or '--',
                 'timestamp': lap.created_at.isoformat() if lap.created_at else None,
                 'is_pb': lap.is_personal_best,
                 'session_id': lap.session_id,
@@ -311,7 +311,7 @@ def api_laps():
                 'car_name': l.car_name,
                 'lap': l.lap_number,
                 'laptime_raw': l.laptime_ms,
-                'laptime_formatted': l.laptime_display or fmt_ms(l.laptime_ms) or '--:--.---',
+                'laptime_formatted': fmt_ms(l.laptime_ms) or l.laptime_display or '--',
                 'sector_1': l.sector_1,
                 'sector_2': l.sector_2,
                 'sector_3': l.sector_3,
@@ -650,7 +650,7 @@ def api_export_csv():
                 l.created_at.strftime('%Y-%m-%d %H:%M:%S') if l.created_at else '',
                 l.controller_id or '', l.driver_name or '', l.car_name or '',
                 l.lap_number or 0, l.laptime_ms or 0,
-                l.laptime_display or fmt_ms(l.laptime_ms) or '',
+                fmt_ms(l.laptime_ms) or l.laptime_display or '',
                 l.sector_1 or '', l.sector_2 or '', l.sector_3 or '',
                 'Ja' if l.is_personal_best else 'Nein',
             ])
@@ -872,7 +872,7 @@ def api_live_feed():
                 'car_name': lap.car_name,
                 'lap_number': lap.lap_number,
                 'laptime_ms': lap.laptime_ms,
-                'laptime_formatted': lap.laptime_display or fmt_ms(lap.laptime_ms) or '--',
+                'laptime_formatted': fmt_ms(lap.laptime_ms) or lap.laptime_display or '--',
                 'is_pb': lap.is_personal_best,
                 'color': lap.controller_color or lap.car_color,
             })

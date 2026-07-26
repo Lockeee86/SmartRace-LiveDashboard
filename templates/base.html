@@ -193,10 +193,12 @@
     // Globale Hilfsfunktionen
     // =========================================================================
     function formatTime(timeMs) {
-        if (!timeMs || timeMs <= 0) return '--:--.---';
-        const minutes = Math.floor(timeMs / 60000);
-        const seconds = ((timeMs % 60000) / 1000).toFixed(3);
-        return minutes + ':' + seconds.padStart(6, '0');
+        if (!timeMs || timeMs <= 0) return '--';
+        const s = timeMs / 1000;
+        // Kompakt: unter 60s nur Sekunden (z.B. "7.576"), sonst M:SS.mmm
+        if (s < 60) return s.toFixed(3);
+        const minutes = Math.floor(s / 60);
+        return minutes + ':' + (s % 60).toFixed(3).padStart(6, '0');
     }
 
     const CONTROLLER_COLORS = {

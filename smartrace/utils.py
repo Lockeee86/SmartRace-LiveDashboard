@@ -91,10 +91,15 @@ def rgb_to_hex(val):
 
 
 def fmt_ms(ms):
-    """Millisekunden -> 'M:SS.mmm'"""
+    """Millisekunden -> kompakte Rundenzeit.
+
+    Unter 60s nur Sekunden ('7.576'), sonst 'M:SS.mmm' ('1:05.234').
+    """
     if not ms or ms <= 0:
         return None
     s = ms / 1000
+    if s < 60:
+        return f"{s:.3f}"
     return f"{int(s // 60)}:{s % 60:06.3f}"
 
 
