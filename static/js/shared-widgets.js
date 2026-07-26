@@ -35,6 +35,81 @@ function parseSectorMs(val) {
 }
 
 /**
+ * "Letzte Runden" rendern: oben die aktuellste Runde prominent inkl.
+ * farbiger Sektoren, darunter die davor gefahrenen Runden als Liste.
+ * @param {Object} opts
+ * @param {string} opts.containerId
+ * @param {Object} opts.data                  Live-Daten (controller -> {laps, color, name})
+ * @param {Function} [opts.getLaps]           (cd) => laps[]
+ * @param {Function} [opts.includeController] (cid) => bool
+ * @param {number} [opts.limit]               max. Anzahl Zeilen inkl. aktueller (Default 8)
+ */
+function renderRecentLaps(opts) {
+    const container = document.getElementById(opts.containerId);
+    if (!container) return;
+    const getLaps = opts.getLaps || (cd => cd.laps || []);
+    const limit = opts.limit || 8;
+    const SC = (typeof SECTOR_COLORS !== 'undefined') ? SECTOR_COLORS : ['#ef5350', '#ffca28', '#42a5f5'];
+
+    // Alle Runden aller (sichtbaren) Controller einsammeln
+    const all = [];
+    Object.entries(opts.data).forEach(([cid, cd]) => {
+        if (opts.includeController && !opts.includeController(cid)) return;
+        const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
+        const name = cd.name || 'C' + cid;
+        getLaps(cd).forEach(l => {
+            if (!l.laptime_raw || l.laptime_raw <= 0) return;
+            all.push({
+                name, color,
+                lap: l.lap, tf: l.laptime_formatted || formatTime(l.laptime_raw),
+                s1: l.sector_1, s2: l.sector_2, s3: l.sector_3,
+                ts: l.timestamp || '', pb: l.is_pb,
+            });
+        });
+    });
+
+    if (all.length === 0) {
+        container.innerHTML = '<span class="text-muted small">Warte auf Rundendaten...</span>';
+        return;
+    }
+
+    // Neueste zuerst
+    all.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+    const current = all[0];
+    const rest = all.slice(1, limit);
+
+    const chip = (label, val, i) =>
+        `<span class="rl-sector" style="--sc:${SC[i]}"><b>${label}</b> ${val || '--'}</span>`;
+
+    let html = `<div class="rl-current" style="border-left:3px solid ${current.color}">
+        <div class="rl-current-head">
+            <span class="rl-dot" style="background:${current.color}"></span>
+            <span class="rl-name" style="color:${current.color}">${current.name}</span>
+            <span class="rl-lapnum">Rd ${current.lap || '-'}</span>
+            <span class="rl-time font-mono">${current.tf}</span>
+            ${current.pb ? '<i class="fas fa-trophy text-warning ms-1"></i>' : ''}
+        </div>
+        <div class="rl-sectors">${chip('S1', current.s1, 0)}${chip('S2', current.s2, 1)}${chip('S3', current.s3, 2)}</div>
+    </div>`;
+
+    if (rest.length) {
+        html += '<div class="rl-list">';
+        rest.forEach(l => {
+            html += `<div class="rl-row">
+                <span class="rl-dot" style="background:${l.color}"></span>
+                <span class="rl-name-sm" style="color:${l.color}">${l.name}</span>
+                <span class="rl-lapnum-sm">Rd ${l.lap || '-'}</span>
+                <span class="rl-time-sm font-mono">${l.tf}</span>
+                <span class="rl-sectors-sm font-mono">${l.s1 || '--'} · ${l.s2 || '--'} · ${l.s3 || '--'}</span>
+            </div>`;
+        });
+        html += '</div>';
+    }
+
+    container.innerHTML = html;
+}
+
+/**
  * Rundenzeit-Heatmap rendern (fit-to-view: nur die aktuellsten Runden,
  * die in die Breite passen).
  * @param {Object} opts

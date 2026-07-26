@@ -1509,6 +1509,58 @@ footer {
     background: linear-gradient(to right, rgb(40,200,80), rgb(255,200,30), rgb(230,60,30));
 }
 
+/* ===== Widget "Letzte Runden" ===== */
+.recent-laps-container { display: flex; flex-direction: column; gap: 6px; }
+
+.rl-current {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 6px;
+    padding: 7px 10px;
+}
+.rl-current-head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+}
+.rl-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    display: inline-block; flex-shrink: 0;
+}
+.rl-name { font-weight: 700; font-size: 0.85rem; }
+.rl-lapnum {
+    font-size: 0.65rem; color: var(--sr-text-muted, #6c757d);
+    background: rgba(255, 255, 255, 0.06); border-radius: 4px; padding: 0 5px;
+}
+.rl-time { margin-left: auto; font-size: 1.1rem; font-weight: 700; }
+.rl-sectors { display: flex; gap: 6px; margin-top: 6px; }
+.rl-sector {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 1px 7px; border-radius: 4px;
+    border-left: 3px solid var(--sc, #888);
+    background: rgba(255, 255, 255, 0.05);
+    font-family: var(--sr-font-mono, monospace); font-size: 0.7rem;
+    flex: 1 1 0; justify-content: center;
+}
+.rl-sector b { color: var(--sc, #888); font-weight: 700; }
+
+.rl-list { display: flex; flex-direction: column; }
+.rl-row {
+    display: flex; align-items: center; gap: 7px;
+    padding: 4px 6px;
+    border-top: 1px solid var(--sr-border, rgba(255, 255, 255, 0.06));
+    font-size: 0.75rem;
+}
+.rl-name-sm { font-weight: 600; min-width: 60px; }
+.rl-lapnum-sm { font-size: 0.62rem; color: var(--sr-text-muted, #6c757d); }
+.rl-time-sm { margin-left: auto; font-weight: 700; }
+.rl-sectors-sm {
+    font-size: 0.62rem; color: var(--sr-text-muted, #6c757d);
+    min-width: 130px; text-align: right;
+}
+[data-bs-theme="light"] .rl-current { background: rgba(0, 0, 0, 0.03); }
+[data-bs-theme="light"] .rl-sector { background: rgba(0, 0, 0, 0.04); }
+
 /* ===== Leaderboard: Ticker vertikal (rechts) ===== */
 #lbTickerLayout.ticker-side {
     display: flex;
