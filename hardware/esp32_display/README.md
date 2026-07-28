@@ -16,6 +16,14 @@ Logik**, nur Anzeige.
 SmartRace-App ─► Flask-Dashboard (z.B. 192.168.1.90:5000) ─WLAN─► ESP32 Display
 ```
 
+## Layout (Vorschau)
+
+Maßstabsgetreues Mockup (480×480), Beispiel: Controller **C1** ausgewählt — die
+Kopfzeile (Farbleiste, C#-Badge, Fahrername, Position) färbt sich in der
+Controllerfarbe.
+
+![ESP32-Display Layout 480x480](layout_mockup.png)
+
 ## Verwendete Server-Endpunkte (schon im Dashboard vorhanden)
 
 - `GET /api/device/laps?controller=N` — Fahrer, Best-/Letzte-Zeit, Position,
