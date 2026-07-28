@@ -71,6 +71,11 @@ den gewählten Controller. Unten C1–C6 antippen zum Wechseln.
 Farben sind auf das Web-Dashboard abgestimmt (C1 rot … C6 lila; S1 rot, S2 gelb,
 S3 blau).
 
+**Auf einen Blick:** die Farbe des gewählten Controllers wird als Akzent an
+mehreren Stellen gezeigt — obere Farbleiste, „C#"-Badge, Fahrername und Position.
+Im Picker ist der aktive Button voll deckend + weißer Rand, die anderen sind
+abgedunkelt (Buttons ohne Daten noch etwas mehr).
+
 ## Anpassen
 
 - **Intervall**: `POLL_INTERVAL_MS` in `config.h` (Default 500 ms).

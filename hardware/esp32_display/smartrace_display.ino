@@ -44,6 +44,8 @@ static uint32_t g_lastPoll = 0;
 static uint32_t g_lastCtrlPoll = 0;
 
 // ---- UI-Objekte ----
+static lv_obj_t *accentBar;      // obere Farbleiste in Controller-Farbe
+static lv_obj_t *lblBadge;       // "C1"-Badge in Controller-Farbe
 static lv_obj_t *lblDriver;      // Fahrername + Auto
 static lv_obj_t *lblPos;         // "P2"
 static lv_obj_t *lblStatus;      // Status-Punkt/Text
@@ -52,8 +54,12 @@ static lv_obj_t *lblBest;        // Bestzeit
 static lv_obj_t *lblDelta;       // Delta letzte vs. beste
 static lv_obj_t *lblSec[3];      // S1/S2/S3
 static lv_obj_t *lapList;        // Container fuer die letzten Runden
-static lv_obj_t *btnMatrix;      // C1..C6 Picker
-static const char *btnMap[] = { "C1", "C2", "C3", "C4", "C5", "C6", "" };
+static lv_obj_t *btnCtrl[6];     // C1..C6 Picker (einzelne Buttons)
+
+// Farbe des aktuell gewaehlten Controllers
+static inline lv_color_t accent_color() {
+  return lv_color_hex(CTRL_COLORS[(g_controller - 1) % 6]);
+}
 
 // ============================================================================
 // Board-Init (LVGL + Display + Touch) -> aus Waveshare-Demo uebernehmen
@@ -77,13 +83,38 @@ static void style_time_label(lv_obj_t *l, const lv_font_t *font, lv_color_t col)
   lv_obj_set_style_text_color(l, col, 0);
 }
 
-static void picker_event_cb(lv_event_t *e) {
-  lv_obj_t *obj = lv_event_get_target(e);
-  uint32_t id = lv_btnmatrix_get_selected_btn(obj);
-  if (id != LV_BTNMATRIX_BTN_NONE) {
-    g_controller = (int)id + 1;                 // 0-basiert -> 1..6
-    g_lastPoll = 0;                              // sofort neu laden
+// Akzentfarbe (= Farbe des gewaehlten Controllers) an markanten Stellen anwenden
+static void apply_accent() {
+  lv_color_t c = accent_color();
+  lv_obj_set_style_bg_color(accentBar, c, 0);
+  lv_obj_set_style_bg_color(lblBadge, c, 0);
+  lv_label_set_text_fmt(lblBadge, "C%d", g_controller);
+  lv_obj_set_style_text_color(lblDriver, c, 0);
+  lv_obj_set_style_text_color(lblPos, c, 0);
+}
+
+// Picker-Buttons: gewaehlten hervorheben (voll, weisser Rand), Rest abdunkeln
+static void style_picker() {
+  for (int i = 0; i < 6; i++) {
+    bool sel = (i == g_controller - 1);
+    lv_obj_set_style_bg_opa(btnCtrl[i], sel ? LV_OPA_COVER : LV_OPA_40, 0);
+    lv_obj_set_style_border_width(btnCtrl[i], sel ? 3 : 0, 0);
+    lv_obj_set_style_border_color(btnCtrl[i], lv_color_hex(0xffffff), 0);
+    lv_obj_set_style_transform_zoom(btnCtrl[i], sel ? 270 : 256, 0); // leicht groesser
   }
+}
+
+static void select_controller(int n) {
+  if (n < 1 || n > 6) return;
+  g_controller = n;
+  apply_accent();
+  style_picker();
+  g_lastPoll = 0;   // sofort neu laden
+}
+
+static void picker_event_cb(lv_event_t *e) {
+  int idx = (int)(intptr_t)lv_event_get_user_data(e);
+  select_controller(idx + 1);
 }
 
 static void build_ui() {
@@ -91,24 +122,40 @@ static void build_ui() {
   lv_obj_set_style_bg_color(scr, lv_color_hex(0x0d0d10), 0);
   lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
 
+  // --- Obere Farbleiste (Controller-Farbe) ---
+  accentBar = lv_obj_create(scr);
+  lv_obj_set_size(accentBar, LV_PCT(100), 6);
+  lv_obj_align(accentBar, LV_ALIGN_TOP_MID, 0, 0);
+  lv_obj_set_style_border_width(accentBar, 0, 0);
+  lv_obj_set_style_radius(accentBar, 0, 0);
+
+  // --- "C#"-Badge in Controller-Farbe ---
+  lblBadge = lv_label_create(scr);
+  lv_label_set_text(lblBadge, "C1");
+  lv_obj_set_style_text_font(lblBadge, &lv_font_montserrat_18, 0);
+  lv_obj_set_style_text_color(lblBadge, lv_color_hex(0xffffff), 0);
+  lv_obj_set_style_bg_opa(lblBadge, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(lblBadge, 5, 0);
+  lv_obj_set_style_pad_hor(lblBadge, 8, 0);
+  lv_obj_set_style_pad_ver(lblBadge, 3, 0);
+  lv_obj_align(lblBadge, LV_ALIGN_TOP_LEFT, 12, 14);
+
   // --- Kopf: Fahrer + Position + Status ---
   lblDriver = lv_label_create(scr);
   lv_label_set_text(lblDriver, "Warte auf Daten...");
   lv_obj_set_style_text_font(lblDriver, &lv_font_montserrat_20, 0);
-  lv_obj_set_style_text_color(lblDriver, lv_color_hex(0xffffff), 0);
-  lv_obj_align(lblDriver, LV_ALIGN_TOP_LEFT, 12, 10);
+  lv_obj_align(lblDriver, LV_ALIGN_TOP_LEFT, 58, 16);
 
   lblPos = lv_label_create(scr);
   lv_label_set_text(lblPos, "P-");
   lv_obj_set_style_text_font(lblPos, &lv_font_montserrat_20, 0);
-  lv_obj_set_style_text_color(lblPos, lv_color_hex(0xf1c40f), 0);
-  lv_obj_align(lblPos, LV_ALIGN_TOP_RIGHT, -14, 10);
+  lv_obj_align(lblPos, LV_ALIGN_TOP_RIGHT, -14, 16);
 
   lblStatus = lv_label_create(scr);
   lv_label_set_text(lblStatus, "");
   lv_obj_set_style_text_font(lblStatus, &lv_font_montserrat_14, 0);
   lv_obj_set_style_text_color(lblStatus, lv_color_hex(0x9aa0a6), 0);
-  lv_obj_align(lblStatus, LV_ALIGN_TOP_LEFT, 12, 40);
+  lv_obj_align(lblStatus, LV_ALIGN_TOP_LEFT, 12, 44);
 
   // --- Grosse letzte Rundenzeit ---
   lblLast = lv_label_create(scr);
@@ -145,20 +192,34 @@ static void build_ui() {
   lv_obj_set_style_pad_all(lapList, 4, 0);
   lv_obj_set_flex_flow(lapList, LV_FLEX_FLOW_COLUMN);
 
-  // --- Picker C1..C6 (fest) ---
-  btnMatrix = lv_btnmatrix_create(scr);
-  lv_btnmatrix_set_map(btnMatrix, btnMap);
-  lv_btnmatrix_set_btn_ctrl_all(btnMatrix, LV_BTNMATRIX_CTRL_CHECKABLE);
-  lv_btnmatrix_set_one_checked(btnMatrix, true);
-  lv_obj_set_size(btnMatrix, LV_PCT(96), 60);
-  lv_obj_align(btnMatrix, LV_ALIGN_BOTTOM_MID, 0, -8);
-  lv_obj_add_event_cb(btnMatrix, picker_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
-  lv_btnmatrix_set_btn_ctrl(btnMatrix, DEFAULT_CONTROLLER - 1, LV_BTNMATRIX_CTRL_CHECKED);
-  // Buttons in Controller-Farben einfaerben
+  // --- Picker C1..C6 (fest, je Button in Controller-Farbe) ---
+  lv_obj_t *pick = lv_obj_create(scr);
+  lv_obj_set_size(pick, LV_PCT(96), 64);
+  lv_obj_align(pick, LV_ALIGN_BOTTOM_MID, 0, -8);
+  lv_obj_set_style_bg_opa(pick, LV_OPA_0, 0);
+  lv_obj_set_style_border_width(pick, 0, 0);
+  lv_obj_set_style_pad_all(pick, 0, 0);
+  lv_obj_set_flex_flow(pick, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(pick, LV_FLEX_ALIGN_SPACE_BETWEEN,
+                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_clear_flag(pick, LV_OBJ_FLAG_SCROLLABLE);
+
   for (int i = 0; i < 6; i++) {
-    lv_obj_set_style_bg_color(btnMatrix, lv_color_hex(CTRL_COLORS[i]),
-                              LV_PART_ITEMS | (lv_style_selector_t)0);
+    btnCtrl[i] = lv_btn_create(pick);
+    lv_obj_set_size(btnCtrl[i], 66, 54);
+    lv_obj_set_style_bg_color(btnCtrl[i], lv_color_hex(CTRL_COLORS[i]), 0);
+    lv_obj_set_style_radius(btnCtrl[i], 8, 0);
+    lv_obj_add_event_cb(btnCtrl[i], picker_event_cb, LV_EVENT_CLICKED,
+                        (void *)(intptr_t)i);
+    lv_obj_t *bl = lv_label_create(btnCtrl[i]);
+    lv_label_set_text_fmt(bl, "C%d", i + 1);
+    lv_obj_set_style_text_font(bl, &lv_font_montserrat_20, 0);
+    lv_obj_center(bl);
   }
+
+  // Startzustand: Akzentfarbe + ausgewaehlten Button setzen
+  apply_accent();
+  style_picker();
 }
 
 // Hilfszeile in der Runden-Liste erzeugen
@@ -269,19 +330,18 @@ static void fetch_laps() {
   }
 }
 
-// Fahrernamen -> koennte man auf die Buttons legen (optional; Picker bleibt C1-C6)
+// Aktive Controller markieren: Buttons ohne Daten leicht abdunkeln
+// (der ausgewaehlte Button bleibt durch style_picker() immer voll sichtbar).
 static void fetch_controllers() {
   JsonDocument doc;
   String url = String(SERVER_BASE) + "/api/device/controllers";
   if (!http_get_json(url, doc)) return;
-  // Beispiel: aktive Controller optisch hervorheben (Deaktivierte abdunkeln)
   JsonArray arr = doc["controllers"].as<JsonArray>();
   int i = 0;
   for (JsonObject c : arr) {
     bool active = c["active"] | false;
-    if (i < 6) {
-      if (active) lv_btnmatrix_clear_btn_ctrl(btnMatrix, i, LV_BTNMATRIX_CTRL_DISABLED);
-      else        lv_btnmatrix_set_btn_ctrl(btnMatrix, i, LV_BTNMATRIX_CTRL_DISABLED);
+    if (i < 6 && i != g_controller - 1) {
+      lv_obj_set_style_bg_opa(btnCtrl[i], active ? LV_OPA_40 : LV_OPA_20, 0);
     }
     i++;
   }
