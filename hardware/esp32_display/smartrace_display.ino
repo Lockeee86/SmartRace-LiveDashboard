@@ -65,14 +65,23 @@ static inline lv_color_t accent_color() {
 // Board-Init (LVGL + Display + Touch) -> aus Waveshare-Demo uebernehmen
 // ============================================================================
 static void board_init() {
-  // TODO: Hier den Display/Touch/LVGL-Init aus dem Waveshare-Arduino-Demo
-  //       einfuegen (oder deren Init-Funktion aufrufen). Danach ist ein
-  //       aktiver LVGL-Screen vorhanden und lv_timer_handler() funktioniert.
+  // ESP32-S3-Touch-LCD-4: ST7701 (RGB-Panel, 480x480) + GT911 (Touch, I2C)
+  // + IO-Expander. Basis: Waveshare-Arduino-Beispiel "02_LVGL_Porting".
+  // Benoetigte Libs: ESP32_Display_Panel, ESP32_IO_Expander,
+  //                  GFX_Library_for_Arduino, lvgl 8.4.
   //
-  // Erwartet nach diesem Aufruf:
-  //   - lv_init() wurde aufgerufen
-  //   - Display-Treiber + Flush-Callback registriert
-  //   - Touch-Treiber als LVGL-Indev registriert
+  // Typisches Muster aus 02_LVGL_Porting (an deine Lib-Version anpassen;
+  // lvgl_port_v8.h/.cpp aus dem Beispiel mit ins Projekt kopieren):
+  //
+  //   #include <ESP_Panel_Library.h>
+  //   #include "lvgl_port_v8.h"
+  //   ESP_Panel *panel = new ESP_Panel();
+  //   panel->init();
+  //   panel->begin();
+  //   lvgl_port_init(panel->getLcd(), panel->getTouch());
+  //
+  // Danach ist ein aktiver LVGL-Screen vorhanden (lv_scr_act()) und
+  // lv_timer_handler() rendert Display + verarbeitet Touch.
 }
 
 // ============================================================================
