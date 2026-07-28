@@ -55,11 +55,25 @@ static lv_obj_t *lblDelta;       // Delta letzte vs. beste
 static lv_obj_t *lblSec[3];      // S1/S2/S3
 static lv_obj_t *lapList;        // Container fuer die letzten Runden
 static lv_obj_t *btnCtrl[6];     // C1..C6 Picker (einzelne Buttons)
+static lv_obj_t *btnAll;         // 7. Button: "Letzte Runden" (alle Fahrer)
 
-// Farbe des aktuell gewaehlten Controllers
+// g_controller == 0  -> Modus "Letzte Runden" (alle Fahrer gemischt)
+// g_controller 1..6  -> einzelner Controller
+static inline bool recent_mode() { return g_controller == 0; }
+
+// Akzentfarbe: Controllerfarbe, im "Alle"-Modus neutral
 static inline lv_color_t accent_color() {
-  return lv_color_hex(CTRL_COLORS[(g_controller - 1) % 6]);
+  if (g_controller < 1 || g_controller > 6) return lv_color_hex(0x8a8f98);
+  return lv_color_hex(CTRL_COLORS[g_controller - 1]);
 }
+
+// ---- Vorwaertsdeklarationen (werden vor ihrer Definition benutzt) ----
+static void apply_accent();
+static void apply_layout();
+static void style_picker();
+static void fetch_laps();
+static void fetch_recent();
+static void poll_data();
 
 // ============================================================================
 // Board-Init (LVGL + Display + Touch) -> aus Waveshare-Demo uebernehmen
@@ -97,33 +111,42 @@ static void apply_accent() {
   lv_color_t c = accent_color();
   lv_obj_set_style_bg_color(accentBar, c, 0);
   lv_obj_set_style_bg_color(lblBadge, c, 0);
-  lv_label_set_text_fmt(lblBadge, "C%d", g_controller);
+  if (recent_mode()) lv_label_set_text(lblBadge, LV_SYMBOL_LIST);
+  else               lv_label_set_text_fmt(lblBadge, "C%d", g_controller);
   lv_obj_set_style_text_color(lblDriver, c, 0);
   lv_obj_set_style_text_color(lblPos, c, 0);
 }
 
-// Picker-Buttons: gewaehlten hervorheben (voll, weisser Rand), Rest abdunkeln
+// Ein Picker-Button hervorheben/abdunkeln
+static void style_btn(lv_obj_t *b, bool sel) {
+  lv_obj_set_style_bg_opa(b, sel ? LV_OPA_COVER : LV_OPA_40, 0);
+  lv_obj_set_style_border_width(b, sel ? 3 : 0, 0);
+  lv_obj_set_style_border_color(b, lv_color_hex(0xffffff), 0);
+  lv_obj_set_style_transform_zoom(b, sel ? 270 : 256, 0);
+}
+
+// Picker: gewaehlten (C1..C6 oder "Alle") hervorheben, Rest abdunkeln
 static void style_picker() {
-  for (int i = 0; i < 6; i++) {
-    bool sel = (i == g_controller - 1);
-    lv_obj_set_style_bg_opa(btnCtrl[i], sel ? LV_OPA_COVER : LV_OPA_40, 0);
-    lv_obj_set_style_border_width(btnCtrl[i], sel ? 3 : 0, 0);
-    lv_obj_set_style_border_color(btnCtrl[i], lv_color_hex(0xffffff), 0);
-    lv_obj_set_style_transform_zoom(btnCtrl[i], sel ? 270 : 256, 0); // leicht groesser
-  }
+  for (int i = 0; i < 6; i++) style_btn(btnCtrl[i], i == g_controller - 1);
+  style_btn(btnAll, recent_mode());
 }
 
 static void select_controller(int n) {
-  if (n < 1 || n > 6) return;
-  g_controller = n;
+  if (n < 0 || n > 6) return;
+  g_controller = n;   // 0 = "Letzte Runden" (alle), 1..6 = Controller
   apply_accent();
+  apply_layout();
   style_picker();
   g_lastPoll = 0;   // sofort neu laden
 }
 
 static void picker_event_cb(lv_event_t *e) {
-  int idx = (int)(intptr_t)lv_event_get_user_data(e);
+  int idx = (int)(intptr_t)lv_event_get_user_data(e);   // 0..5 = C1..C6
   select_controller(idx + 1);
+}
+
+static void all_event_cb(lv_event_t *e) {
+  select_controller(0);   // "Letzte Runden"-Modus
 }
 
 static void build_ui() {
@@ -215,7 +238,7 @@ static void build_ui() {
 
   for (int i = 0; i < 6; i++) {
     btnCtrl[i] = lv_btn_create(pick);
-    lv_obj_set_size(btnCtrl[i], 66, 54);
+    lv_obj_set_size(btnCtrl[i], 56, 54);
     lv_obj_set_style_bg_color(btnCtrl[i], lv_color_hex(CTRL_COLORS[i]), 0);
     lv_obj_set_style_radius(btnCtrl[i], 8, 0);
     lv_obj_add_event_cb(btnCtrl[i], picker_event_cb, LV_EVENT_CLICKED,
@@ -226,14 +249,26 @@ static void build_ui() {
     lv_obj_center(bl);
   }
 
-  // Startzustand: Akzentfarbe + ausgewaehlten Button setzen
+  // 7. Button: "Letzte Runden" (alle Fahrer gemischt)
+  btnAll = lv_btn_create(pick);
+  lv_obj_set_size(btnAll, 56, 54);
+  lv_obj_set_style_bg_color(btnAll, lv_color_hex(0x4b5563), 0);  // neutrales Grau
+  lv_obj_set_style_radius(btnAll, 8, 0);
+  lv_obj_add_event_cb(btnAll, all_event_cb, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *ba = lv_label_create(btnAll);
+  lv_label_set_text(ba, LV_SYMBOL_LIST);   // Listen-Symbol
+  lv_obj_set_style_text_font(ba, &lv_font_montserrat_20, 0);
+  lv_obj_center(ba);
+
+  // Startzustand: Akzentfarbe + Layout + ausgewaehlten Button setzen
   apply_accent();
+  apply_layout();
   style_picker();
 }
 
-// Hilfszeile in der Runden-Liste erzeugen
-static void add_lap_row(int lap, const char *t, const char *s1,
-                        const char *s2, const char *s3) {
+// Zeile in der Runden-Liste. driver != NULL -> farbiger Fahrername (Alle-Modus).
+static void add_lap_row(const char *driver, uint32_t col, int lap, const char *t,
+                        const char *s1, const char *s2, const char *s3) {
   lv_obj_t *row = lv_obj_create(lapList);
   lv_obj_set_size(row, LV_PCT(100), 30);
   lv_obj_set_style_bg_opa(row, LV_OPA_0, 0);
@@ -241,21 +276,53 @@ static void add_lap_row(int lap, const char *t, const char *s1,
   lv_obj_set_style_pad_all(row, 2, 0);
   lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
-  lv_obj_t *ln = lv_label_create(row);
-  lv_label_set_text_fmt(ln, "R%d", lap);
-  lv_obj_set_style_text_color(ln, lv_color_hex(0x9aa0a6), 0);
-  lv_obj_align(ln, LV_ALIGN_LEFT_MID, 0, 0);
+  int xTime = 60;
+  if (driver && driver[0]) {
+    lv_obj_t *dn = lv_label_create(row);           // Fahrername (farbig)
+    lv_label_set_text(dn, driver);
+    lv_obj_set_style_text_font(dn, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(dn, lv_color_hex(col), 0);
+    lv_obj_align(dn, LV_ALIGN_LEFT_MID, 4, 0);
 
-  lv_obj_t *lt = lv_label_create(row);
+    lv_obj_t *rn = lv_label_create(row);           // "R{n}"
+    lv_label_set_text_fmt(rn, "R%d", lap);
+    lv_obj_set_style_text_color(rn, lv_color_hex(0x9aa0a6), 0);
+    lv_obj_align(rn, LV_ALIGN_LEFT_MID, 128, 0);
+    xTime = 172;
+  } else {
+    lv_obj_t *ln = lv_label_create(row);
+    lv_label_set_text_fmt(ln, "R%d", lap);
+    lv_obj_set_style_text_color(ln, lv_color_hex(0x9aa0a6), 0);
+    lv_obj_align(ln, LV_ALIGN_LEFT_MID, 0, 0);
+  }
+
+  lv_obj_t *lt = lv_label_create(row);             // Rundenzeit
   lv_label_set_text(lt, t);
   lv_obj_set_style_text_font(lt, &lv_font_montserrat_18, 0);
   lv_obj_set_style_text_color(lt, lv_color_hex(0xffffff), 0);
-  lv_obj_align(lt, LV_ALIGN_LEFT_MID, 60, 0);
+  lv_obj_align(lt, LV_ALIGN_LEFT_MID, xTime, 0);
 
-  lv_obj_t *ls = lv_label_create(row);
+  lv_obj_t *ls = lv_label_create(row);             // Sektoren
   lv_label_set_text_fmt(ls, "%s  %s  %s", s1, s2, s3);
   lv_obj_set_style_text_color(ls, lv_color_hex(0x8a8f98), 0);
   lv_obj_align(ls, LV_ALIGN_RIGHT_MID, 0, 0);
+}
+
+// Layout je nach Modus: Einzel-Controller (Kopf mit grosser Zeit) vs. Alle
+static void apply_layout() {
+  bool r = recent_mode();
+  lv_obj_t *single[] = { lblLast, lblBest, lblDelta, lblSec[0], lblSec[1], lblSec[2] };
+  for (int i = 0; i < 6; i++) {
+    if (r) lv_obj_add_flag(single[i], LV_OBJ_FLAG_HIDDEN);
+    else   lv_obj_clear_flag(single[i], LV_OBJ_FLAG_HIDDEN);
+  }
+  if (r) {                                    // Liste gross, mehr Runden sichtbar
+    lv_obj_align(lapList, LV_ALIGN_TOP_MID, 0, 70);
+    lv_obj_set_height(lapList, 320);
+  } else {
+    lv_obj_align(lapList, LV_ALIGN_TOP_MID, 0, 184);
+    lv_obj_set_height(lapList, 190);
+  }
 }
 
 // ============================================================================
@@ -329,12 +396,37 @@ static void fetch_laps() {
     lv_label_set_text_fmt(lblSec[2], "S3 %s", (const char *)(cur["s3"] | "--"));
   }
 
-  // Runden-Liste neu aufbauen
+  // Runden-Liste neu aufbauen (Einzel-Modus: ohne Fahrername)
   lv_obj_clean(lapList);
   int shown = 0;
   for (JsonObject l : laps) {
     if (shown++ >= LAP_LIST_COUNT) break;
-    add_lap_row(l["lap"] | 0, l["t"] | "--", l["s1"] | "--",
+    add_lap_row(NULL, 0, l["lap"] | 0, l["t"] | "--", l["s1"] | "--",
+                l["s2"] | "--", l["s3"] | "--");
+  }
+}
+
+// "Letzte Runden" (alle Fahrer gemischt) — wie das Web-Widget
+static void fetch_recent() {
+  JsonDocument doc;
+  String url = String(SERVER_BASE) + "/api/device/recent?limit=" + LAP_LIST_COUNT;
+  if (!http_get_json(url, doc)) {
+    lv_label_set_text(lblStatus, "keine Verbindung");
+    return;
+  }
+  lv_label_set_text(lblDriver, "Letzte Runden");
+  lv_label_set_text(lblPos, "");
+  lv_label_set_text_fmt(lblStatus, "%s", (const char *)(doc["status"] | ""));
+
+  lv_obj_clean(lapList);
+  JsonArray laps = doc["laps"].as<JsonArray>();
+  int shown = 0;
+  for (JsonObject l : laps) {
+    if (shown++ >= LAP_LIST_COUNT) break;
+    int ctrl = atoi((const char *)(l["controller"] | "1"));
+    if (ctrl < 1 || ctrl > 6) ctrl = 1;
+    add_lap_row((const char *)(l["driver"] | ""), CTRL_COLORS[ctrl - 1],
+                l["lap"] | 0, l["t"] | "--", l["s1"] | "--",
                 l["s2"] | "--", l["s3"] | "--");
   }
 }
@@ -371,13 +463,19 @@ static void wifi_connect() {
 // ============================================================================
 // Arduino Setup / Loop
 // ============================================================================
+// Je nach Modus die richtigen Daten holen
+static void poll_data() {
+  if (recent_mode()) fetch_recent();
+  else               fetch_laps();
+}
+
 void setup() {
   Serial.begin(115200);
   board_init();     // <- Waveshare Display/Touch/LVGL-Init
   build_ui();
   wifi_connect();
   fetch_controllers();
-  fetch_laps();
+  poll_data();
 }
 
 void loop() {
@@ -388,7 +486,7 @@ void loop() {
   if (now - g_lastPoll >= POLL_INTERVAL_MS) {
     g_lastPoll = now;
     if (WiFi.status() != WL_CONNECTED) wifi_connect();
-    fetch_laps();
+    poll_data();
   }
   if (now - g_lastCtrlPoll >= CTRL_POLL_INTERVAL_MS) {
     g_lastCtrlPoll = now;

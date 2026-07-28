@@ -585,6 +585,36 @@ def api_device_laps():
         return jsonify({'controller': request.args.get('controller', '1'), 'laps': []}), 500
 
 
+@api_bp.route('/api/device/recent')
+def api_device_recent():
+    """Letzte Runden ALLER Controller gemischt (neueste zuerst) fuer das Display.
+
+    Wie das "Letzte Runden"-Widget im Web: pro Zeile Controller, Fahrer,
+    Runde, Zeit und Sektoren. Die Firmware faerbt nach Controller.
+    """
+    try:
+        limit = min(int(request.args.get('limit', 10)), 20)
+        latest = db.session.query(Event.session_id).order_by(Event.id.desc()).first()
+        sid = latest.session_id if latest else None
+        q = Lap.query.filter(Lap.is_outlier.isnot(True), Lap.laptime_ms > 0)
+        if sid:
+            q = q.filter(Lap.session_id == sid)
+        laps = q.order_by(Lap.created_at.desc()).limit(limit).all()
+        result = [{
+            'controller': l.controller_id,
+            'driver': l.driver_name,
+            'lap': l.lap_number,
+            't': fmt_ms(l.laptime_ms),
+            's1': _fmt_sec(l.sector_1),
+            's2': _fmt_sec(l.sector_2),
+            's3': _fmt_sec(l.sector_3),
+        } for l in laps]
+        return jsonify({'status': _device_status(sid), 'laps': result})
+    except Exception as e:
+        log.error(f"device-recent: {e}")
+        return jsonify({'laps': []})
+
+
 @api_bp.route('/api/driver-stats')
 def api_driver_stats():
     """Fahrer-Statistiken ueber alle Sessions."""
