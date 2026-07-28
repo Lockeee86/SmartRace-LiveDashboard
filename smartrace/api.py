@@ -469,6 +469,122 @@ def api_race_status():
         return jsonify({'status': 'unknown'})
 
 
+# =============================================================================
+# Geraete-API (ESP32 Hardware-Display) — schlanke, kompakte Endpunkte
+# =============================================================================
+
+def _device_status(sid):
+    """Aktueller Rennstatus einer Session (fuer das Display)."""
+    if not sid:
+        return 'waiting'
+    rs = RaceStatus.query.filter_by(session_id=sid).order_by(
+        RaceStatus.id.desc()).first()
+    return rs.status if rs else 'waiting'
+
+
+def _fmt_sec(val):
+    """Sektor-String -> kompakte Zeit ('3.268') oder None."""
+    ms = _parse_sector_ms(val)
+    return fmt_ms(ms) if ms else None
+
+
+@api_bp.route('/api/device/controllers')
+def api_device_controllers():
+    """Controller C1-C6 mit Fahrername/Farbe der aktuellen Session (fuer den Picker)."""
+    try:
+        latest = db.session.query(Event.session_id).order_by(Event.id.desc()).first()
+        sid = latest.session_id if latest else None
+        result = []
+        for cid in ['1', '2', '3', '4', '5', '6']:
+            q = Lap.query.filter(Lap.controller_id == cid)
+            if sid:
+                q = q.filter(Lap.session_id == sid)
+            lap = q.order_by(Lap.created_at.desc()).first()
+            result.append({
+                'controller': cid,
+                'driver': lap.driver_name if lap else None,
+                'color': (lap.controller_color or lap.car_color) if lap else None,
+                'active': lap is not None,
+            })
+        return jsonify({'session_id': sid, 'status': _device_status(sid),
+                        'controllers': result})
+    except Exception as e:
+        log.error(f"device-controllers: {e}")
+        return jsonify({'controllers': []})
+
+
+@api_bp.route('/api/device/laps')
+def api_device_laps():
+    """Kompakte Renn-Daten eines Controllers fuer das ESP32-Display.
+
+    ?controller=1 (Default). Liefert Fahrer, Best-/Letzte-Zeit, Position und
+    die letzten 10 Runden (neueste zuerst) mit Sektoren — alles kompakt
+    formatiert, damit die Firmware nur anzeigen muss.
+    """
+    try:
+        cid = request.args.get('controller', '1')
+        latest = db.session.query(Event.session_id).order_by(Event.id.desc()).first()
+        sid = latest.session_id if latest else None
+
+        base = Lap.query.filter(Lap.is_outlier.isnot(True))
+        if sid:
+            base = base.filter(Lap.session_id == sid)
+        laps = base.filter(Lap.controller_id == cid).order_by(
+            Lap.created_at.desc()).all()
+
+        if not laps:
+            return jsonify({
+                'controller': cid, 'driver': None, 'car': None, 'color': None,
+                'best': None, 'last': None, 'lap_count': 0, 'position': 0,
+                'status': _device_status(sid), 'laps': [],
+            })
+
+        times = [l.laptime_ms for l in laps if l.laptime_ms and l.laptime_ms > 0]
+        best = min(times) if times else None
+        last_lap = laps[0]
+        lap_nums = [l.lap_number for l in laps if l.lap_number]
+        lap_count = max(lap_nums) if lap_nums else 0
+
+        # Position: meiste Runden, dann Bestzeit
+        rows = db.session.query(
+            Lap.controller_id,
+            func.min(Lap.laptime_ms).label('best'),
+            func.max(Lap.lap_number).label('maxlap'),
+        ).filter(Lap.is_outlier.isnot(True), Lap.laptime_ms > 0)
+        if sid:
+            rows = rows.filter(Lap.session_id == sid)
+        rows = rows.group_by(Lap.controller_id).all()
+        order = sorted(rows, key=lambda r: (-(r.maxlap or 0), r.best or 9_999_999))
+        position = next((i + 1 for i, r in enumerate(order)
+                         if str(r.controller_id) == str(cid)), 0)
+
+        recent = [{
+            'lap': l.lap_number,
+            't': fmt_ms(l.laptime_ms),
+            's1': _fmt_sec(l.sector_1),
+            's2': _fmt_sec(l.sector_2),
+            's3': _fmt_sec(l.sector_3),
+        } for l in laps[:10]]
+
+        return jsonify({
+            'controller': cid,
+            'driver': last_lap.driver_name,
+            'car': last_lap.car_name,
+            'color': last_lap.controller_color or last_lap.car_color,
+            'best': fmt_ms(best),
+            'last': fmt_ms(last_lap.laptime_ms),
+            'best_ms': best,
+            'last_ms': last_lap.laptime_ms,
+            'lap_count': lap_count,
+            'position': position,
+            'status': _device_status(sid),
+            'laps': recent,
+        })
+    except Exception as e:
+        log.error(f"device-laps: {e}")
+        return jsonify({'controller': request.args.get('controller', '1'), 'laps': []}), 500
+
+
 @api_bp.route('/api/driver-stats')
 def api_driver_stats():
     """Fahrer-Statistiken ueber alle Sessions."""
