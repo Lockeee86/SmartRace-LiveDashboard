@@ -68,6 +68,7 @@ static inline lv_color_t accent_color() {
 }
 
 // ---- Vorwaertsdeklarationen (werden vor ihrer Definition benutzt) ----
+static void set_accent(lv_color_t c);
 static void apply_accent();
 static void apply_layout();
 static void style_picker();
@@ -106,15 +107,19 @@ static void style_time_label(lv_obj_t *l, const lv_font_t *font, lv_color_t col)
   lv_obj_set_style_text_color(l, col, 0);
 }
 
-// Akzentfarbe (= Farbe des gewaehlten Controllers) an markanten Stellen anwenden
-static void apply_accent() {
-  lv_color_t c = accent_color();
+// Akzentfarbe an markanten Stellen (Farbleiste, Badge, Fahrername, Position)
+static void set_accent(lv_color_t c) {
   lv_obj_set_style_bg_color(accentBar, c, 0);
   lv_obj_set_style_bg_color(lblBadge, c, 0);
-  if (recent_mode()) lv_label_set_text(lblBadge, LV_SYMBOL_LIST);
-  else               lv_label_set_text_fmt(lblBadge, "C%d", g_controller);
   lv_obj_set_style_text_color(lblDriver, c, 0);
   lv_obj_set_style_text_color(lblPos, c, 0);
+}
+
+// Akzent (= Farbe des gewaehlten Controllers) + Badge-Text setzen
+static void apply_accent() {
+  set_accent(accent_color());
+  if (recent_mode()) lv_label_set_text(lblBadge, LV_SYMBOL_LIST);
+  else               lv_label_set_text_fmt(lblBadge, "C%d", g_controller);
 }
 
 // Ein Picker-Button hervorheben/abdunkeln
@@ -308,21 +313,21 @@ static void add_lap_row(const char *driver, uint32_t col, int lap, const char *t
   lv_obj_align(ls, LV_ALIGN_RIGHT_MID, 0, 0);
 }
 
-// Layout je nach Modus: Einzel-Controller (Kopf mit grosser Zeit) vs. Alle
+// Layout je nach Modus. In BEIDEN Modi: oben die neueste Runde gross mit
+// Sektoren, darunter die Liste. Nur Best/Delta gibt's im "Alle"-Modus nicht
+// (ueber alle Fahrer gemischt nicht sinnvoll).
 static void apply_layout() {
   bool r = recent_mode();
-  lv_obj_t *single[] = { lblLast, lblBest, lblDelta, lblSec[0], lblSec[1], lblSec[2] };
-  for (int i = 0; i < 6; i++) {
-    if (r) lv_obj_add_flag(single[i], LV_OBJ_FLAG_HIDDEN);
-    else   lv_obj_clear_flag(single[i], LV_OBJ_FLAG_HIDDEN);
+  lv_obj_t *onlySingle[] = { lblBest, lblDelta };
+  for (int i = 0; i < 2; i++) {
+    if (r) lv_obj_add_flag(onlySingle[i], LV_OBJ_FLAG_HIDDEN);
+    else   lv_obj_clear_flag(onlySingle[i], LV_OBJ_FLAG_HIDDEN);
   }
-  if (r) {                                    // Liste gross, mehr Runden sichtbar
-    lv_obj_align(lapList, LV_ALIGN_TOP_MID, 0, 70);
-    lv_obj_set_height(lapList, 320);
-  } else {
-    lv_obj_align(lapList, LV_ALIGN_TOP_MID, 0, 184);
-    lv_obj_set_height(lapList, 190);
-  }
+  // Grosse Zeit + Sektoren + Liste sind in beiden Modi sichtbar und gleich platziert
+  lv_obj_clear_flag(lblLast, LV_OBJ_FLAG_HIDDEN);
+  for (int i = 0; i < 3; i++) lv_obj_clear_flag(lblSec[i], LV_OBJ_FLAG_HIDDEN);
+  lv_obj_align(lapList, LV_ALIGN_TOP_MID, 0, 184);
+  lv_obj_set_height(lapList, 190);
 }
 
 // ============================================================================
@@ -406,7 +411,9 @@ static void fetch_laps() {
   }
 }
 
-// "Letzte Runden" (alle Fahrer gemischt) — wie das Web-Widget
+// "Letzte Runden" (alle Fahrer gemischt) — wie das Web-Widget:
+// oben die neueste Runde gross mit Sektoren (in Controllerfarbe),
+// darunter die aelteren Runden in der Liste.
 static void fetch_recent() {
   JsonDocument doc;
   String url = String(SERVER_BASE) + "/api/device/recent?limit=" + LAP_LIST_COUNT;
@@ -414,20 +421,44 @@ static void fetch_recent() {
     lv_label_set_text(lblStatus, "keine Verbindung");
     return;
   }
-  lv_label_set_text(lblDriver, "Letzte Runden");
-  lv_label_set_text(lblPos, "");
   lv_label_set_text_fmt(lblStatus, "%s", (const char *)(doc["status"] | ""));
 
-  lv_obj_clean(lapList);
   JsonArray laps = doc["laps"].as<JsonArray>();
+  lv_obj_clean(lapList);
+
+  bool first = true;
   int shown = 0;
   for (JsonObject l : laps) {
-    if (shown++ >= LAP_LIST_COUNT) break;
     int ctrl = atoi((const char *)(l["controller"] | "1"));
     if (ctrl < 1 || ctrl > 6) ctrl = 1;
-    add_lap_row((const char *)(l["driver"] | ""), CTRL_COLORS[ctrl - 1],
-                l["lap"] | 0, l["t"] | "--", l["s1"] | "--",
-                l["s2"] | "--", l["s3"] | "--");
+    const char *driver = (const char *)(l["driver"] | "");
+    const char *t  = (const char *)(l["t"]  | "--");
+    const char *s1 = (const char *)(l["s1"] | "--");
+    const char *s2 = (const char *)(l["s2"] | "--");
+    const char *s3 = (const char *)(l["s3"] | "--");
+
+    if (first) {                          // neueste Runde gross oben
+      first = false;
+      set_accent(lv_color_hex(CTRL_COLORS[ctrl - 1]));   // Kopf in Fahrerfarbe
+      lv_label_set_text(lblDriver, (driver[0] ? driver : "Letzte Runden"));
+      lv_label_set_text_fmt(lblPos, "R%d", (int)(l["lap"] | 0));
+      lv_label_set_text(lblLast, t);
+      lv_label_set_text_fmt(lblSec[0], "S1 %s", s1);
+      lv_label_set_text_fmt(lblSec[1], "S2 %s", s2);
+      lv_label_set_text_fmt(lblSec[2], "S3 %s", s3);
+      continue;                           // neueste nicht auch in die Liste
+    }
+
+    if (shown++ >= LAP_LIST_COUNT) break;
+    add_lap_row(driver, CTRL_COLORS[ctrl - 1], l["lap"] | 0, t, s1, s2, s3);
+  }
+
+  if (first) {                            // keine Daten
+    set_accent(accent_color());
+    lv_label_set_text(lblDriver, "Letzte Runden");
+    lv_label_set_text(lblPos, "");
+    lv_label_set_text(lblLast, "--");
+    for (int i = 0; i < 3; i++) lv_label_set_text_fmt(lblSec[i], "S%d --", i + 1);
   }
 }
 
