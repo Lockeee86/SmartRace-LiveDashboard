@@ -124,6 +124,13 @@ SmartRace App  ──POST──>  Flask Backend  ──WebSocket──>  Browser
 | `GET /api/track-record` | Current track record |
 | `GET /api/analytics` | Analytics data |
 
+## Development
+
+Useful when working with the SmartRace data interface:
+
+- [SmartRace WebSocket Client Demo](https://www.smartrace.de/anleitung/websocket-client-demo/) — a live viewer for the events the SmartRace app sends. Very handy for inspecting the raw event payloads (`ui.lap_update`, `event.end`, `race.penalty_update`, …) and building or debugging integrations without guessing at the data format.
+- [SmartRace Data Interface manual](https://www.smartrace.de/en/the-smartrace-manual/data-interface/) — official documentation of the interface.
+
 ## Portainer
 
 This project is optimized for deployment with [Portainer](https://www.portainer.io/). Simply deploy as a stack and set the environment variables in the Portainer UI.
