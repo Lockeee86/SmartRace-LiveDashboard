@@ -103,7 +103,8 @@ static Arduino_ESP32RGBPanel *rgbpanel = new Arduino_ESP32RGBPanel(
   14 /* G0 */, 13 /* G1 */, 12 /* G2 */, 11 /* G3 */, 10 /* G4 */, 9 /* G5 */,
   5 /* B0 */, 45 /* B1 */, 48 /* B2 */, 47 /* B3 */, 21 /* B4 */,
   1 /* hsync_pol */, 10 /* hsync_fp */, 8 /* hsync_pw */, 50 /* hsync_bp */,
-  1 /* vsync_pol */, 10 /* vsync_fp */, 8 /* vsync_pw */, 20 /* vsync_bp */);
+  1 /* vsync_pol */, 10 /* vsync_fp */, 8 /* vsync_pw */, 20 /* vsync_bp */,
+  0 /* pclk_active_neg */, RGB_PCLK_HZ /* prefer_speed: Pixeltakt gegen Flackern */);
 
 static Arduino_RGB_Display *gfx = new Arduino_RGB_Display(
   480 /* w */, 480 /* h */, rgbpanel, 2 /* rotation */, true /* auto_flush */,
@@ -598,6 +599,7 @@ static void fetch_controllers() {
 // ============================================================================
 static void wifi_connect() {
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);   // Modem-Sleep aus -> kein periodisches Flackern durch WLAN-Bursts
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   uint32_t t0 = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - t0 < 15000) {

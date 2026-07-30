@@ -41,17 +41,62 @@ curl "http://192.168.1.90:5000/api/device/controllers"
 1. **Arduino IDE** (2.x) + **ESP32-Boardpaket** (Boards-Manager-URL von Espressif).
 2. Board: *ESP32S3 Dev Module*, **PSRAM aktivieren** (OPI, wie im Wiki),
    16 MB Flash, passende Partition. Genaue Werte stehen im Waveshare-Wiki.
-3. Bibliotheken — am einfachsten die aus dem **Waveshare-Repo** verwenden:
-   [`ESP32-S3-Touch-LCD-4/examples/arduino/libraries`](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries).
-   Kopiere diese Ordner nach `Documents/Arduino/libraries/`:
-   - **lvgl** 8.4.0  (**genau diese Version** — nicht 9.x!) + die mitgelieferte
-     **`lv_conf.h`** (liegt in `.../libraries/lv_conf.h`, direkt neben `lvgl/`).
-     Dort sind Farbtiefe 16 und alle Montserrat-Fonts (inkl. 48) schon aktiviert.
-   - **GFX_Library_for_Arduino** (Display, ST7701 RGB)
-   - **SensorLib** (Touch **GT911**)
-   - **WS_CH32_IO** (IO-Expander: Reset/Backlight)
-   - **ArduinoJson** 7.x (aus dem Bibliotheksverwalter)
-   - ESP32-Core: **stabile** Version (z.B. 2.0.14 / 3.0.x) — **kein** `*-alpha`.
+3. **Bibliotheken** (siehe Tabelle unten). Wichtig: **nicht** alle liegen im
+   Bibliotheksverwalter — die board-spezifischen kommen aus dem Waveshare-Repo.
+4. ESP32-Core: **Arduino-ESP32 `3.3.11`** (von Waveshare offiziell getestet) —
+   **kein** `4.0.0-alpha*`! Die Alpha-Cores brechen die RGB-Panel-Lib
+   (`gpio_num_t` / `bits_per_pixel`-Fehler). Umstellen im **Boardverwalter**:
+   Eintrag „esp32 by Espressif" → Versions-Dropdown → `3.3.11` → Installieren.
+   Board-Einstellungen: *ESP32S3 Dev Module*, **USB CDC On Boot: Enabled**,
+   **Flash 16MB**, **PSRAM: OPI PSRAM**, Partition **16M Flash (3MB APP/9.9MB FATFS)**.
+
+### Benötigte Bibliotheken
+
+Alle board-spezifischen Libs liegen gebündelt im Waveshare-Repo unter
+[`examples/arduino/libraries`](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries).
+
+| Bibliothek | Version | Woher | Zweck |
+|---|---|---|---|
+| **lvgl** | **8.4.0** (nicht 9.x!) | Bibliotheksverwalter **oder** [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries/lvgl) · [Upstream](https://github.com/lvgl/lvgl) | GUI-Framework |
+| **lv_conf.h** | zu 8.4.0 passend | [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/blob/main/examples/arduino/libraries/lv_conf.h) | LVGL-Konfig (Farbtiefe 16, alle Montserrat-Fonts an) — **direkt in `libraries/` legen**, neben den `lvgl`-Ordner |
+| **GFX_Library_for_Arduino** | Waveshare-Stand | [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries/GFX_Library_for_Arduino) · [Upstream](https://github.com/moononournation/Arduino_GFX) | Display (ST7701 RGB) |
+| **SensorLib** | Waveshare-Stand | [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries/SensorLib) · [Upstream](https://github.com/lewisxhe/SensorLib) | Touch (GT911) |
+| **WS_CH32_IO** | Waveshare-only | **nur** [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries/WS_CH32_IO) | IO-Expander (Display-Reset/Backlight) |
+| **ArduinoJson** | **7.x** | [Bibliotheksverwalter](https://arduinojson.org/) | JSON-Parsing der API |
+
+> ⚠️ **`WS_CH32_IO` gibt es NICHT im Bibliotheksverwalter** — die Suche findet
+> sie nicht. Sie muss aus dem Waveshare-Repo kommen (siehe Installation unten).
+> Ohne sie bleibt das Display dunkel (kein Reset/Backlight).
+
+### Bibliotheken installieren
+
+**Variante A — als ZIP über die IDE (empfohlen für die Waveshare-Libs):**
+1. Repo-Ordner der Lib als ZIP holen (z.B. per „Code → Download ZIP" vom Repo,
+   oder den einzelnen Lib-Ordner zippen).
+2. Arduino IDE: **Sketch → Bibliothek einbinden → .ZIP-Bibliothek hinzufügen…**
+   *(EN: Sketch → Include Library → Add .ZIP Library…)* und die ZIP wählen.
+
+**Variante B — manuell kopieren:**
+Lib-Ordner nach `Documents/Arduino/libraries/` kopieren, **genau eine Ebene tief**:
+```
+Documents/Arduino/libraries/
+├── lvgl/
+├── lv_conf.h                     ← neben (nicht in) den lvgl-Ordner!
+├── GFX_Library_for_Arduino/
+├── SensorLib/
+│   ├── library.properties
+│   └── src/TouchDrvGT911.hpp
+└── WS_CH32_IO/
+    ├── library.properties
+    └── src/WS_CH32_IO.h
+```
+Häufige Fehler: Ordner eine Ebene zu tief (`libraries/SensorLib/SensorLib/…`) →
+Lib wird nicht gefunden. Und: **nach dem Kopieren die IDE neu starten**, sonst
+liest sie die neuen Libs nicht ein.
+
+> 💡 Am einfachsten zuerst das Waveshare-Beispiel **`09_LVGL_Widgets`** flashen
+> (Schritt 1 unten). Läuft das, sitzen `lvgl`, `lv_conf.h`, `GFX_Library_for_Arduino`,
+> `SensorLib` und `WS_CH32_IO` alle korrekt — und dieser Sketch kompiliert auch.
 
 ## Einrichtung in 3 Schritten
 
@@ -99,6 +144,18 @@ abgedunkelt (Buttons ohne Daten noch etwas mehr).
 - **Anzahl Runden in der Liste**: `LAP_LIST_COUNT` (max 10, so viele liefert die API).
 - **Schriftgrößen/Layout**: in `build_ui()` (LVGL-Fonts müssen in `lv_conf.h`
   aktiviert sein — z.B. `montserrat_48` für die große Zeit).
+
+## Flackern beheben
+
+RGB-Displays flimmern, wenn die Bildwiederholrate zu niedrig ist. Der GFX-Standard
+sind nur **12 MHz Pixeltakt → ~42 Hz** (sichtbares Flimmern). Stellschraube:
+
+- **`RGB_PCLK_HZ`** in `config.h` (Default **16 MHz ≈ 56 Hz**). Höher = ruhiger:
+  `16000000` → `18000000` (≈63 Hz) probieren.
+- **Zu hoch** kann *Tearing* (verschobene Zeilen) durch PSRAM-/WLAN-Bandbreite
+  verursachen — dann wieder auf `14000000` senken. Sweet Spot liegt meist bei 14–18 MHz.
+- **WLAN-Modem-Sleep** ist bereits aus (`WiFi.setSleep(false)`), das verhindert
+  periodisches Zittern durch WLAN-Aufwachbursts.
 
 ## Hinweise
 

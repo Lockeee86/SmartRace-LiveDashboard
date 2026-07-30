@@ -21,3 +21,9 @@
 
 // --- Wie viele Runden in der Liste anzeigen (max 10, so viele liefert die API) ---
 #define LAP_LIST_COUNT  10
+
+// --- Display-Pixeltakt (gegen Flackern) ---
+// Standard der GFX-Lib waeren nur 12 MHz -> ~42 Hz Bildrate = sichtbares Flimmern.
+// Hoeher = mehr Hz = ruhiger. Bei Tearing (WLAN/Bandbreite) eher wieder senken.
+// Sinnvoll: 14000000 .. 18000000. 16 MHz (~56 Hz) ist ein guter Startwert.
+#define RGB_PCLK_HZ  16000000
