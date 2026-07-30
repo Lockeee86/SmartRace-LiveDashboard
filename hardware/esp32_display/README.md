@@ -103,6 +103,21 @@ Wie oben: *ESP32S3 Dev Module*, Core **3.3.11**, **USB CDC On Boot: Enabled**,
 - Display-Details musst du **nicht** anfassen — sie stehen in
   `esp_panel_board_custom_conf.h` (Pins/ST7701-Init aus `09_LVGL_Widgets`).
 
+> ⚠️ **WICHTIG — `esp_panel_board_custom_conf.h` zusätzlich in den `libraries/`-Ordner
+> legen.** ESP32_Display_Panel baut seine Board-Config in einer eigenen Library-Datei
+> (`esp_panel_board_default_config.cpp`). Diese sieht die Config im Sketch-Ordner
+> **nicht** immer (Arduino legt den Sketch-Ordner nicht in den Include-Pfad der
+> Library). Folge: Es wird die **Default-Config mit aktivem Touch** genommen → Boot
+> bricht mit `i2c: CONFLICT! driver_ng is not allowed to be used with this old driver`
+> ab. Fix: `esp_panel_board_custom_conf.h` **zusätzlich** nach
+> `Dokumente/Arduino/libraries/` kopieren (in den `libraries/`-Ordner selbst, **neben**
+> — nicht in — den `ESP32_Display_Panel`-Ordner). Von dort findet die Library sie
+> deterministisch über den `../../../`-Fallback.
+>
+> Danach **einmal den Build-Cache leeren**, sonst nutzt Arduino das alte, mit
+> Touch=an kompilierte Objekt weiter: Arduino IDE schließen und unter Windows den
+> Ordner `%LOCALAPPDATA%\Temp\arduino\` löschen (nur Cache), dann neu kompilieren.
+
 ### 3) Flashen
 Kompilieren und hochladen. Auf dem Serial-Monitor (115200) siehst du den
 WLAN-Status. Das Display verbindet sich, holt alle 0,5 s die Daten und zeigt
