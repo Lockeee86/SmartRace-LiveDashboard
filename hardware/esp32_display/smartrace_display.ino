@@ -28,6 +28,7 @@
 
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include "esp_rom_sys.h"           // esp_rom_printf() — direkter UART0-Marker
 #include <ArduinoJson.h>
 #include <lvgl.h>
 #include <Wire.h>
@@ -187,6 +188,8 @@ static void board_init() {
     Serial.println("CH32 IO-Expander init fehlgeschlagen");
   }
 
+  esp_rom_printf("[SR] CH32 fertig, baue RGB-Bus...\n");
+
   // RGB-Bus (3-wire-SPI-Init + 16-bit RGB). Pins/Timings 1:1 aus 09_LVGL_Widgets:
   //   CS42/SCK2/SDA1 ; D0..D15 = B0-4,G0-5,R0-4 ; HSYNC38 VSYNC39 PCLK41 DE40 ;
   //   14 MHz ; 480x480 ; HPW8 HBP50 HFP10 VPW8 VBP20 VFP10.
@@ -206,13 +209,16 @@ static void board_init() {
   bus->configRGB_BounceBufferSize(PANEL_W * 10);
 #endif
   lcd->configMirrorByCommand(true);   // 180 Grad per LCD-Kommando (statt Software)
-  if (!lcd->begin()) Serial.println("LCD begin fehlgeschlagen");
+  esp_rom_printf("[SR] LCD begin()...\n");
+  if (!lcd->begin()) esp_rom_printf("[SR] LCD begin FEHLGESCHLAGEN\n");
   lcd->mirrorX(true);
   lcd->mirrorY(true);
   g_lcd = lcd;
+  esp_rom_printf("[SR] LCD ok, starte LVGL-Port...\n");
 
   // LVGL starten (eigener Task, ohne Touch). Ab hier: lv_* nur zwischen lock()/unlock().
   lvgl_port_init(g_lcd, nullptr);
+  esp_rom_printf("[SR] LVGL laeuft, init GT911-Touch...\n");
 
   // Touch selbst initialisieren und als LVGL-Eingabegeraet registrieren.
   gt911_available = init_gt911(WS_CH32_IO::DEFAULT_I2C_SDA, WS_CH32_IO::DEFAULT_I2C_SCL);
@@ -631,7 +637,12 @@ static void poll_data() {
 
 void setup() {
   Serial.begin(115200);
-  board_init();     // Display/Touch/LVGL (ESP32_Display_Panel + lvgl_port)
+  // BUILD-MARKER: erscheint IMMER auf UART0 (unabhaengig von USB-CDC/Core-Debug-Level).
+  // Siehst du diese Zeile im Log -> der NEUE Code laeuft. Fehlt sie und es kommt der
+  // alte i2c-CONFLICT -> es wurde das alte Binary geflasht (Build/Upload nahm den
+  // neuen Code nicht).
+  esp_rom_printf("\n\n=== SMARTRACE BUILD manual-rgb-v3 === setup() gestartet ===\n\n");
+  board_init();     // Display/Touch/LVGL (manuell aufgebauter RGB-Bus + ST7701)
 
   // UI aufbauen — lv_* nur unter dem LVGL-Lock.
   lvgl_port_lock(-1);
