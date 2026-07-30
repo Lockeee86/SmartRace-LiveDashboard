@@ -16,7 +16,7 @@
 #define POLL_INTERVAL_MS      500   // wie oft die aktuellen Daten geholt werden
 #define CTRL_POLL_INTERVAL_MS 3000  // wie oft Fahrernamen der Buttons aktualisiert werden
 
-// --- Start-Controller (1..6) ---
+// --- Start-Ansicht: 0 = "Letzte Runden" (alle Fahrer), 1..6 = Controller C1..C6 ---
 #define DEFAULT_CONTROLLER  1
 
 // --- Wie viele Runden in der Liste anzeigen (max 10, so viele liefert die API) ---
