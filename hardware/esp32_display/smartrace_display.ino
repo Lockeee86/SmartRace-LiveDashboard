@@ -30,6 +30,11 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <lvgl.h>
+#include <Wire.h>
+#include <SPI.h>
+#include "Arduino_GFX_Library.h"   // Waveshare-Beispiel-Lib: GFX_Library_for_Arduino
+#include "TouchDrvGT911.hpp"       // Waveshare-Beispiel-Lib: SensorLib
+#include "WS_CH32_IO.h"            // Waveshare-Beispiel-Lib: IO-Expander (Reset/Backlight)
 #include "config.h"
 
 // ---- Farben (passend zum Web-Dashboard) ----
@@ -77,26 +82,135 @@ static void fetch_recent();
 static void poll_data();
 
 // ============================================================================
-// Board-Init (LVGL + Display + Touch) -> aus Waveshare-Demo uebernehmen
+// Board-Init (LVGL + Display + Touch) — portiert aus Waveshare 09_LVGL_Widgets
+// ESP32-S3-Touch-LCD-4: ST7701 (RGB-Panel, 480x480) + GT911 (Touch) + CH32-IO
+// Benoetigte Libs (aus dem Waveshare-Repo /examples/arduino/libraries kopieren):
+//   GFX_Library_for_Arduino, SensorLib, WS_CH32_IO, lvgl 8.4.0 + deren lv_conf.h
 // ============================================================================
+#define LV_TICK_PERIOD_MS 2
+
+static uint32_t screenWidth, screenHeight;
+static lv_disp_draw_buf_t draw_buf;
+
+// --- ST7701-Init ueber SWSPI, Bilddaten ueber den RGB-Bus (Pins laut Waveshare) ---
+static Arduino_DataBus *bus = new Arduino_SWSPI(
+  GFX_NOT_DEFINED /* DC */, 42 /* CS */,
+  2 /* SCK */, 1 /* MOSI */, GFX_NOT_DEFINED /* MISO */);
+
+static Arduino_ESP32RGBPanel *rgbpanel = new Arduino_ESP32RGBPanel(
+  40 /* DE */, 39 /* VSYNC */, 38 /* HSYNC */, 41 /* PCLK */,
+  46 /* R0 */, 3 /* R1 */, 8 /* R2 */, 18 /* R3 */, 17 /* R4 */,
+  14 /* G0 */, 13 /* G1 */, 12 /* G2 */, 11 /* G3 */, 10 /* G4 */, 9 /* G5 */,
+  5 /* B0 */, 45 /* B1 */, 48 /* B2 */, 47 /* B3 */, 21 /* B4 */,
+  1 /* hsync_pol */, 10 /* hsync_fp */, 8 /* hsync_pw */, 50 /* hsync_bp */,
+  1 /* vsync_pol */, 10 /* vsync_fp */, 8 /* vsync_pw */, 20 /* vsync_bp */);
+
+static Arduino_RGB_Display *gfx = new Arduino_RGB_Display(
+  480 /* w */, 480 /* h */, rgbpanel, 2 /* rotation */, true /* auto_flush */,
+  bus, GFX_NOT_DEFINED /* RST */, st7701_type1_init_operations, sizeof(st7701_type1_init_operations));
+
+static TouchDrvGT911 GT911;
+static int16_t ts_x[5], ts_y[5];
+static uint8_t gt911_addr = 0;
+static bool gt911_available = false;
+
+// LVGL-Display-Flush -> Bitmap auf das GFX-Panel zeichnen
+static void disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
+  uint32_t w = area->x2 - area->x1 + 1;
+  uint32_t h = area->y2 - area->y1 + 1;
+#if (LV_COLOR_16_SWAP != 0)
+  gfx->draw16bitBeRGBBitmap(area->x1, area->y1, (uint16_t *)&color_p->full, w, h);
+#else
+  gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)&color_p->full, w, h);
+#endif
+  lv_disp_flush_ready(disp);
+}
+
+static void lvgl_tick_cb(void *arg) { lv_tick_inc(LV_TICK_PERIOD_MS); }
+
+// LVGL-Touch-Read -> Punkt vom GT911, an die Display-Rotation angepasst
+static void touch_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
+  if (!gt911_available) { data->state = LV_INDEV_STATE_REL; return; }
+  uint8_t touched = GT911.getPoint(ts_x, ts_y, GT911.getSupportTouchPoint());
+  if (touched > 0) {
+    int16_t tx = ts_x[0], ty = ts_y[0];
+    switch (gfx->getRotation()) {
+      case 1: tx = ts_y[0]; ty = gfx->height() - ts_x[0]; break;
+      case 2: tx = gfx->width() - ts_x[0]; ty = gfx->height() - ts_y[0]; break;
+      case 3: tx = gfx->width() - ts_y[0]; ty = ts_x[0]; break;
+    }
+    data->state = LV_INDEV_STATE_PR;
+    data->point.x = tx;
+    data->point.y = ty;
+  } else {
+    data->state = LV_INDEV_STATE_REL;
+  }
+}
+
+// GT911-Adresse per I2C-Scan finden und initialisieren
+static bool init_gt911(int sda, int scl) {
+  Wire.begin(sda, scl);
+  delay(100);
+  for (byte a = 1; a < 127; a++) {
+    Wire.beginTransmission(a);
+    if (Wire.endTransmission() == 0 &&
+        (a == GT911_SLAVE_ADDRESS_L || a == GT911_SLAVE_ADDRESS_H)) {
+      gt911_addr = a;
+    }
+  }
+  if (!gt911_addr) { Serial.println("GT911 nicht gefunden"); return false; }
+  GT911.setPins(-1, -1);
+  if (GT911.begin(Wire, gt911_addr, sda, scl)) {
+    GT911.setMaxTouchPoint(1);
+    return true;
+  }
+  Serial.println("GT911 begin fehlgeschlagen");
+  return false;
+}
+
 static void board_init() {
-  // ESP32-S3-Touch-LCD-4: ST7701 (RGB-Panel, 480x480) + GT911 (Touch, I2C)
-  // + IO-Expander. Basis: Waveshare-Arduino-Beispiel "02_LVGL_Porting".
-  // Benoetigte Libs: ESP32_Display_Panel, ESP32_IO_Expander,
-  //                  GFX_Library_for_Arduino, lvgl 8.4.
-  //
-  // Typisches Muster aus 02_LVGL_Porting (an deine Lib-Version anpassen;
-  // lvgl_port_v8.h/.cpp aus dem Beispiel mit ins Projekt kopieren):
-  //
-  //   #include <ESP_Panel_Library.h>
-  //   #include "lvgl_port_v8.h"
-  //   ESP_Panel *panel = new ESP_Panel();
-  //   panel->init();
-  //   panel->begin();
-  //   lvgl_port_init(panel->getLcd(), panel->getTouch());
-  //
-  // Danach ist ein aktiver LVGL-Screen vorhanden (lv_scr_act()) und
-  // lv_timer_handler() rendert Display + verarbeitet Touch.
+  // IO-Expander (CH32V003) — schaltet u.a. Display-Reset/Backlight frei
+  if (!WS_CH32_IO::begin(Wire, WS_CH32_IO::DEFAULT_I2C_SDA, WS_CH32_IO::DEFAULT_I2C_SCL,
+                         WS_CH32_IO::DEFAULT_I2C_FREQ, &Serial)) {
+    Serial.println("CH32 IO-Expander init fehlgeschlagen");
+  }
+
+  gt911_available = init_gt911(15, 7);
+
+  gfx->begin();
+  screenWidth  = gfx->width();
+  screenHeight = gfx->height();
+
+  lv_init();
+
+  // Zwei DMA-Puffer je 1/4 Screen (wie im Waveshare-Beispiel)
+  size_t px = screenWidth * screenHeight / 4;
+  lv_color_t *buf1 = (lv_color_t *)heap_caps_malloc(px * sizeof(lv_color_t), MALLOC_CAP_DMA);
+  lv_color_t *buf2 = (lv_color_t *)heap_caps_malloc(px * sizeof(lv_color_t), MALLOC_CAP_DMA);
+  lv_disp_draw_buf_init(&draw_buf, buf1, buf2, px);
+
+  static lv_disp_drv_t disp_drv;
+  lv_disp_drv_init(&disp_drv);
+  disp_drv.hor_res   = screenWidth;
+  disp_drv.ver_res   = screenHeight;
+  disp_drv.flush_cb  = disp_flush;
+  disp_drv.draw_buf  = &draw_buf;
+  disp_drv.sw_rotate = 1;
+  lv_disp_drv_register(&disp_drv);
+
+  if (gt911_available) {
+    static lv_indev_drv_t indev_drv;
+    lv_indev_drv_init(&indev_drv);
+    indev_drv.type    = LV_INDEV_TYPE_POINTER;
+    indev_drv.read_cb = touch_read;
+    lv_indev_drv_register(&indev_drv);
+  }
+
+  // LVGL-Tick per Hardware-Timer (LVGL weiss so, wie viel Zeit vergeht)
+  const esp_timer_create_args_t tick_args = { .callback = &lvgl_tick_cb, .name = "lvgl_tick" };
+  esp_timer_handle_t tick_timer = NULL;
+  esp_timer_create(&tick_args, &tick_timer);
+  esp_timer_start_periodic(tick_timer, LV_TICK_PERIOD_MS * 1000);
 }
 
 // ============================================================================

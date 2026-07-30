@@ -41,33 +41,34 @@ curl "http://192.168.1.90:5000/api/device/controllers"
 1. **Arduino IDE** (2.x) + **ESP32-Boardpaket** (Boards-Manager-URL von Espressif).
 2. Board: *ESP32S3 Dev Module*, **PSRAM aktivieren** (OPI, wie im Wiki),
    16 MB Flash, passende Partition. Genaue Werte stehen im Waveshare-Wiki.
-3. Bibliotheken (Bibliotheksverwalter / Waveshare-Demo):
-   - **lvgl** 8.4.x  (Beispiel nutzt genau diese Version)
-   - **ArduinoJson** 7.x
-   - **ESP32_Display_Panel** (ST7701 + GT911, v0.1.8),
-     **ESP32_IO_Expander**, **GFX_Library_for_Arduino**
-   - `lv_conf.h` aus dem Waveshare-Beispiel übernehmen (Fonts wie
-     `montserrat_48` müssen aktiviert sein)
+3. Bibliotheken — am einfachsten die aus dem **Waveshare-Repo** verwenden:
+   [`ESP32-S3-Touch-LCD-4/examples/arduino/libraries`](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries).
+   Kopiere diese Ordner nach `Documents/Arduino/libraries/`:
+   - **lvgl** 8.4.0  (**genau diese Version** — nicht 9.x!) + die mitgelieferte
+     **`lv_conf.h`** (liegt in `.../libraries/lv_conf.h`, direkt neben `lvgl/`).
+     Dort sind Farbtiefe 16 und alle Montserrat-Fonts (inkl. 48) schon aktiviert.
+   - **GFX_Library_for_Arduino** (Display, ST7701 RGB)
+   - **SensorLib** (Touch **GT911**)
+   - **WS_CH32_IO** (IO-Expander: Reset/Backlight)
+   - **ArduinoJson** 7.x (aus dem Bibliotheksverwalter)
+   - ESP32-Core: **stabile** Version (z.B. 2.0.14 / 3.0.x) — **kein** `*-alpha`.
 
 ## Einrichtung in 3 Schritten
 
 ### 1) Waveshare-Demo zum Laufen bringen
-Lade das Beispiel **`02_LVGL_Porting`** (RGB-Touch mit LVGL) aus dem Waveshare-
-Wiki/Demo und flashe es. Wenn dort die LVGL-Demo sauber angezeigt wird und der
-Touch reagiert, ist die Board-Basis fertig.
-
-Übernimm aus diesem Beispiel **`lv_conf.h`** sowie **`lvgl_port_v8.h/.cpp`**
-in dein Projekt.
+Lade das Beispiel **`09_LVGL_Widgets`** (RGB-Touch mit LVGL) aus dem Waveshare-
+Repo (`examples/arduino/09_LVGL_Widgets`) und flashe es. Wenn dort die LVGL-Demo
+sauber angezeigt wird und der Touch reagiert, ist die Board-Basis fertig — und
+alle Bibliotheken/`lv_conf.h` sitzen richtig.
 
 ### 2) Diesen Sketch einbinden
 - Ordner `smartrace_display/` mit `smartrace_display.ino` + `config.h` öffnen.
 - In **`config.h`** eintragen:
   - `WIFI_SSID`, `WIFI_PASSWORD`
   - `SERVER_BASE` = Adresse deines Dashboards, z.B. `http://192.168.1.90:5000`
-- In **`smartrace_display.ino`** die Funktion **`board_init()`** ausfüllen:
-  den Display-/Touch-/LVGL-Init aus dem Waveshare-Demo (aus deren `setup()`)
-  dorthin übernehmen bzw. deren Init-Funktion aufrufen. Danach muss ein aktiver
-  LVGL-Screen vorhanden sein und `lv_timer_handler()` laufen.
+- **`board_init()` ist bereits ausgefüllt** — der Display-/Touch-/LVGL-Init aus
+  `09_LVGL_Widgets` ist übernommen (Pins, ST7701, GT911, CH32-IO, LVGL-Tick).
+  Es muss nur dasselbe Board + dieselben Libs wie in Schritt 1 aktiv sein.
 
 ### 3) Flashen
 Kompilieren und hochladen. Auf dem Serial-Monitor (115200) siehst du den
