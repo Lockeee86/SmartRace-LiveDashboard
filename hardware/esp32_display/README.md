@@ -43,7 +43,12 @@ curl "http://192.168.1.90:5000/api/device/controllers"
    16 MB Flash, passende Partition. Genaue Werte stehen im Waveshare-Wiki.
 3. **Bibliotheken** (siehe Tabelle unten). Wichtig: **nicht** alle liegen im
    Bibliotheksverwalter — die board-spezifischen kommen aus dem Waveshare-Repo.
-4. ESP32-Core: **stabile** Version (z.B. 2.0.14 / 3.0.x) — **kein** `*-alpha`.
+4. ESP32-Core: **Arduino-ESP32 `3.3.11`** (von Waveshare offiziell getestet) —
+   **kein** `4.0.0-alpha*`! Die Alpha-Cores brechen die RGB-Panel-Lib
+   (`gpio_num_t` / `bits_per_pixel`-Fehler). Umstellen im **Boardverwalter**:
+   Eintrag „esp32 by Espressif" → Versions-Dropdown → `3.3.11` → Installieren.
+   Board-Einstellungen: *ESP32S3 Dev Module*, **USB CDC On Boot: Enabled**,
+   **Flash 16MB**, **PSRAM: OPI PSRAM**, Partition **16M Flash (3MB APP/9.9MB FATFS)**.
 
 ### Benötigte Bibliotheken
 
