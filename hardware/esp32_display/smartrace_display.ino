@@ -85,16 +85,59 @@ static void fetch_recent();
 static void poll_data();
 
 // ============================================================================
-// Board-Init: Display + Touch via ESP32_Display_Panel (Anti-Tear/Doppelpuffer).
-// Alle Hardware-Details (Pins, ST7701-Init, GT911, Timings, PCLK) stehen in
-// esp_panel_board_custom_conf.h. Display-Reset/Backlight macht der CH32-IO-Expander.
-// LVGL laeuft danach in einem eigenen Task -> alle lv_*-Aufrufe muessen mit
-// lvgl_port_lock()/lvgl_port_unlock() geklammert werden.
+// Board-Init: Display (RGB + ST7701) wird DIREKT im Sketch aufgebaut — OHNE die
+// Board-Config-Dateien und OHNE die Board-Klasse von ESP32_Display_Panel. Grund:
+// deren Auto-Config (esp_panel_board_default_config.cpp) findet Sketch-Configs im
+// Arduino nicht zuverlaessig -> fiel auf einen Default MIT Touch zurueck und
+// installierte einen zweiten I2C-Treiber -> Kollision mit Arduino-Wire (CH32/GT911).
+// Manuell konstruiert nutzt ESP_PANEL fuer's Display KEIN I2C. Touch/Reset/Backlight
+// laufen ueber Arduino-Wire (CH32 + GT911/SensorLib), also nur EIN I2C-Treiber.
+// LVGL laeuft danach im eigenen Task -> lv_* nur zwischen lock()/unlock().
 // ============================================================================
-static Board *g_board = nullptr;
+static esp_panel::drivers::LCD *g_lcd = nullptr;
 
-// Panelgroesse (fuer Touch-Mapping). Muss zur Board-Config passen.
+// Panelgroesse (fuer Touch-Mapping).
 static const int16_t PANEL_W = 480, PANEL_H = 480;
+
+// ST7701-Init unseres Panels (1:1 aus Arduino_GFX st7701_type1_init_operations).
+static const esp_panel_lcd_vendor_init_cmd_t st7701_init_cmd[] = {
+  {0xFF, (uint8_t []){0x77, 0x01, 0x00, 0x00, 0x10}, 5, 0},
+  {0xC0, (uint8_t []){0x3B, 0x00}, 2, 0},
+  {0xC1, (uint8_t []){0x0D, 0x02}, 2, 0},
+  {0xC2, (uint8_t []){0x31, 0x05}, 2, 0},
+  {0xCD, (uint8_t []){0x08}, 1, 0},
+  {0xB0, (uint8_t []){0x00, 0x11, 0x18, 0x0E, 0x11, 0x06, 0x07, 0x08, 0x07, 0x22, 0x04, 0x12, 0x0F, 0xAA, 0x31, 0x18}, 16, 0},
+  {0xB1, (uint8_t []){0x00, 0x11, 0x19, 0x0E, 0x12, 0x07, 0x08, 0x08, 0x08, 0x22, 0x04, 0x11, 0x11, 0xA9, 0x32, 0x18}, 16, 0},
+  {0xFF, (uint8_t []){0x77, 0x01, 0x00, 0x00, 0x11}, 5, 0},
+  {0xB0, (uint8_t []){0x60}, 1, 0},
+  {0xB1, (uint8_t []){0x32}, 1, 0},
+  {0xB2, (uint8_t []){0x07}, 1, 0},
+  {0xB3, (uint8_t []){0x80}, 1, 0},
+  {0xB5, (uint8_t []){0x49}, 1, 0},
+  {0xB7, (uint8_t []){0x85}, 1, 0},
+  {0xB8, (uint8_t []){0x21}, 1, 0},
+  {0xC1, (uint8_t []){0x78}, 1, 0},
+  {0xC2, (uint8_t []){0x78}, 1, 0},
+  {0xE0, (uint8_t []){0x00, 0x1B, 0x02}, 3, 0},
+  {0xE1, (uint8_t []){0x08, 0xA0, 0x00, 0x00, 0x07, 0xA0, 0x00, 0x00, 0x00, 0x44, 0x44}, 11, 0},
+  {0xE2, (uint8_t []){0x11, 0x11, 0x44, 0x44, 0xED, 0xA0, 0x00, 0x00, 0xEC, 0xA0, 0x00, 0x00}, 12, 0},
+  {0xE3, (uint8_t []){0x00, 0x00, 0x11, 0x11}, 4, 0},
+  {0xE4, (uint8_t []){0x44, 0x44}, 2, 0},
+  {0xE5, (uint8_t []){0x0A, 0xE9, 0xD8, 0xA0, 0x0C, 0xEB, 0xD8, 0xA0, 0x0E, 0xED, 0xD8, 0xA0, 0x10, 0xEF, 0xD8, 0xA0}, 16, 0},
+  {0xE6, (uint8_t []){0x00, 0x00, 0x11, 0x11}, 4, 0},
+  {0xE7, (uint8_t []){0x44, 0x44}, 2, 0},
+  {0xE8, (uint8_t []){0x09, 0xE8, 0xD8, 0xA0, 0x0B, 0xEA, 0xD8, 0xA0, 0x0D, 0xEC, 0xD8, 0xA0, 0x0F, 0xEE, 0xD8, 0xA0}, 16, 0},
+  {0xEB, (uint8_t []){0x02, 0x00, 0xE4, 0xE4, 0x88, 0x00, 0x40}, 7, 0},
+  {0xEC, (uint8_t []){0x3C, 0x00}, 2, 0},
+  {0xED, (uint8_t []){0xAB, 0x89, 0x76, 0x54, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x20, 0x45, 0x67, 0x98, 0xBA}, 16, 0},
+  {0xFF, (uint8_t []){0x77, 0x01, 0x00, 0x00, 0x13}, 5, 0},
+  {0xE5, (uint8_t []){0xE4}, 1, 0},
+  {0xFF, (uint8_t []){0x77, 0x01, 0x00, 0x00, 0x00}, 5, 0},
+  {0x21, (uint8_t []){0x00}, 0, 0},
+  {0x3A, (uint8_t []){0x60}, 1, 0},
+  {0x11, (uint8_t []){0x00}, 0, 120},
+  {0x29, (uint8_t []){0x00}, 0, 0},
+};
 
 // --- GT911-Touch (SensorLib, ueber Arduino-Wire — selber Bus wie der CH32) ---
 static TouchDrvGT911 GT911;
@@ -144,25 +187,32 @@ static void board_init() {
     Serial.println("CH32 IO-Expander init fehlgeschlagen");
   }
 
-  // Display: ESP32_Display_Panel (nur RGB + ST7701 ueber SPI, kein I2C -> kein
-  // Konflikt mit Arduino-Wire).
-  g_board = new Board();
-  g_board->init();
+  // RGB-Bus (3-wire-SPI-Init + 16-bit RGB). Pins/Timings 1:1 aus 09_LVGL_Widgets:
+  //   CS42/SCK2/SDA1 ; D0..D15 = B0-4,G0-5,R0-4 ; HSYNC38 VSYNC39 PCLK41 DE40 ;
+  //   14 MHz ; 480x480 ; HPW8 HBP50 HFP10 VPW8 VBP20 VFP10.
+  BusRGB *bus = new BusRGB(
+    42, 2, 1,
+    5, 45, 48, 47, 21, 14, 13, 12, 11, 10, 9, 46, 3, 8, 18, 17,
+    38, 39, 41, 40, -1,
+    14 * 1000 * 1000, 480, 480, 8, 50, 10, 8, 20, 10);
 
+  // ST7701-LCD (RST=-1, den macht der CH32). RGB565.
+  LCD_ST7701 *lcd = new LCD_ST7701(bus, 480, 480, ESP_PANEL_LCD_COLOR_BITS_RGB565, -1);
+  lcd->configVendorCommands(st7701_init_cmd, sizeof(st7701_init_cmd) / sizeof(st7701_init_cmd[0]));
+  lcd->configColorRGB_Order(false);   // 0 = RGB
 #if LVGL_PORT_AVOID_TEARING_MODE
-  // Anti-Tear: dem RGB-Bus die noetige Framebuffer-Anzahl + Bounce-Buffer geben.
-  auto lcd = g_board->getLCD();
+  // Anti-Tear: mehrere Framebuffer + Bounce-Buffer gegen PSRAM-Underrun.
   lcd->configFrameBufferNumber(LVGL_PORT_DISP_BUFFER_NUM);
-  auto lcd_bus = lcd->getBus();
-  if (lcd_bus->getBasicAttributes().type == ESP_PANEL_BUS_TYPE_RGB) {
-    static_cast<BusRGB *>(lcd_bus)->configRGB_BounceBufferSize(lcd->getFrameWidth() * 10);
-  }
+  bus->configRGB_BounceBufferSize(PANEL_W * 10);
 #endif
-
-  g_board->begin();
+  lcd->configMirrorByCommand(true);   // 180 Grad per LCD-Kommando (statt Software)
+  if (!lcd->begin()) Serial.println("LCD begin fehlgeschlagen");
+  lcd->mirrorX(true);
+  lcd->mirrorY(true);
+  g_lcd = lcd;
 
   // LVGL starten (eigener Task, ohne Touch). Ab hier: lv_* nur zwischen lock()/unlock().
-  lvgl_port_init(g_board->getLCD(), nullptr);
+  lvgl_port_init(g_lcd, nullptr);
 
   // Touch selbst initialisieren und als LVGL-Eingabegeraet registrieren.
   gt911_available = init_gt911(WS_CH32_IO::DEFAULT_I2C_SDA, WS_CH32_IO::DEFAULT_I2C_SCL);
