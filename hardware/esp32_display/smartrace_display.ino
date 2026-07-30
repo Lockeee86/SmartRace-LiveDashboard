@@ -184,8 +184,9 @@ static void board_init() {
 
   lv_init();
 
-  // Zwei DMA-Puffer je 1/4 Screen (wie im Waveshare-Beispiel)
-  size_t px = screenWidth * screenHeight / 4;
+  // Zwei DMA-Puffer je 1/10 Screen. Bewusst klein gehalten: so bleibt viel
+  // interner SRAM fuer WLAN + den RGB-Bounce-Buffer frei -> weniger Underrun/Flackern.
+  size_t px = screenWidth * screenHeight / 10;
   lv_color_t *buf1 = (lv_color_t *)heap_caps_malloc(px * sizeof(lv_color_t), MALLOC_CAP_DMA);
   lv_color_t *buf2 = (lv_color_t *)heap_caps_malloc(px * sizeof(lv_color_t), MALLOC_CAP_DMA);
   lv_disp_draw_buf_init(&draw_buf, buf1, buf2, px);
