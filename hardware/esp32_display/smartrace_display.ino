@@ -42,7 +42,7 @@ using namespace esp_panel::drivers;
 using namespace esp_panel::board;
 
 // ---- Diagnose / Optionen ----
-#define SR_ENABLE_TOUCH  0   // vorerst AUS: isoliert den I2C-Konflikt (Display zuerst)
+#define SR_ENABLE_TOUCH  1   // Touch an (I2C-Konflikt via Core 3.1.x behoben)
 // Sichtbare Marker: geht auf USB-CDC (braucht "USB CDC On Boot: Enabled") UND HW-UART0.
 static inline void sr_mark(const char *s) { Serial.println(s); Serial.flush(); esp_rom_printf("%s\n", s); }
 
@@ -343,7 +343,12 @@ static void build_ui() {
   lblLast = lv_label_create(scr);
   lv_label_set_text(lblLast, "--");
   style_time_label(lblLast, &lv_font_montserrat_48, lv_color_hex(0xffffff));
-  lv_obj_align(lblLast, LV_ALIGN_TOP_MID, 0, 66);
+  lv_obj_align(lblLast, LV_ALIGN_TOP_MID, 0, 60);
+  // montserrat_48 ist die groesste fertige Schrift -> per Zoom noch etwas groesser,
+  // Pivot mittig, damit es zentriert waechst.
+  lv_obj_set_style_transform_zoom(lblLast, 296, 0);            // ~1.16x
+  lv_obj_set_style_transform_pivot_x(lblLast, LV_PCT(50), 0);
+  lv_obj_set_style_transform_pivot_y(lblLast, LV_PCT(50), 0);
 
   // --- Bestzeit + Delta ---
   lblBest = lv_label_create(scr);
@@ -360,9 +365,10 @@ static void build_ui() {
   for (int i = 0; i < 3; i++) {
     lblSec[i] = lv_label_create(scr);
     lv_label_set_text_fmt(lblSec[i], "S%d --", i + 1);
-    lv_obj_set_style_text_font(lblSec[i], &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(lblSec[i], &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(lblSec[i], lv_color_hex(SECTOR_COLORS[i]), 0);
-    lv_obj_align(lblSec[i], LV_ALIGN_TOP_LEFT, 14 + i * 155, 156);
+    // Zentriert als Dreiergruppe (Mitte bei i==1), etwas tiefer wegen groesserer Zeit.
+    lv_obj_align(lblSec[i], LV_ALIGN_TOP_MID, (i - 1) * 160, 160);
   }
 
   // --- Liste der letzten Runden (scrollbar) ---
@@ -455,7 +461,7 @@ static void add_lap_row(const char *driver, uint32_t col, int lap, const char *t
   lv_obj_t *ls = lv_label_create(row);             // Sektoren
   lv_label_set_text_fmt(ls, "%s  %s  %s", s1, s2, s3);
   lv_obj_set_style_text_color(ls, lv_color_hex(0x8a8f98), 0);
-  lv_obj_align(ls, LV_ALIGN_RIGHT_MID, 0, 0);
+  lv_obj_align(ls, LV_ALIGN_RIGHT_MID, -16, 0);    // -16: freihalten vom Scrollbalken
 }
 
 // Layout je nach Modus. In BEIDEN Modi: oben die neueste Runde gross mit
@@ -648,7 +654,7 @@ static void poll_data() {
 
 void setup() {
   Serial.begin(115200);
-  delay(1500);   // USB-CDC Zeit zum Enumerieren geben, damit die Marker sichtbar sind
+  delay(300);
   sr_mark("\n=== SMARTRACE BUILD touch-off-v4 === setup() gestartet ===");
   board_init();     // Display (Touch per SR_ENABLE_TOUCH schaltbar)
 
