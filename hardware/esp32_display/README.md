@@ -52,68 +52,53 @@ curl "http://192.168.1.90:5000/api/device/controllers"
 
 ### Benötigte Bibliotheken
 
-Alle board-spezifischen Libs liegen gebündelt im Waveshare-Repo unter
-[`examples/arduino/libraries`](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries).
+Der Display-/Touch-Teil läuft über **ESP32_Display_Panel** — die nutzt einen
+**Doppel-/Triple-Framebuffer (Anti-Tear)** und behebt so das Flackern, das mit
+Arduino_GFX (nur ein Framebuffer) bei aktivem WLAN nicht lösbar war.
 
 | Bibliothek | Version | Woher | Zweck |
 |---|---|---|---|
-| **lvgl** | **8.4.0** (nicht 9.x!) | Bibliotheksverwalter **oder** [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries/lvgl) · [Upstream](https://github.com/lvgl/lvgl) | GUI-Framework |
+| **ESP32_Display_Panel** | **1.0.5+** | [Bibliotheksverwalter](https://github.com/esp-arduino-libs/ESP32_Display_Panel) | Display (ST7701 RGB) **+** Touch (GT911), Anti-Tear |
+| **lvgl** | **8.4.0** (nicht 9.x!) | Bibliotheksverwalter · [Upstream](https://github.com/lvgl/lvgl) | GUI-Framework |
 | **lv_conf.h** | zu 8.4.0 passend | [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/blob/main/examples/arduino/libraries/lv_conf.h) | LVGL-Konfig (Farbtiefe 16, alle Montserrat-Fonts an) — **direkt in `libraries/` legen**, neben den `lvgl`-Ordner |
-| **GFX_Library_for_Arduino** | Waveshare-Stand | [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries/GFX_Library_for_Arduino) · [Upstream](https://github.com/moononournation/Arduino_GFX) | Display (ST7701 RGB) |
-| **SensorLib** | Waveshare-Stand | [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries/SensorLib) · [Upstream](https://github.com/lewisxhe/SensorLib) | Touch (GT911) |
 | **WS_CH32_IO** | Waveshare-only | **nur** [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries/WS_CH32_IO) | IO-Expander (Display-Reset/Backlight) |
 | **ArduinoJson** | **7.x** | [Bibliotheksverwalter](https://arduinojson.org/) | JSON-Parsing der API |
 
-> ⚠️ **`WS_CH32_IO` gibt es NICHT im Bibliotheksverwalter** — die Suche findet
-> sie nicht. Sie muss aus dem Waveshare-Repo kommen (siehe Installation unten).
-> Ohne sie bleibt das Display dunkel (kein Reset/Backlight).
+> **ESP32_Display_Panel** über den Bibliotheksverwalter installieren (Suche
+> „ESP32_Display_Panel"); nötige Sub-Treiber (ST7701, GT911) bringt sie mit.
+> **`WS_CH32_IO`** gibt es dort **nicht** — die kommt als ZIP über
+> *Sketch → Bibliothek einbinden → .ZIP-Bibliothek hinzufügen…* (siehe oben).
+> `GFX_Library_for_Arduino` und `SensorLib` werden **nicht mehr** gebraucht.
 
-### Bibliotheken installieren
+### Die Board-Config steckt im Sketch-Ordner
 
-**Variante A — als ZIP über die IDE (empfohlen für die Waveshare-Libs):**
-1. Repo-Ordner der Lib als ZIP holen (z.B. per „Code → Download ZIP" vom Repo,
-   oder den einzelnen Lib-Ordner zippen).
-2. Arduino IDE: **Sketch → Bibliothek einbinden → .ZIP-Bibliothek hinzufügen…**
-   *(EN: Sketch → Include Library → Add .ZIP Library…)* und die ZIP wählen.
+Anders als vorher liegen die Display-Details **nicht** in der Lib, sondern als
+Dateien **neben** `smartrace_display.ino` (kommen über `git`/ZIP mit):
 
-**Variante B — manuell kopieren:**
-Lib-Ordner nach `Documents/Arduino/libraries/` kopieren, **genau eine Ebene tief**:
-```
-Documents/Arduino/libraries/
-├── lvgl/
-├── lv_conf.h                     ← neben (nicht in) den lvgl-Ordner!
-├── GFX_Library_for_Arduino/
-├── SensorLib/
-│   ├── library.properties
-│   └── src/TouchDrvGT911.hpp
-└── WS_CH32_IO/
-    ├── library.properties
-    └── src/WS_CH32_IO.h
-```
-Häufige Fehler: Ordner eine Ebene zu tief (`libraries/SensorLib/SensorLib/…`) →
-Lib wird nicht gefunden. Und: **nach dem Kopieren die IDE neu starten**, sonst
-liest sie die neuen Libs nicht ein.
+| Datei | Zweck |
+|---|---|
+| `esp_panel_board_custom_conf.h` | **Unser Board** (480×480 ST7701 + GT911): Pins, Timings, ST7701-Init, PCLK 14 MHz |
+| `lvgl_v8_port.h/.cpp` | LVGL-Anbindung mit **`LVGL_PORT_AVOID_TEARING_MODE = 3`** (Doppel-FB + Direct-Mode) |
+| `esp_panel_board_supported_conf.h`, `esp_panel_drivers_conf.h`, `esp_utils_conf.h` | ESP32_Display_Panel-Konfig (unverändert übernommen) |
 
-> 💡 Am einfachsten zuerst das Waveshare-Beispiel **`09_LVGL_Widgets`** flashen
-> (Schritt 1 unten). Läuft das, sitzen `lvgl`, `lv_conf.h`, `GFX_Library_for_Arduino`,
-> `SensorLib` und `WS_CH32_IO` alle korrekt — und dieser Sketch kompiliert auch.
+## Einrichtung
 
-## Einrichtung in 3 Schritten
+### 1) Libs installieren
+`ESP32_Display_Panel` (1.0.5+), `lvgl` (8.4.0), `ArduinoJson` (7.x) über den
+Bibliotheksverwalter; `WS_CH32_IO` als ZIP; `lv_conf.h` in `libraries/` legen.
+Danach IDE einmal neu starten.
 
-### 1) Waveshare-Demo zum Laufen bringen
-Lade das Beispiel **`09_LVGL_Widgets`** (RGB-Touch mit LVGL) aus dem Waveshare-
-Repo (`examples/arduino/09_LVGL_Widgets`) und flashe es. Wenn dort die LVGL-Demo
-sauber angezeigt wird und der Touch reagiert, ist die Board-Basis fertig — und
-alle Bibliotheken/`lv_conf.h` sitzen richtig.
+### 2) Board-Einstellungen
+Wie oben: *ESP32S3 Dev Module*, Core **3.3.11**, **USB CDC On Boot: Enabled**,
+**Flash 16MB**, **PSRAM: OPI PSRAM**, Partition **16M Flash (3MB APP/9.9MB FATFS)**.
 
-### 2) Diesen Sketch einbinden
-- Ordner `smartrace_display/` mit `smartrace_display.ino` + `config.h` öffnen.
-- In **`config.h`** eintragen:
-  - `WIFI_SSID`, `WIFI_PASSWORD`
-  - `SERVER_BASE` = Adresse deines Dashboards, z.B. `http://192.168.1.90:5000`
-- **`board_init()` ist bereits ausgefüllt** — der Display-/Touch-/LVGL-Init aus
-  `09_LVGL_Widgets` ist übernommen (Pins, ST7701, GT911, CH32-IO, LVGL-Tick).
-  Es muss nur dasselbe Board + dieselben Libs wie in Schritt 1 aktiv sein.
+### 3) Sketch öffnen & konfigurieren
+- **Alle** Dateien des `smartrace_display/`-Ordners gehören zusammen in **einen**
+  Sketch-Ordner (die `.ino` + `config.h` + die 5 `esp_panel*`/`lvgl_v8_port`-Dateien).
+- In **`config.h`** eintragen: `WIFI_SSID`, `WIFI_PASSWORD`, `SERVER_BASE`
+  (z.B. `http://192.168.1.90:5000`).
+- Display-Details musst du **nicht** anfassen — sie stehen in
+  `esp_panel_board_custom_conf.h` (Pins/ST7701-Init aus `09_LVGL_Widgets`).
 
 ### 3) Flashen
 Kompilieren und hochladen. Auf dem Serial-Monitor (115200) siehst du den
@@ -147,28 +132,28 @@ abgedunkelt (Buttons ohne Daten noch etwas mehr).
 
 ## Flackern beheben
 
-Es gibt zwei verschiedene Flacker-Ursachen — der Trick ist, die richtige zu treffen:
+Das Flackern kam daher, dass Arduino_GFX **nur einen** Framebuffer hat: dasselbe
+PSRAM wird gleichzeitig zum Bildschirm geschoben **und** von LVGL neu beschrieben.
+Mit aktivem WLAN reißt die PSRAM-Bandbreite → sichtbares Flackern. **ESP32_Display_Panel**
+löst das über **mehrere Framebuffer (Anti-Tear)**: LVGL schreibt in einen, angezeigt
+wird ein anderer. Deshalb ist der Umbau die eigentliche Lösung.
 
-**A) Zu niedrige Bildrate** (flimmert gleichmäßig): dann **höher** takten.
-**B) PSRAM-Underrun** (die RGB-DMA bekommt Pixel nicht schnell genug — flackert
-auch im Leerlauf, wird bei *höherem* Takt *schlimmer*): dann **niedriger** takten
-und dem System Bandbreite verschaffen.
+Stellschrauben (falls doch noch Reste bleiben):
 
-Stellschrauben:
+- **Anti-Tear-Modus** in `lvgl_v8_port.h` → `LVGL_PORT_AVOID_TEARING_MODE`
+  (Default **3** = Doppel-FB + Direct-Mode). Bei Rest-Tearing **`2`** probieren
+  (Triple-FB + Full-Refresh, am ruhigsten, braucht 1 FB mehr PSRAM ≈ 460 KB).
+- **`ESP_PANEL_BOARD_LCD_RGB_CLK_HZ`** in `esp_panel_board_custom_conf.h`
+  (Default **14 MHz**). Bei Screen-Drift/Zittern eher **senken** (12–13 MHz).
+- **Bounce-Buffer**: im Sketch auf `WIDTH * 10` gesetzt (`board_init()`), bzw.
+  `ESP_PANEL_BOARD_LCD_RGB_BOUNCE_BUF_SIZE` in der Board-Config. Bei Drift größer,
+  bei zu großem Wert (Alloc schlägt fehl) kleiner.
+- **WLAN-Modem-Sleep aus** (`WiFi.setSleep(false)`, bereits gesetzt).
 
-- **`RGB_PCLK_HZ`** in `config.h` (Default **14 MHz**). Testreihe: 12 / 13 / 14 /
-  15 MHz. Wird es bei höherem Takt schlechter → Fall B (Underrun), Sweet Spot
-  meist **13–15 MHz**.
-- **LVGL-Puffer klein** (im Sketch bereits auf 1/10 Screen reduziert): lässt
-  mehr internen SRAM für WLAN + den RGB-Bounce-Buffer frei → weniger Underrun.
-- **WLAN-Modem-Sleep aus** (`WiFi.setSleep(false)`, bereits gesetzt): verhindert
-  periodisches Zittern durch WLAN-Aufwachbursts.
-- **Bounce-Buffer vergrößern** (stärkster Hebel gegen Underrun, aber Eingriff in
-  die Lib): in `libraries/GFX_Library_for_Arduino/src/databus/Arduino_ESP32RGBPanel.cpp`
-  die Zeile `.bounce_buffer_size_px = 40 * w,` auf z.B. `80 * w` erhöhen. Größer =
-  mehr Puffer gegen PSRAM-Aussetzer (kostet internen SRAM; bei zu groß kann die
-  Panel-Allokation fehlschlagen → dann wieder kleiner). ⚠️ geht bei einer Lib-
-  Neuinstallation verloren.
+> Wenn nach dem Umbau **das Display schwarz bleibt** oder **Touch nicht geht**,
+> liegt es fast immer an der Board-Config (`esp_panel_board_custom_conf.h`) oder
+> am geteilten I2C-Bus (CH32 ↔ GT911). Melde dich mit der **Serial-Ausgabe (115200)**
+> — daran sieht man, ob `Board().init()`/`begin()` durchläuft.
 
 ## Hinweise
 
