@@ -145,6 +145,18 @@ abgedunkelt (Buttons ohne Daten noch etwas mehr).
 - **Schriftgrößen/Layout**: in `build_ui()` (LVGL-Fonts müssen in `lv_conf.h`
   aktiviert sein — z.B. `montserrat_48` für die große Zeit).
 
+## Flackern beheben
+
+RGB-Displays flimmern, wenn die Bildwiederholrate zu niedrig ist. Der GFX-Standard
+sind nur **12 MHz Pixeltakt → ~42 Hz** (sichtbares Flimmern). Stellschraube:
+
+- **`RGB_PCLK_HZ`** in `config.h` (Default **16 MHz ≈ 56 Hz**). Höher = ruhiger:
+  `16000000` → `18000000` (≈63 Hz) probieren.
+- **Zu hoch** kann *Tearing* (verschobene Zeilen) durch PSRAM-/WLAN-Bandbreite
+  verursachen — dann wieder auf `14000000` senken. Sweet Spot liegt meist bei 14–18 MHz.
+- **WLAN-Modem-Sleep** ist bereits aus (`WiFi.setSleep(false)`), das verhindert
+  periodisches Zittern durch WLAN-Aufwachbursts.
+
 ## Hinweise
 
 - Diese Firmware nutzt **REST-Polling** (robust auf dem ESP32) statt der
