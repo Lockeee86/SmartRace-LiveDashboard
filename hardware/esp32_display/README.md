@@ -58,17 +58,20 @@ Arduino_GFX (nur ein Framebuffer) bei aktivem WLAN nicht lösbar war.
 
 | Bibliothek | Version | Woher | Zweck |
 |---|---|---|---|
-| **ESP32_Display_Panel** | **1.0.5+** | [Bibliotheksverwalter](https://github.com/esp-arduino-libs/ESP32_Display_Panel) | Display (ST7701 RGB) **+** Touch (GT911), Anti-Tear |
+| **ESP32_Display_Panel** | **1.0.5+** | [Bibliotheksverwalter](https://github.com/esp-arduino-libs/ESP32_Display_Panel) | Display (ST7701 RGB), Anti-Tear |
 | **lvgl** | **8.4.0** (nicht 9.x!) | Bibliotheksverwalter · [Upstream](https://github.com/lvgl/lvgl) | GUI-Framework |
 | **lv_conf.h** | zu 8.4.0 passend | [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/blob/main/examples/arduino/libraries/lv_conf.h) | LVGL-Konfig (Farbtiefe 16, alle Montserrat-Fonts an) — **direkt in `libraries/` legen**, neben den `lvgl`-Ordner |
+| **SensorLib** | Waveshare-Stand | [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries/SensorLib) · [Upstream](https://github.com/lewisxhe/SensorLib) | Touch (GT911, über Arduino-Wire) |
 | **WS_CH32_IO** | Waveshare-only | **nur** [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries/WS_CH32_IO) | IO-Expander (Display-Reset/Backlight) |
 | **ArduinoJson** | **7.x** | [Bibliotheksverwalter](https://arduinojson.org/) | JSON-Parsing der API |
 
 > **ESP32_Display_Panel** über den Bibliotheksverwalter installieren (Suche
-> „ESP32_Display_Panel"); nötige Sub-Treiber (ST7701, GT911) bringt sie mit.
-> **`WS_CH32_IO`** gibt es dort **nicht** — die kommt als ZIP über
-> *Sketch → Bibliothek einbinden → .ZIP-Bibliothek hinzufügen…* (siehe oben).
-> `GFX_Library_for_Arduino` und `SensorLib` werden **nicht mehr** gebraucht.
+> „ESP32_Display_Panel") — sie macht **nur das Display**. Den **GT911-Touch** treibt
+> der Sketch selbst über **`SensorLib`** + Arduino-Wire, weil GT911 und der
+> **`WS_CH32_IO`**-Expander am selben I2C-Bus hängen (sonst I2C-Treiberkonflikt
+> „driver_ng … old driver"). `SensorLib` und `WS_CH32_IO` kommen als ZIP über
+> *Sketch → Bibliothek einbinden → .ZIP-Bibliothek hinzufügen…*.
+> `GFX_Library_for_Arduino` wird **nicht mehr** gebraucht.
 
 ### Die Board-Config steckt im Sketch-Ordner
 

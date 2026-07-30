@@ -33,6 +33,7 @@
 #include <Wire.h>
 #include <esp_display_panel.hpp>   // ESP32_Display_Panel (Anti-Tear via Doppel-Framebuffer)
 #include "lvgl_v8_port.h"          // LVGL-Port aus dem ESP32_Display_Panel-Beispiel
+#include "TouchDrvGT911.hpp"       // SensorLib: GT911-Touch (ueber Arduino-Wire)
 #include "WS_CH32_IO.h"            // IO-Expander (Display-Reset/Backlight) — vor board.init()
 #include "config.h"
 
@@ -92,18 +93,59 @@ static void poll_data();
 // ============================================================================
 static Board *g_board = nullptr;
 
+// Panelgroesse (fuer Touch-Mapping). Muss zur Board-Config passen.
+static const int16_t PANEL_W = 480, PANEL_H = 480;
+
+// --- GT911-Touch (SensorLib, ueber Arduino-Wire — selber Bus wie der CH32) ---
+static TouchDrvGT911 GT911;
+static int16_t ts_x[5], ts_y[5];
+static uint8_t gt911_addr = 0;
+static bool gt911_available = false;
+
+// GT911-Adresse per I2C-Scan finden und initialisieren
+static bool init_gt911(int sda, int scl) {
+  Wire.begin(sda, scl);
+  delay(100);
+  for (byte a = 1; a < 127; a++) {
+    Wire.beginTransmission(a);
+    if (Wire.endTransmission() == 0 &&
+        (a == GT911_SLAVE_ADDRESS_L || a == GT911_SLAVE_ADDRESS_H)) {
+      gt911_addr = a;
+    }
+  }
+  if (!gt911_addr) { Serial.println("GT911 nicht gefunden"); return false; }
+  GT911.setPins(-1, -1);
+  if (GT911.begin(Wire, gt911_addr, sda, scl)) {
+    GT911.setMaxTouchPoint(1);
+    return true;
+  }
+  Serial.println("GT911 begin fehlgeschlagen");
+  return false;
+}
+
+// LVGL-Touch-Read -> Punkt vom GT911, um 180 Grad gedreht (passend zu MIRROR_X/Y).
+static void touch_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
+  if (!gt911_available) { data->state = LV_INDEV_STATE_REL; return; }
+  uint8_t touched = GT911.getPoint(ts_x, ts_y, GT911.getSupportTouchPoint());
+  if (touched > 0) {
+    data->state   = LV_INDEV_STATE_PR;
+    data->point.x = PANEL_W - 1 - ts_x[0];
+    data->point.y = PANEL_H - 1 - ts_y[0];
+  } else {
+    data->state = LV_INDEV_STATE_REL;
+  }
+}
+
 static void board_init() {
-  // IO-Expander (CH32V003) ZUERST: gibt Display-Reset frei + schaltet Backlight ein.
-  // Nutzt Arduino-Wire auf demselben I2C-Bus (SDA15/SCL7) wie der GT911-Touch.
+  // IO-Expander (CH32V003) ZUERST: gibt Display-Reset + Touch-Reset frei + Backlight an.
+  // Arduino-Wire auf SDA15/SCL7. Bleibt aktiv — der GT911-Touch nutzt denselben Bus.
   if (!WS_CH32_IO::begin(Wire, WS_CH32_IO::DEFAULT_I2C_SDA, WS_CH32_IO::DEFAULT_I2C_SCL,
                          WS_CH32_IO::DEFAULT_I2C_FREQ, &Serial)) {
     Serial.println("CH32 IO-Expander init fehlgeschlagen");
   }
-  // I2C-Peripherie wieder freigeben, damit ESP32_Display_Panel den Bus fuer den
-  // GT911 selbst (IDF-Treiber) initialisieren kann. Die CH32-Ausgaenge (Reset/
-  // Backlight) bleiben gesetzt, auch ohne weitere Kommunikation.
-  Wire.end();
 
+  // Display: ESP32_Display_Panel (nur RGB + ST7701 ueber SPI, kein I2C -> kein
+  // Konflikt mit Arduino-Wire).
   g_board = new Board();
   g_board->init();
 
@@ -119,8 +161,20 @@ static void board_init() {
 
   g_board->begin();
 
-  // LVGL starten (eigener Task). Ab hier: lv_* nur zwischen lock()/unlock().
-  lvgl_port_init(g_board->getLCD(), g_board->getTouch());
+  // LVGL starten (eigener Task, ohne Touch). Ab hier: lv_* nur zwischen lock()/unlock().
+  lvgl_port_init(g_board->getLCD(), nullptr);
+
+  // Touch selbst initialisieren und als LVGL-Eingabegeraet registrieren.
+  gt911_available = init_gt911(WS_CH32_IO::DEFAULT_I2C_SDA, WS_CH32_IO::DEFAULT_I2C_SCL);
+  if (gt911_available) {
+    lvgl_port_lock(-1);
+    static lv_indev_drv_t indev_drv;
+    lv_indev_drv_init(&indev_drv);
+    indev_drv.type    = LV_INDEV_TYPE_POINTER;
+    indev_drv.read_cb = touch_read;
+    lv_indev_drv_register(&indev_drv);
+    lvgl_port_unlock();
+  }
 }
 
 // ============================================================================

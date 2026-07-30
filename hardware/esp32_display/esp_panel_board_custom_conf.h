@@ -138,9 +138,11 @@
 #define ESP_PANEL_BOARD_LCD_COLOR_BGR_ORDER     (0)
 #define ESP_PANEL_BOARD_LCD_COLOR_INEVRT_BIT    (0)
 
+// MIRROR_X + MIRROR_Y = 180 Grad -> entspricht der alten Arduino_GFX-Rotation 2.
+// Falls das Bild kopfsteht: beide auf 0 setzen (bzw. eins von beiden).
 #define ESP_PANEL_BOARD_LCD_SWAP_XY             (0)
-#define ESP_PANEL_BOARD_LCD_MIRROR_X            (0)
-#define ESP_PANEL_BOARD_LCD_MIRROR_Y            (0)
+#define ESP_PANEL_BOARD_LCD_MIRROR_X            (1)
+#define ESP_PANEL_BOARD_LCD_MIRROR_Y            (1)
 #define ESP_PANEL_BOARD_LCD_GAP_X               (0)
 #define ESP_PANEL_BOARD_LCD_GAP_Y               (0)
 
@@ -151,7 +153,12 @@
 #endif // ESP_PANEL_BOARD_USE_LCD
 
 ///////////////////////////////////////////// TOUCH /////////////////////////////////////////////
-#define ESP_PANEL_BOARD_USE_TOUCH               (1)
+// AUS: Der GT911 haengt am selben I2C-Bus wie der CH32-Expander. ESP32_Display_Panel
+// wuerde dafuer den alten esp_lcd-I2C-Treiber nutzen, Arduino-Wire (CH32) den neuen
+// (driver_ng) -> Abbruch "driver_ng is not allowed to be used with this old driver".
+// Deshalb macht ESP_PANEL nur das Display; den GT911 treibt der Sketch selbst ueber
+// Arduino-Wire (SensorLib) und haengt ihn als LVGL-Eingabegeraet ein.
+#define ESP_PANEL_BOARD_USE_TOUCH               (0)
 
 #if ESP_PANEL_BOARD_USE_TOUCH
 #define ESP_PANEL_BOARD_TOUCH_CONTROLLER        GT911
