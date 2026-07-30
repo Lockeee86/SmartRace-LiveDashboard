@@ -28,7 +28,7 @@
 
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include "esp_rom_sys.h"           // esp_rom_printf() — direkter UART0-Marker
+#include "esp_rom_sys.h"           // esp_rom_printf() — Marker auch auf HW-UART0
 #include <ArduinoJson.h>
 #include <lvgl.h>
 #include <Wire.h>
@@ -40,6 +40,11 @@
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
+
+// ---- Diagnose / Optionen ----
+#define SR_ENABLE_TOUCH  0   // vorerst AUS: isoliert den I2C-Konflikt (Display zuerst)
+// Sichtbare Marker: geht auf USB-CDC (braucht "USB CDC On Boot: Enabled") UND HW-UART0.
+static inline void sr_mark(const char *s) { Serial.println(s); Serial.flush(); esp_rom_printf("%s\n", s); }
 
 // ---- Farben (passend zum Web-Dashboard) ----
 static const uint32_t CTRL_COLORS[6] = {
@@ -181,14 +186,14 @@ static void touch_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
 }
 
 static void board_init() {
+  sr_mark("[SR] board_init: starte CH32 (Wire)...");
   // IO-Expander (CH32V003) ZUERST: gibt Display-Reset + Touch-Reset frei + Backlight an.
-  // Arduino-Wire auf SDA15/SCL7. Bleibt aktiv — der GT911-Touch nutzt denselben Bus.
+  // Arduino-Wire auf SDA15/SCL7.
   if (!WS_CH32_IO::begin(Wire, WS_CH32_IO::DEFAULT_I2C_SDA, WS_CH32_IO::DEFAULT_I2C_SCL,
                          WS_CH32_IO::DEFAULT_I2C_FREQ, &Serial)) {
-    Serial.println("CH32 IO-Expander init fehlgeschlagen");
+    sr_mark("[SR] CH32 IO-Expander init FEHLGESCHLAGEN");
   }
-
-  esp_rom_printf("[SR] CH32 fertig, baue RGB-Bus...\n");
+  sr_mark("[SR] CH32 fertig, baue RGB-Bus + ST7701...");
 
   // RGB-Bus (3-wire-SPI-Init + 16-bit RGB). Pins/Timings 1:1 aus 09_LVGL_Widgets:
   //   CS42/SCK2/SDA1 ; D0..D15 = B0-4,G0-5,R0-4 ; HSYNC38 VSYNC39 PCLK41 DE40 ;
@@ -209,18 +214,20 @@ static void board_init() {
   bus->configRGB_BounceBufferSize(PANEL_W * 10);
 #endif
   lcd->configMirrorByCommand(true);   // 180 Grad per LCD-Kommando (statt Software)
-  esp_rom_printf("[SR] LCD begin()...\n");
-  if (!lcd->begin()) esp_rom_printf("[SR] LCD begin FEHLGESCHLAGEN\n");
+  sr_mark("[SR] LCD begin() (ST7701-Init ueber SPI)...");
+  if (!lcd->begin()) sr_mark("[SR] LCD begin FEHLGESCHLAGEN");
   lcd->mirrorX(true);
   lcd->mirrorY(true);
   g_lcd = lcd;
-  esp_rom_printf("[SR] LCD ok, starte LVGL-Port...\n");
+  sr_mark("[SR] LCD ok, starte LVGL-Port...");
 
   // LVGL starten (eigener Task, ohne Touch). Ab hier: lv_* nur zwischen lock()/unlock().
   lvgl_port_init(g_lcd, nullptr);
-  esp_rom_printf("[SR] LVGL laeuft, init GT911-Touch...\n");
+  sr_mark("[SR] LVGL laeuft.");
 
+#if SR_ENABLE_TOUCH
   // Touch selbst initialisieren und als LVGL-Eingabegeraet registrieren.
+  sr_mark("[SR] init GT911-Touch...");
   gt911_available = init_gt911(WS_CH32_IO::DEFAULT_I2C_SDA, WS_CH32_IO::DEFAULT_I2C_SCL);
   if (gt911_available) {
     lvgl_port_lock(-1);
@@ -231,6 +238,10 @@ static void board_init() {
     lv_indev_drv_register(&indev_drv);
     lvgl_port_unlock();
   }
+  sr_mark("[SR] Touch fertig.");
+#else
+  sr_mark("[SR] Touch DEAKTIVIERT (SR_ENABLE_TOUCH=0).");
+#endif
 }
 
 // ============================================================================
@@ -637,12 +648,9 @@ static void poll_data() {
 
 void setup() {
   Serial.begin(115200);
-  // BUILD-MARKER: erscheint IMMER auf UART0 (unabhaengig von USB-CDC/Core-Debug-Level).
-  // Siehst du diese Zeile im Log -> der NEUE Code laeuft. Fehlt sie und es kommt der
-  // alte i2c-CONFLICT -> es wurde das alte Binary geflasht (Build/Upload nahm den
-  // neuen Code nicht).
-  esp_rom_printf("\n\n=== SMARTRACE BUILD manual-rgb-v3 === setup() gestartet ===\n\n");
-  board_init();     // Display/Touch/LVGL (manuell aufgebauter RGB-Bus + ST7701)
+  delay(1500);   // USB-CDC Zeit zum Enumerieren geben, damit die Marker sichtbar sind
+  sr_mark("\n=== SMARTRACE BUILD touch-off-v4 === setup() gestartet ===");
+  board_init();     // Display (Touch per SR_ENABLE_TOUCH schaltbar)
 
   // UI aufbauen — lv_* nur unter dem LVGL-Lock.
   lvgl_port_lock(-1);
