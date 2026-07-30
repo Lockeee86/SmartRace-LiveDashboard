@@ -22,10 +22,7 @@
 // --- Wie viele Runden in der Liste anzeigen (max 10, so viele liefert die API) ---
 #define LAP_LIST_COUNT  10
 
-// --- Display-Pixeltakt (gegen Flackern) ---
-// Standard der GFX-Lib waeren nur 12 MHz -> ~42 Hz Bildrate = sichtbares Flimmern.
-// Hoeher = mehr Hz = ruhiger. Bei Tearing (WLAN/Bandbreite) eher wieder senken.
-// Sinnvoll: 12000000 .. 16000000. Bei Underrun-Flackern eher NIEDRIGER (14 MHz
-// war in Tests am ruhigsten; 18 MHz war schlechter). Bei Flimmern durch zu wenig
-// Bildrate eher hoeher. Sweet Spot meist 13..15 MHz.
-#define RGB_PCLK_HZ  14000000
+// --- Display-Pixeltakt ---
+// HINWEIS: Der Pixeltakt (und alle Display-Timings/Pins) stehen jetzt in
+// esp_panel_board_custom_conf.h -> ESP_PANEL_BOARD_LCD_RGB_CLK_HZ (Default 14 MHz).
+// Das eigentliche Flackern loest der Doppel-Framebuffer (Anti-Tear) im LVGL-Port.
