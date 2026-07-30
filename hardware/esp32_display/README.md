@@ -147,15 +147,28 @@ abgedunkelt (Buttons ohne Daten noch etwas mehr).
 
 ## Flackern beheben
 
-RGB-Displays flimmern, wenn die Bildwiederholrate zu niedrig ist. Der GFX-Standard
-sind nur **12 MHz Pixeltakt → ~42 Hz** (sichtbares Flimmern). Stellschraube:
+Es gibt zwei verschiedene Flacker-Ursachen — der Trick ist, die richtige zu treffen:
 
-- **`RGB_PCLK_HZ`** in `config.h` (Default **16 MHz ≈ 56 Hz**). Höher = ruhiger:
-  `16000000` → `18000000` (≈63 Hz) probieren.
-- **Zu hoch** kann *Tearing* (verschobene Zeilen) durch PSRAM-/WLAN-Bandbreite
-  verursachen — dann wieder auf `14000000` senken. Sweet Spot liegt meist bei 14–18 MHz.
-- **WLAN-Modem-Sleep** ist bereits aus (`WiFi.setSleep(false)`), das verhindert
+**A) Zu niedrige Bildrate** (flimmert gleichmäßig): dann **höher** takten.
+**B) PSRAM-Underrun** (die RGB-DMA bekommt Pixel nicht schnell genug — flackert
+auch im Leerlauf, wird bei *höherem* Takt *schlimmer*): dann **niedriger** takten
+und dem System Bandbreite verschaffen.
+
+Stellschrauben:
+
+- **`RGB_PCLK_HZ`** in `config.h` (Default **14 MHz**). Testreihe: 12 / 13 / 14 /
+  15 MHz. Wird es bei höherem Takt schlechter → Fall B (Underrun), Sweet Spot
+  meist **13–15 MHz**.
+- **LVGL-Puffer klein** (im Sketch bereits auf 1/10 Screen reduziert): lässt
+  mehr internen SRAM für WLAN + den RGB-Bounce-Buffer frei → weniger Underrun.
+- **WLAN-Modem-Sleep aus** (`WiFi.setSleep(false)`, bereits gesetzt): verhindert
   periodisches Zittern durch WLAN-Aufwachbursts.
+- **Bounce-Buffer vergrößern** (stärkster Hebel gegen Underrun, aber Eingriff in
+  die Lib): in `libraries/GFX_Library_for_Arduino/src/databus/Arduino_ESP32RGBPanel.cpp`
+  die Zeile `.bounce_buffer_size_px = 40 * w,` auf z.B. `80 * w` erhöhen. Größer =
+  mehr Puffer gegen PSRAM-Aussetzer (kostet internen SRAM; bei zu groß kann die
+  Panel-Allokation fehlschlagen → dann wieder kleiner). ⚠️ geht bei einer Lib-
+  Neuinstallation verloren.
 
 ## Hinweise
 

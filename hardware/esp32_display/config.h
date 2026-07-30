@@ -25,5 +25,7 @@
 // --- Display-Pixeltakt (gegen Flackern) ---
 // Standard der GFX-Lib waeren nur 12 MHz -> ~42 Hz Bildrate = sichtbares Flimmern.
 // Hoeher = mehr Hz = ruhiger. Bei Tearing (WLAN/Bandbreite) eher wieder senken.
-// Sinnvoll: 14000000 .. 18000000. 16 MHz (~56 Hz) ist ein guter Startwert.
-#define RGB_PCLK_HZ  16000000
+// Sinnvoll: 12000000 .. 16000000. Bei Underrun-Flackern eher NIEDRIGER (14 MHz
+// war in Tests am ruhigsten; 18 MHz war schlechter). Bei Flimmern durch zu wenig
+// Bildrate eher hoeher. Sweet Spot meist 13..15 MHz.
+#define RGB_PCLK_HZ  14000000
