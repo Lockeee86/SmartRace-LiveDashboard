@@ -343,12 +343,15 @@ static void build_ui() {
   lblLast = lv_label_create(scr);
   lv_label_set_text(lblLast, "--");
   style_time_label(lblLast, &lv_font_montserrat_48, lv_color_hex(0xffffff));
+  // Feste, zentrierte Breite -> Zoom-Pivot kann in festen Pixeln (halbe Breite)
+  // liegen. WICHTIG: LVGL 8.x versteht LV_PCT beim Transform-Pivot NICHT.
+  lv_obj_set_width(lblLast, 300);
+  lv_obj_set_style_text_align(lblLast, LV_TEXT_ALIGN_CENTER, 0);
   lv_obj_align(lblLast, LV_ALIGN_TOP_MID, 0, 60);
-  // montserrat_48 ist die groesste fertige Schrift -> per Zoom noch etwas groesser,
-  // Pivot mittig, damit es zentriert waechst.
+  // montserrat_48 ist die groesste fertige Schrift -> per Zoom noch etwas groesser.
   lv_obj_set_style_transform_zoom(lblLast, 296, 0);            // ~1.16x
-  lv_obj_set_style_transform_pivot_x(lblLast, LV_PCT(50), 0);
-  lv_obj_set_style_transform_pivot_y(lblLast, LV_PCT(50), 0);
+  lv_obj_set_style_transform_pivot_x(lblLast, 150, 0);         // halbe Breite (300/2)
+  lv_obj_set_style_transform_pivot_y(lblLast, 28, 0);          // ~halbe Zeilenhoehe
 
   // --- Bestzeit + Delta ---
   lblBest = lv_label_create(scr);
