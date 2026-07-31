@@ -28,16 +28,23 @@
 
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include "esp_rom_sys.h"           // esp_rom_printf() — Marker auch auf HW-UART0
 #include <ArduinoJson.h>
 #include <lvgl.h>
 #include <Wire.h>
 #include <esp_display_panel.hpp>   // ESP32_Display_Panel (Anti-Tear via Doppel-Framebuffer)
 #include "lvgl_v8_port.h"          // LVGL-Port aus dem ESP32_Display_Panel-Beispiel
+#include "TouchDrvGT911.hpp"       // SensorLib: GT911-Touch (ueber Arduino-Wire)
 #include "WS_CH32_IO.h"            // IO-Expander (Display-Reset/Backlight) — vor board.init()
 #include "config.h"
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
+
+// ---- Diagnose / Optionen ----
+#define SR_ENABLE_TOUCH  1   // Touch an (I2C-Konflikt via Core 3.1.x behoben)
+// Sichtbare Marker: geht auf USB-CDC (braucht "USB CDC On Boot: Enabled") UND HW-UART0.
+static inline void sr_mark(const char *s) { Serial.println(s); Serial.flush(); esp_rom_printf("%s\n", s); }
 
 // ---- Farben (passend zum Web-Dashboard) ----
 static const uint32_t CTRL_COLORS[6] = {
@@ -84,43 +91,157 @@ static void fetch_recent();
 static void poll_data();
 
 // ============================================================================
-// Board-Init: Display + Touch via ESP32_Display_Panel (Anti-Tear/Doppelpuffer).
-// Alle Hardware-Details (Pins, ST7701-Init, GT911, Timings, PCLK) stehen in
-// esp_panel_board_custom_conf.h. Display-Reset/Backlight macht der CH32-IO-Expander.
-// LVGL laeuft danach in einem eigenen Task -> alle lv_*-Aufrufe muessen mit
-// lvgl_port_lock()/lvgl_port_unlock() geklammert werden.
+// Board-Init: Display (RGB + ST7701) wird DIREKT im Sketch aufgebaut — OHNE die
+// Board-Config-Dateien und OHNE die Board-Klasse von ESP32_Display_Panel. Grund:
+// deren Auto-Config (esp_panel_board_default_config.cpp) findet Sketch-Configs im
+// Arduino nicht zuverlaessig -> fiel auf einen Default MIT Touch zurueck und
+// installierte einen zweiten I2C-Treiber -> Kollision mit Arduino-Wire (CH32/GT911).
+// Manuell konstruiert nutzt ESP_PANEL fuer's Display KEIN I2C. Touch/Reset/Backlight
+// laufen ueber Arduino-Wire (CH32 + GT911/SensorLib), also nur EIN I2C-Treiber.
+// LVGL laeuft danach im eigenen Task -> lv_* nur zwischen lock()/unlock().
 // ============================================================================
-static Board *g_board = nullptr;
+static esp_panel::drivers::LCD *g_lcd = nullptr;
+
+// Panelgroesse (fuer Touch-Mapping).
+static const int16_t PANEL_W = 480, PANEL_H = 480;
+
+// ST7701-Init unseres Panels (1:1 aus Arduino_GFX st7701_type1_init_operations).
+static const esp_panel_lcd_vendor_init_cmd_t st7701_init_cmd[] = {
+  {0xFF, (uint8_t []){0x77, 0x01, 0x00, 0x00, 0x10}, 5, 0},
+  {0xC0, (uint8_t []){0x3B, 0x00}, 2, 0},
+  {0xC1, (uint8_t []){0x0D, 0x02}, 2, 0},
+  {0xC2, (uint8_t []){0x31, 0x05}, 2, 0},
+  {0xCD, (uint8_t []){0x08}, 1, 0},
+  {0xB0, (uint8_t []){0x00, 0x11, 0x18, 0x0E, 0x11, 0x06, 0x07, 0x08, 0x07, 0x22, 0x04, 0x12, 0x0F, 0xAA, 0x31, 0x18}, 16, 0},
+  {0xB1, (uint8_t []){0x00, 0x11, 0x19, 0x0E, 0x12, 0x07, 0x08, 0x08, 0x08, 0x22, 0x04, 0x11, 0x11, 0xA9, 0x32, 0x18}, 16, 0},
+  {0xFF, (uint8_t []){0x77, 0x01, 0x00, 0x00, 0x11}, 5, 0},
+  {0xB0, (uint8_t []){0x60}, 1, 0},
+  {0xB1, (uint8_t []){0x32}, 1, 0},
+  {0xB2, (uint8_t []){0x07}, 1, 0},
+  {0xB3, (uint8_t []){0x80}, 1, 0},
+  {0xB5, (uint8_t []){0x49}, 1, 0},
+  {0xB7, (uint8_t []){0x85}, 1, 0},
+  {0xB8, (uint8_t []){0x21}, 1, 0},
+  {0xC1, (uint8_t []){0x78}, 1, 0},
+  {0xC2, (uint8_t []){0x78}, 1, 0},
+  {0xE0, (uint8_t []){0x00, 0x1B, 0x02}, 3, 0},
+  {0xE1, (uint8_t []){0x08, 0xA0, 0x00, 0x00, 0x07, 0xA0, 0x00, 0x00, 0x00, 0x44, 0x44}, 11, 0},
+  {0xE2, (uint8_t []){0x11, 0x11, 0x44, 0x44, 0xED, 0xA0, 0x00, 0x00, 0xEC, 0xA0, 0x00, 0x00}, 12, 0},
+  {0xE3, (uint8_t []){0x00, 0x00, 0x11, 0x11}, 4, 0},
+  {0xE4, (uint8_t []){0x44, 0x44}, 2, 0},
+  {0xE5, (uint8_t []){0x0A, 0xE9, 0xD8, 0xA0, 0x0C, 0xEB, 0xD8, 0xA0, 0x0E, 0xED, 0xD8, 0xA0, 0x10, 0xEF, 0xD8, 0xA0}, 16, 0},
+  {0xE6, (uint8_t []){0x00, 0x00, 0x11, 0x11}, 4, 0},
+  {0xE7, (uint8_t []){0x44, 0x44}, 2, 0},
+  {0xE8, (uint8_t []){0x09, 0xE8, 0xD8, 0xA0, 0x0B, 0xEA, 0xD8, 0xA0, 0x0D, 0xEC, 0xD8, 0xA0, 0x0F, 0xEE, 0xD8, 0xA0}, 16, 0},
+  {0xEB, (uint8_t []){0x02, 0x00, 0xE4, 0xE4, 0x88, 0x00, 0x40}, 7, 0},
+  {0xEC, (uint8_t []){0x3C, 0x00}, 2, 0},
+  {0xED, (uint8_t []){0xAB, 0x89, 0x76, 0x54, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x20, 0x45, 0x67, 0x98, 0xBA}, 16, 0},
+  {0xFF, (uint8_t []){0x77, 0x01, 0x00, 0x00, 0x13}, 5, 0},
+  {0xE5, (uint8_t []){0xE4}, 1, 0},
+  {0xFF, (uint8_t []){0x77, 0x01, 0x00, 0x00, 0x00}, 5, 0},
+  {0x21, (uint8_t []){0x00}, 0, 0},
+  {0x3A, (uint8_t []){0x60}, 1, 0},
+  {0x11, (uint8_t []){0x00}, 0, 120},
+  {0x29, (uint8_t []){0x00}, 0, 0},
+};
+
+// --- GT911-Touch (SensorLib, ueber Arduino-Wire — selber Bus wie der CH32) ---
+static TouchDrvGT911 GT911;
+static int16_t ts_x[5], ts_y[5];
+static uint8_t gt911_addr = 0;
+static bool gt911_available = false;
+
+// GT911-Adresse per I2C-Scan finden und initialisieren
+static bool init_gt911(int sda, int scl) {
+  Wire.begin(sda, scl);
+  delay(100);
+  for (byte a = 1; a < 127; a++) {
+    Wire.beginTransmission(a);
+    if (Wire.endTransmission() == 0 &&
+        (a == GT911_SLAVE_ADDRESS_L || a == GT911_SLAVE_ADDRESS_H)) {
+      gt911_addr = a;
+    }
+  }
+  if (!gt911_addr) { Serial.println("GT911 nicht gefunden"); return false; }
+  GT911.setPins(-1, -1);
+  if (GT911.begin(Wire, gt911_addr, sda, scl)) {
+    GT911.setMaxTouchPoint(1);
+    return true;
+  }
+  Serial.println("GT911 begin fehlgeschlagen");
+  return false;
+}
+
+// LVGL-Touch-Read -> Punkt vom GT911, um 180 Grad gedreht (passend zu MIRROR_X/Y).
+static void touch_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
+  if (!gt911_available) { data->state = LV_INDEV_STATE_REL; return; }
+  uint8_t touched = GT911.getPoint(ts_x, ts_y, GT911.getSupportTouchPoint());
+  if (touched > 0) {
+    data->state   = LV_INDEV_STATE_PR;
+    data->point.x = PANEL_W - 1 - ts_x[0];
+    data->point.y = PANEL_H - 1 - ts_y[0];
+  } else {
+    data->state = LV_INDEV_STATE_REL;
+  }
+}
 
 static void board_init() {
-  // IO-Expander (CH32V003) ZUERST: gibt Display-Reset frei + schaltet Backlight ein.
-  // Nutzt Arduino-Wire auf demselben I2C-Bus (SDA15/SCL7) wie der GT911-Touch.
+  sr_mark("[SR] board_init: starte CH32 (Wire)...");
+  // IO-Expander (CH32V003) ZUERST: gibt Display-Reset + Touch-Reset frei + Backlight an.
+  // Arduino-Wire auf SDA15/SCL7.
   if (!WS_CH32_IO::begin(Wire, WS_CH32_IO::DEFAULT_I2C_SDA, WS_CH32_IO::DEFAULT_I2C_SCL,
                          WS_CH32_IO::DEFAULT_I2C_FREQ, &Serial)) {
-    Serial.println("CH32 IO-Expander init fehlgeschlagen");
+    sr_mark("[SR] CH32 IO-Expander init FEHLGESCHLAGEN");
   }
-  // I2C-Peripherie wieder freigeben, damit ESP32_Display_Panel den Bus fuer den
-  // GT911 selbst (IDF-Treiber) initialisieren kann. Die CH32-Ausgaenge (Reset/
-  // Backlight) bleiben gesetzt, auch ohne weitere Kommunikation.
-  Wire.end();
+  sr_mark("[SR] CH32 fertig, baue RGB-Bus + ST7701...");
 
-  g_board = new Board();
-  g_board->init();
+  // RGB-Bus (3-wire-SPI-Init + 16-bit RGB). Pins/Timings 1:1 aus 09_LVGL_Widgets:
+  //   CS42/SCK2/SDA1 ; D0..D15 = B0-4,G0-5,R0-4 ; HSYNC38 VSYNC39 PCLK41 DE40 ;
+  //   14 MHz ; 480x480 ; HPW8 HBP50 HFP10 VPW8 VBP20 VFP10.
+  BusRGB *bus = new BusRGB(
+    42, 2, 1,
+    5, 45, 48, 47, 21, 14, 13, 12, 11, 10, 9, 46, 3, 8, 18, 17,
+    38, 39, 41, 40, -1,
+    14 * 1000 * 1000, 480, 480, 8, 50, 10, 8, 20, 10);
 
+  // ST7701-LCD (RST=-1, den macht der CH32). RGB565.
+  LCD_ST7701 *lcd = new LCD_ST7701(bus, 480, 480, ESP_PANEL_LCD_COLOR_BITS_RGB565, -1);
+  lcd->configVendorCommands(st7701_init_cmd, sizeof(st7701_init_cmd) / sizeof(st7701_init_cmd[0]));
+  lcd->configColorRGB_Order(false);   // 0 = RGB
 #if LVGL_PORT_AVOID_TEARING_MODE
-  // Anti-Tear: dem RGB-Bus die noetige Framebuffer-Anzahl + Bounce-Buffer geben.
-  auto lcd = g_board->getLCD();
+  // Anti-Tear: mehrere Framebuffer + Bounce-Buffer gegen PSRAM-Underrun.
   lcd->configFrameBufferNumber(LVGL_PORT_DISP_BUFFER_NUM);
-  auto lcd_bus = lcd->getBus();
-  if (lcd_bus->getBasicAttributes().type == ESP_PANEL_BUS_TYPE_RGB) {
-    static_cast<BusRGB *>(lcd_bus)->configRGB_BounceBufferSize(lcd->getFrameWidth() * 10);
-  }
+  bus->configRGB_BounceBufferSize(PANEL_W * 10);
 #endif
+  lcd->configMirrorByCommand(true);   // 180 Grad per LCD-Kommando (statt Software)
+  sr_mark("[SR] LCD begin() (ST7701-Init ueber SPI)...");
+  if (!lcd->begin()) sr_mark("[SR] LCD begin FEHLGESCHLAGEN");
+  lcd->mirrorX(true);
+  lcd->mirrorY(true);
+  g_lcd = lcd;
+  sr_mark("[SR] LCD ok, starte LVGL-Port...");
 
-  g_board->begin();
+  // LVGL starten (eigener Task, ohne Touch). Ab hier: lv_* nur zwischen lock()/unlock().
+  lvgl_port_init(g_lcd, nullptr);
+  sr_mark("[SR] LVGL laeuft.");
 
-  // LVGL starten (eigener Task). Ab hier: lv_* nur zwischen lock()/unlock().
-  lvgl_port_init(g_board->getLCD(), g_board->getTouch());
+#if SR_ENABLE_TOUCH
+  // Touch selbst initialisieren und als LVGL-Eingabegeraet registrieren.
+  sr_mark("[SR] init GT911-Touch...");
+  gt911_available = init_gt911(WS_CH32_IO::DEFAULT_I2C_SDA, WS_CH32_IO::DEFAULT_I2C_SCL);
+  if (gt911_available) {
+    lvgl_port_lock(-1);
+    static lv_indev_drv_t indev_drv;
+    lv_indev_drv_init(&indev_drv);
+    indev_drv.type    = LV_INDEV_TYPE_POINTER;
+    indev_drv.read_cb = touch_read;
+    lv_indev_drv_register(&indev_drv);
+    lvgl_port_unlock();
+  }
+  sr_mark("[SR] Touch fertig.");
+#else
+  sr_mark("[SR] Touch DEAKTIVIERT (SR_ENABLE_TOUCH=0).");
+#endif
 }
 
 // ============================================================================
@@ -222,7 +343,12 @@ static void build_ui() {
   lblLast = lv_label_create(scr);
   lv_label_set_text(lblLast, "--");
   style_time_label(lblLast, &lv_font_montserrat_48, lv_color_hex(0xffffff));
-  lv_obj_align(lblLast, LV_ALIGN_TOP_MID, 0, 66);
+  lv_obj_align(lblLast, LV_ALIGN_TOP_MID, 0, 60);
+  // montserrat_48 ist die groesste fertige Schrift -> per Zoom noch etwas groesser,
+  // Pivot mittig, damit es zentriert waechst.
+  lv_obj_set_style_transform_zoom(lblLast, 296, 0);            // ~1.16x
+  lv_obj_set_style_transform_pivot_x(lblLast, LV_PCT(50), 0);
+  lv_obj_set_style_transform_pivot_y(lblLast, LV_PCT(50), 0);
 
   // --- Bestzeit + Delta ---
   lblBest = lv_label_create(scr);
@@ -239,9 +365,10 @@ static void build_ui() {
   for (int i = 0; i < 3; i++) {
     lblSec[i] = lv_label_create(scr);
     lv_label_set_text_fmt(lblSec[i], "S%d --", i + 1);
-    lv_obj_set_style_text_font(lblSec[i], &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(lblSec[i], &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(lblSec[i], lv_color_hex(SECTOR_COLORS[i]), 0);
-    lv_obj_align(lblSec[i], LV_ALIGN_TOP_LEFT, 14 + i * 155, 156);
+    // Zentriert als Dreiergruppe (Mitte bei i==1), etwas tiefer wegen groesserer Zeit.
+    lv_obj_align(lblSec[i], LV_ALIGN_TOP_MID, (i - 1) * 160, 160);
   }
 
   // --- Liste der letzten Runden (scrollbar) ---
@@ -334,7 +461,7 @@ static void add_lap_row(const char *driver, uint32_t col, int lap, const char *t
   lv_obj_t *ls = lv_label_create(row);             // Sektoren
   lv_label_set_text_fmt(ls, "%s  %s  %s", s1, s2, s3);
   lv_obj_set_style_text_color(ls, lv_color_hex(0x8a8f98), 0);
-  lv_obj_align(ls, LV_ALIGN_RIGHT_MID, 0, 0);
+  lv_obj_align(ls, LV_ALIGN_RIGHT_MID, -16, 0);    // -16: freihalten vom Scrollbalken
 }
 
 // Layout je nach Modus. In BEIDEN Modi: oben die neueste Runde gross mit
@@ -527,7 +654,9 @@ static void poll_data() {
 
 void setup() {
   Serial.begin(115200);
-  board_init();     // Display/Touch/LVGL (ESP32_Display_Panel + lvgl_port)
+  delay(300);
+  sr_mark("\n=== SMARTRACE BUILD touch-off-v4 === setup() gestartet ===");
+  board_init();     // Display (Touch per SR_ENABLE_TOUCH schaltbar)
 
   // UI aufbauen — lv_* nur unter dem LVGL-Lock.
   lvgl_port_lock(-1);

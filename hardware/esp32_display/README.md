@@ -58,28 +58,38 @@ Arduino_GFX (nur ein Framebuffer) bei aktivem WLAN nicht lösbar war.
 
 | Bibliothek | Version | Woher | Zweck |
 |---|---|---|---|
-| **ESP32_Display_Panel** | **1.0.5+** | [Bibliotheksverwalter](https://github.com/esp-arduino-libs/ESP32_Display_Panel) | Display (ST7701 RGB) **+** Touch (GT911), Anti-Tear |
+| **ESP32_Display_Panel** | **1.0.5+** | [Bibliotheksverwalter](https://github.com/esp-arduino-libs/ESP32_Display_Panel) | Display (ST7701 RGB), Anti-Tear |
 | **lvgl** | **8.4.0** (nicht 9.x!) | Bibliotheksverwalter · [Upstream](https://github.com/lvgl/lvgl) | GUI-Framework |
 | **lv_conf.h** | zu 8.4.0 passend | [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/blob/main/examples/arduino/libraries/lv_conf.h) | LVGL-Konfig (Farbtiefe 16, alle Montserrat-Fonts an) — **direkt in `libraries/` legen**, neben den `lvgl`-Ordner |
+| **SensorLib** | Waveshare-Stand | [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries/SensorLib) · [Upstream](https://github.com/lewisxhe/SensorLib) | Touch (GT911, über Arduino-Wire) |
 | **WS_CH32_IO** | Waveshare-only | **nur** [Waveshare-Repo](https://github.com/waveshareteam/ESP32-S3-Touch-LCD-4/tree/main/examples/arduino/libraries/WS_CH32_IO) | IO-Expander (Display-Reset/Backlight) |
 | **ArduinoJson** | **7.x** | [Bibliotheksverwalter](https://arduinojson.org/) | JSON-Parsing der API |
 
 > **ESP32_Display_Panel** über den Bibliotheksverwalter installieren (Suche
-> „ESP32_Display_Panel"); nötige Sub-Treiber (ST7701, GT911) bringt sie mit.
-> **`WS_CH32_IO`** gibt es dort **nicht** — die kommt als ZIP über
-> *Sketch → Bibliothek einbinden → .ZIP-Bibliothek hinzufügen…* (siehe oben).
-> `GFX_Library_for_Arduino` und `SensorLib` werden **nicht mehr** gebraucht.
+> „ESP32_Display_Panel") — sie macht **nur das Display**. Den **GT911-Touch** treibt
+> der Sketch selbst über **`SensorLib`** + Arduino-Wire, weil GT911 und der
+> **`WS_CH32_IO`**-Expander am selben I2C-Bus hängen (sonst I2C-Treiberkonflikt
+> „driver_ng … old driver"). `SensorLib` und `WS_CH32_IO` kommen als ZIP über
+> *Sketch → Bibliothek einbinden → .ZIP-Bibliothek hinzufügen…*.
+> `GFX_Library_for_Arduino` wird **nicht mehr** gebraucht.
 
-### Die Board-Config steckt im Sketch-Ordner
+### Display wird direkt im Sketch aufgebaut (keine Board-Config-Dateien)
 
-Anders als vorher liegen die Display-Details **nicht** in der Lib, sondern als
-Dateien **neben** `smartrace_display.ino` (kommen über `git`/ZIP mit):
+Das Display (RGB-Bus + ST7701) wird **direkt in `smartrace_display.ino`** über die
+Treiberklassen `BusRGB`/`LCD_ST7701` konstruiert — **ohne** die Board-Config-Dateien
+und **ohne** die `Board`-Klasse von ESP32_Display_Panel. Grund: Deren Auto-Config
+(`esp_panel_board_default_config.cpp`) findet im Arduino-Build die Config-Dateien im
+Sketch-Ordner **nicht zuverlässig** und fiel auf einen Default **mit Touch** zurück
+→ zweiter I2C-Treiber → Absturz (`i2c: CONFLICT ... driver_ng`). Manuell konstruiert
+nutzt ESP_PANEL für's Display **kein** I2C. Der GT911-Touch läuft über Arduino-Wire.
+
+Diese Dateien gehören in den Sketch-Ordner (kommen über `git`/ZIP mit):
 
 | Datei | Zweck |
 |---|---|
-| `esp_panel_board_custom_conf.h` | **Unser Board** (480×480 ST7701 + GT911): Pins, Timings, ST7701-Init, PCLK 14 MHz |
+| `smartrace_display.ino` | Sketch inkl. Pins/Timings/ST7701-Init (fest im Code) |
 | `lvgl_v8_port.h/.cpp` | LVGL-Anbindung mit **`LVGL_PORT_AVOID_TEARING_MODE = 3`** (Doppel-FB + Direct-Mode) |
-| `esp_panel_board_supported_conf.h`, `esp_panel_drivers_conf.h`, `esp_utils_conf.h` | ESP32_Display_Panel-Konfig (unverändert übernommen) |
+| `esp_panel_drivers_conf.h`, `esp_utils_conf.h` | ESP32_Display_Panel-Konfig (aktiviert u.a. den ST7701-Treiber) |
 
 ## Einrichtung
 
@@ -99,6 +109,17 @@ Wie oben: *ESP32S3 Dev Module*, Core **3.3.11**, **USB CDC On Boot: Enabled**,
   (z.B. `http://192.168.1.90:5000`).
 - Display-Details musst du **nicht** anfassen — sie stehen in
   `esp_panel_board_custom_conf.h` (Pins/ST7701-Init aus `09_LVGL_Widgets`).
+
+> ⚠️ **WICHTIG — nach dem Umstieg einmal den Build-Cache leeren.** Arduino baut die
+> Library-Objekte (`.o`) nur neu, wenn sich Library-Quellen ändern — bei reinen
+> Sketch-Änderungen bleibt das **alte, evtl. mit Touch kompilierte Objekt** im Cache.
+> Symptom: identischer Absturz trotz Änderungen. Fix: Arduino IDE schließen, unter
+> Windows den Ordner `%LOCALAPPDATA%\Temp\arduino\` löschen (nur Cache), neu bauen.
+>
+> Falls beim Kompilieren `undefined reference to LCD_ST7701` kommt: dann findet die
+> Library die `esp_panel_drivers_conf.h` nicht → zusätzlich nach
+> `Dokumente/Arduino/libraries/` kopieren (in den `libraries/`-Ordner selbst, neben —
+> nicht in — den `ESP32_Display_Panel`-Ordner) und erneut sauber bauen.
 
 ### 3) Flashen
 Kompilieren und hochladen. Auf dem Serial-Monitor (115200) siehst du den
