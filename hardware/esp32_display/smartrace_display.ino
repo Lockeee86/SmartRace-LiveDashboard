@@ -47,10 +47,20 @@ using namespace esp_panel::board;
 static inline void sr_mark(const char *s) { Serial.println(s); Serial.flush(); esp_rom_printf("%s\n", s); }
 
 // ---- Farben (passend zum Web-Dashboard) ----
-static const uint32_t CTRL_COLORS[6] = {
-  0xe74c3c, 0x3498db, 0x2ecc71, 0xf1c40f, 0xe67e22, 0x9b59b6  // C1..C6
-};
 static const uint32_t SECTOR_COLORS[3] = { 0xef5350, 0xffca28, 0x42a5f5 }; // S1,S2,S3
+
+// Laufzeit-Farben je Controller: mit den Defaults geseedet, dann DYNAMISCH aus der
+// API ueberschrieben. SmartRace sendet die Controller-/Auto-Farben mit; das Backend
+// liefert sie als "#rrggbb" in /api/device/controllers und /api/device/laps.
+static uint32_t g_ctrlColors[6] = {
+  0xe74c3c, 0x3498db, 0x2ecc71, 0xf1c40f, 0xe67e22, 0x9b59b6
+};
+
+// "#rrggbb" -> 0xRRGGBB; bei ungueltigem/leerem Wert den Fallback behalten.
+static uint32_t parse_hex_color(const char *s, uint32_t fallback) {
+  if (!s || s[0] != '#' || strlen(s) < 7) return fallback;
+  return (uint32_t)strtol(s + 1, nullptr, 16) & 0xFFFFFF;
+}
 
 // ---- Zustand ----
 static int g_controller = DEFAULT_CONTROLLER;   // 1..6
@@ -78,7 +88,7 @@ static inline bool recent_mode() { return g_controller == 0; }
 // Akzentfarbe: Controllerfarbe, im "Alle"-Modus neutral
 static inline lv_color_t accent_color() {
   if (g_controller < 1 || g_controller > 6) return lv_color_hex(0x8a8f98);
-  return lv_color_hex(CTRL_COLORS[g_controller - 1]);
+  return lv_color_hex(g_ctrlColors[g_controller - 1]);
 }
 
 // ---- Vorwaertsdeklarationen (werden vor ihrer Definition benutzt) ----
@@ -342,13 +352,10 @@ static void build_ui() {
   // --- Grosse letzte Rundenzeit ---
   lblLast = lv_label_create(scr);
   lv_label_set_text(lblLast, "--");
+  // montserrat_48 ist die groesste fertige Schrift. Zoom/Transform rendert auf
+  // diesem Panel (Direct-Mode/Anti-Tear) nicht -> daher ohne Zoom.
   style_time_label(lblLast, &lv_font_montserrat_48, lv_color_hex(0xffffff));
-  lv_obj_align(lblLast, LV_ALIGN_TOP_MID, 0, 60);
-  // montserrat_48 ist die groesste fertige Schrift -> per Zoom noch etwas groesser,
-  // Pivot mittig, damit es zentriert waechst.
-  lv_obj_set_style_transform_zoom(lblLast, 296, 0);            // ~1.16x
-  lv_obj_set_style_transform_pivot_x(lblLast, LV_PCT(50), 0);
-  lv_obj_set_style_transform_pivot_y(lblLast, LV_PCT(50), 0);
+  lv_obj_align(lblLast, LV_ALIGN_TOP_MID, 0, 64);
 
   // --- Bestzeit + Delta ---
   lblBest = lv_label_create(scr);
@@ -395,7 +402,7 @@ static void build_ui() {
   for (int i = 0; i < 6; i++) {
     btnCtrl[i] = lv_btn_create(pick);
     lv_obj_set_size(btnCtrl[i], 56, 54);
-    lv_obj_set_style_bg_color(btnCtrl[i], lv_color_hex(CTRL_COLORS[i]), 0);
+    lv_obj_set_style_bg_color(btnCtrl[i], lv_color_hex(g_ctrlColors[i]), 0);
     lv_obj_set_style_radius(btnCtrl[i], 8, 0);
     lv_obj_add_event_cb(btnCtrl[i], picker_event_cb, LV_EVENT_CLICKED,
                         (void *)(intptr_t)i);
@@ -517,6 +524,15 @@ static void fetch_laps() {
   int lapCount = doc["lap_count"] | 0;
   const char *status = doc["status"] | "";
 
+  // Dynamische Controllerfarbe des gewaehlten Controllers uebernehmen
+  if (g_controller >= 1 && g_controller <= 6) {
+    g_ctrlColors[g_controller - 1] =
+        parse_hex_color(doc["color"] | "", g_ctrlColors[g_controller - 1]);
+    lv_obj_set_style_bg_color(btnCtrl[g_controller - 1],
+                              lv_color_hex(g_ctrlColors[g_controller - 1]), 0);
+    apply_accent();   // Akzent (Leiste/Badge/Name/Position) in aktueller Farbe
+  }
+
   if (strlen(driver) == 0) {
     lv_label_set_text(lblDriver, "C" ); // Fallback
     lv_label_set_text_fmt(lblDriver, "C%d - keine Daten", g_controller);
@@ -590,7 +606,7 @@ static void fetch_recent() {
 
     if (first) {                          // neueste Runde gross oben
       first = false;
-      set_accent(lv_color_hex(CTRL_COLORS[ctrl - 1]));   // Kopf in Fahrerfarbe
+      set_accent(lv_color_hex(g_ctrlColors[ctrl - 1]));  // Kopf in Fahrerfarbe
       lv_label_set_text(lblDriver, (driver[0] ? driver : "Letzte Runden"));
       lv_label_set_text_fmt(lblPos, "R%d", (int)(l["lap"] | 0));
       lv_label_set_text(lblLast, t);
@@ -601,7 +617,7 @@ static void fetch_recent() {
     }
 
     if (shown++ >= LAP_LIST_COUNT) break;
-    add_lap_row(driver, CTRL_COLORS[ctrl - 1], l["lap"] | 0, t, s1, s2, s3);
+    add_lap_row(driver, g_ctrlColors[ctrl - 1], l["lap"] | 0, t, s1, s2, s3);
   }
 
   if (first) {                            // keine Daten
@@ -623,11 +639,17 @@ static void fetch_controllers() {
   int i = 0;
   for (JsonObject c : arr) {
     bool active = c["active"] | false;
-    if (i < 6 && i != g_controller - 1) {
-      lv_obj_set_style_bg_opa(btnCtrl[i], active ? LV_OPA_40 : LV_OPA_20, 0);
+    if (i < 6) {
+      // dynamische Controllerfarbe uebernehmen + Button einfaerben
+      g_ctrlColors[i] = parse_hex_color(c["color"] | "", g_ctrlColors[i]);
+      lv_obj_set_style_bg_color(btnCtrl[i], lv_color_hex(g_ctrlColors[i]), 0);
+      if (i != g_controller - 1)
+        lv_obj_set_style_bg_opa(btnCtrl[i], active ? LV_OPA_40 : LV_OPA_20, 0);
     }
     i++;
   }
+  // Falls sich die Farbe des gewaehlten Controllers geaendert hat -> Akzent auffrischen
+  if (!recent_mode()) apply_accent();
 }
 
 // ============================================================================
