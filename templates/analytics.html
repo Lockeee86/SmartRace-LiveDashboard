@@ -6,8 +6,12 @@
 <!-- Header -->
 <div class="session-selector d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Race Analytics</h5>
-    <div class="d-flex align-items-center gap-2">
-        <select id="analyticsSession" class="form-select form-select-sm" style="min-width: 280px;">
+    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+        <i class="fas fa-road text-muted small" title="Strecke"></i>
+        <select id="analyticsTrackFilter" class="form-select form-select-sm" style="min-width: 170px;" title="Strecke">
+            <option value="">Alle Strecken</option>
+        </select>
+        <select id="analyticsSession" class="form-select form-select-sm" style="min-width: 260px;">
             <option value="all">Alle Sessions</option>
         </select>
         <button id="analyticsRefresh" class="btn btn-sm btn-outline-primary">
@@ -114,13 +118,17 @@ async function loadSessions() {
     }
 }
 
+function currentTrack() {
+    return document.getElementById('analyticsTrackFilter').value;
+}
+
 async function loadAnalytics() {
     try {
-        let url = '/api/analytics';
-        if (currentAnalyticsSession !== 'all') {
-            url += '?session_id=' + encodeURIComponent(currentAnalyticsSession);
-        }
-        const res = await fetch(url);
+        const p = new URLSearchParams();
+        if (currentAnalyticsSession !== 'all') p.set('session_id', currentAnalyticsSession);
+        if (currentTrack()) p.set('track', currentTrack());
+        const qs = p.toString();
+        const res = await fetch('/api/analytics' + (qs ? '?' + qs : ''));
         if (!res.ok) return;
         const data = await res.json();
         renderCharts(data);
@@ -132,13 +140,33 @@ async function loadAnalytics() {
 
 async function loadCarStats() {
     try {
-        const res = await fetch('/api/car-stats');
+        const t = currentTrack();
+        const res = await fetch('/api/car-stats' + (t ? '?track=' + encodeURIComponent(t) : ''));
         if (!res.ok) return;
         const data = await res.json();
         renderCarChart(data);
     } catch (e) {
         console.error('Car-Stats-Fehler:', e);
     }
+}
+
+// Strecken-Dropdown fuellen, Default = aktive Strecke
+async function loadTrackFilter() {
+    const sel = document.getElementById('analyticsTrackFilter');
+    try {
+        const [tRes, aRes] = await Promise.all([
+            fetch('/api/tracks'),
+            fetch('/api/active-track'),
+        ]);
+        const tData = tRes.ok ? await tRes.json() : { tracks: [] };
+        const active = aRes.ok ? (await aRes.json()).name : null;
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">Alle Strecken</option>';
+        (tData.tracks || []).forEach(t => {
+            sel.innerHTML += `<option value="${t.name}">${t.name}</option>`;
+        });
+        sel.value = cur || (active || '');
+    } catch (e) { /* bleibt bei "Alle Strecken" */ }
 }
 
 function renderCharts(data) {
@@ -360,13 +388,18 @@ function renderStatsTable(data) {
 
 // Event Listener
 document.addEventListener('DOMContentLoaded', async () => {
-    await loadSessions();
+    await Promise.all([loadSessions(), loadTrackFilter()]);
     await Promise.all([loadAnalytics(), loadCarStats()]);
 });
 
 document.getElementById('analyticsSession').addEventListener('change', function() {
     currentAnalyticsSession = this.value;
     loadAnalytics();
+});
+
+document.getElementById('analyticsTrackFilter').addEventListener('change', function() {
+    loadAnalytics();
+    loadCarStats();
 });
 
 document.getElementById('analyticsRefresh').addEventListener('click', async function() {

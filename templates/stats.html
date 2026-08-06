@@ -7,6 +7,10 @@
 <div class="session-selector d-flex justify-content-between align-items-center mb-3">
     <h5 class="mb-0"><i class="fas fa-chart-column me-2"></i>Statistiken</h5>
     <div class="d-flex align-items-center gap-2">
+        <i class="fas fa-road text-muted small" title="Strecke"></i>
+        <select id="statsTrackFilter" class="form-select form-select-sm" style="min-width:180px;" title="Strecke">
+            <option value="">Alle Strecken</option>
+        </select>
         <button id="statsRefresh" class="btn btn-sm btn-outline-primary" title="Aktualisieren">
             <i class="fas fa-sync-alt"></i>
         </button>
@@ -109,13 +113,49 @@
         </div>
     </div>
 </div>
+
+<!-- Rekorde (folgen dem Strecken-Filter oben) -->
+<div class="row g-3 mt-1">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0"><i class="fas fa-trophy text-warning me-1"></i> Streckenrekorde</h6>
+                    <button class="btn btn-sm btn-outline-light" onclick="loadTrackRecords()"><i class="fas fa-sync-alt"></i></button>
+                </div>
+                <div id="trackRecordsList" class="small">
+                    <span class="text-muted">Lade...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0"><i class="fas fa-user text-info me-1"></i> Persoenliche Rekorde</h6>
+                    <button class="btn btn-sm btn-outline-light" onclick="loadPersonalRecords()"><i class="fas fa-sync-alt"></i></button>
+                </div>
+                <div id="personalRecordsList" class="small">
+                    <span class="text-muted">Lade...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+// Aktuell gewaehlte Strecke als Query-Parameter (leer = alle Strecken)
+function trackParam() {
+    const t = document.getElementById('statsTrackFilter').value;
+    return t ? '?track=' + encodeURIComponent(t) : '';
+}
+
 async function loadDriverStats() {
     try {
-        const res = await fetch('/api/driver-stats');
+        const res = await fetch('/api/driver-stats' + trackParam());
         if (!res.ok) return;
         const data = await res.json();
         renderDriverStats(data);
@@ -126,7 +166,7 @@ async function loadDriverStats() {
 
 async function loadCarStats() {
     try {
-        const res = await fetch('/api/car-stats');
+        const res = await fetch('/api/car-stats' + trackParam());
         if (!res.ok) return;
         const data = await res.json();
         renderCarStats(data);
@@ -213,31 +253,158 @@ function renderCarStats(cars) {
     </tr>`).join('');
 }
 
+// ---- Rekorde (folgen dem Strecken-Filter oben) ----
+async function loadTrackRecords() {
+    const container = document.getElementById('trackRecordsList');
+    const track = document.getElementById('statsTrackFilter').value;
+    try {
+        const params = track ? '?track=' + encodeURIComponent(track) : '';
+        const [recRes, vbRes] = await Promise.all([
+            fetch('/api/track-records' + params),
+            fetch('/api/virtual-best' + params),
+        ]);
+        if (!recRes.ok) throw new Error('Fehler');
+        const records = await recRes.json();
+        const vb = vbRes.ok ? await vbRes.json() : null;
+
+        if (records.length === 0 && !vb) {
+            container.innerHTML = '<span class="text-muted">Keine Streckenrekorde' + (track ? ' fuer ' + track : '') + '</span>';
+            return;
+        }
+
+        let html = '<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Zeit</th><th>Fahrer</th><th>Auto</th><th>S1</th><th>S2</th><th>S3</th>' + (track ? '' : '<th>Strecke</th>') + '<th>Datum</th><th></th></tr></thead><tbody>';
+
+        if (vb) {
+            html += `<tr style="border-left: 3px solid #9b59b6; background: rgba(155,89,182,0.08);">
+                <td class="font-mono fw-bold" style="color:#9b59b6">${vb.laptime_formatted}</td>
+                <td style="color:#9b59b6"><i class="fas fa-bolt me-1"></i>Virtuelle Beste</td>
+                <td class="text-muted small">Theoretisch</td>
+                <td class="font-mono small">${formatSector(vb.sector_1)}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_1_driver}</span></td>
+                <td class="font-mono small">${formatSector(vb.sector_2)}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_2_driver}</span></td>
+                <td class="font-mono small">${formatSector(vb.sector_3)}<br><span class="text-muted" style="font-size:0.65rem">${vb.sector_3_driver}</span></td>
+                ${track ? '' : '<td class="text-muted">--</td>'}
+                <td class="text-muted">--</td>
+                <td></td>
+            </tr>`;
+        }
+
+        html += records.map((r, i) => `<tr${i === 0 ? ' class="table-success"' : ''}>
+                <td class="font-mono fw-bold">${r.laptime_formatted}</td>
+                <td>${r.driver_name || '--'}</td>
+                <td class="text-muted">${r.car_name || '--'}</td>
+                <td class="font-mono small">${formatSector(r.sector_1)}</td>
+                <td class="font-mono small">${formatSector(r.sector_2)}</td>
+                <td class="font-mono small">${formatSector(r.sector_3)}</td>
+                ${track ? '' : `<td class="text-muted small">${r.track_name || '--'}</td>`}
+                <td class="text-muted">${r.created_at ? new Date(r.created_at).toLocaleDateString('de-DE') : '--'}</td>
+                <td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteTrackRecord(${r.id})" title="Loeschen"><i class="fas fa-trash-alt" style="font-size:0.7rem"></i></button></td>
+            </tr>`).join('');
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = '<span class="text-danger">Fehler beim Laden</span>';
+    }
+}
+
+async function deleteTrackRecord(id) {
+    if (!confirm('Diesen Streckenrekord wirklich loeschen?')) return;
+    try {
+        const res = await fetch('/api/track-records/' + id, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Fehler');
+        showToast('Streckenrekord geloescht', 'success');
+        loadTrackRecords();
+    } catch (e) {
+        showToast('Fehler: ' + e.message, 'danger');
+    }
+}
+
+async function loadPersonalRecords() {
+    const container = document.getElementById('personalRecordsList');
+    const track = document.getElementById('statsTrackFilter').value;
+    try {
+        const params = track ? '?track=' + encodeURIComponent(track) : '';
+        const res = await fetch('/api/personal-records' + params);
+        if (!res.ok) throw new Error('Fehler');
+        const records = await res.json();
+        if (records.length === 0) {
+            container.innerHTML = '<span class="text-muted">Keine persoenlichen Rekorde' + (track ? ' fuer ' + track : '') + '</span>';
+            return;
+        }
+        container.innerHTML = '<table class="table table-sm mb-0"><thead><tr><th>Fahrer</th><th>Zeit</th><th>Auto</th>' + (track ? '' : '<th>Strecke</th>') + '<th></th></tr></thead><tbody>' +
+            records.map(r => `<tr>
+                <td class="fw-bold">${r.driver_name || '--'}</td>
+                <td class="font-mono">${r.laptime_formatted}</td>
+                <td class="text-muted">${r.car_name || '--'}</td>
+                ${track ? '' : `<td class="text-muted small">${r.track_name || '--'}</td>`}
+                <td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deletePersonalRecord(${r.id})" title="Loeschen"><i class="fas fa-trash-alt" style="font-size:0.7rem"></i></button></td>
+            </tr>`).join('') + '</tbody></table>';
+    } catch (e) {
+        container.innerHTML = '<span class="text-danger">Fehler beim Laden</span>';
+    }
+}
+
+async function deletePersonalRecord(id) {
+    if (!confirm('Diesen persoenlichen Rekord wirklich loeschen?')) return;
+    try {
+        const res = await fetch('/api/personal-records/' + id, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Fehler');
+        showToast('Persoenlicher Rekord geloescht', 'success');
+        loadPersonalRecords();
+    } catch (e) {
+        showToast('Fehler: ' + e.message, 'danger');
+    }
+}
+
+// Strecken-Dropdown fuellen, Default = aktive Strecke
+async function populateTrackFilter() {
+    const sel = document.getElementById('statsTrackFilter');
+    try {
+        const [tRes, aRes] = await Promise.all([
+            fetch('/api/tracks'),
+            fetch('/api/active-track'),
+        ]);
+        const tData = tRes.ok ? await tRes.json() : { tracks: [] };
+        const active = aRes.ok ? (await aRes.json()).name : null;
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">Alle Strecken</option>';
+        (tData.tracks || []).forEach(t => {
+            sel.innerHTML += `<option value="${t.name}">${t.name}</option>`;
+        });
+        // Beim ersten Laden auf aktive Strecke vorwaehlen
+        sel.value = cur || (active || '');
+    } catch (e) { /* Dropdown bleibt bei "Alle Strecken" */ }
+}
+
+// Alles neu laden (Statistik + Rekorde) fuer die gewaehlte Strecke
+function reloadAll() {
+    loadDriverStats();
+    loadCarStats();
+    loadTrackRecords();
+    loadPersonalRecords();
+}
+
 // Event Listener
 document.addEventListener('DOMContentLoaded', async () => {
-    await Promise.all([loadDriverStats(), loadCarStats()]);
+    await populateTrackFilter();
+    reloadAll();
+    document.getElementById('statsTrackFilter').addEventListener('change', reloadAll);
 });
 
 document.getElementById('statsRefresh').addEventListener('click', async function() {
     this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     this.disabled = true;
-    await Promise.all([loadDriverStats(), loadCarStats()]);
+    await populateTrackFilter();
+    reloadAll();
     this.innerHTML = '<i class="fas fa-sync-alt"></i>';
     this.disabled = false;
 });
 
 // WebSocket: Live-Updates
-socket.on('new_data', () => {
-    loadDriverStats();
-    loadCarStats();
-});
-
-socket.on('track_record', () => {
-    loadDriverStats();
-    loadCarStats();
-});
+socket.on('new_data', reloadAll);
+socket.on('track_record', reloadAll);
 
 // Fallback
-setInterval(() => { loadDriverStats(); loadCarStats(); }, 30000);
+setInterval(reloadAll, 30000);
 </script>
 {% endblock %}

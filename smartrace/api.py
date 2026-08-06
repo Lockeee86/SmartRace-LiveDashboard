@@ -353,6 +353,7 @@ def api_analytics():
     """Aggregierte Daten fuer Charts (SQL-Aggregation)."""
     try:
         sid = request.args.get('session_id')
+        track = (request.args.get('track') or '').strip()
 
         # 1. Aggregierte Stats per SQL (schnell, auch bei 500K+ Rows)
         q = db.session.query(
@@ -365,6 +366,8 @@ def api_analytics():
 
         if sid and sid != 'all':
             q = q.filter(Lap.session_id == sid)
+        if track:
+            q = q.filter(Lap.track_name == track)
 
         agg = {r.driver_name: {
             'total_laps': r.total_laps,
@@ -385,6 +388,8 @@ def api_analytics():
 
         if sid and sid != 'all':
             ranked = ranked.filter(Lap.session_id == sid)
+        if track:
+            ranked = ranked.filter(Lap.track_name == track)
 
         ranked_sub = ranked.subquery()
         recent_laps = db.session.query(
@@ -617,9 +622,10 @@ def api_device_recent():
 
 @api_bp.route('/api/driver-stats')
 def api_driver_stats():
-    """Fahrer-Statistiken ueber alle Sessions."""
+    """Fahrer-Statistiken. Optional auf eine Strecke gefiltert (?track=Name)."""
     try:
-        lap_rows = db.session.query(
+        track = (request.args.get('track') or '').strip()
+        lap_q = db.session.query(
             Lap.driver_name,
             func.count(Lap.id).label('total_laps'),
             func.count(func.distinct(Lap.session_id)).label('total_sessions'),
@@ -631,7 +637,10 @@ def api_driver_stats():
             Lap.driver_name.isnot(None),
             Lap.driver_name != '',
             Lap.is_outlier.isnot(True),
-        ).group_by(Lap.driver_name).all()
+        )
+        if track:
+            lap_q = lap_q.filter(Lap.track_name == track)
+        lap_rows = lap_q.group_by(Lap.driver_name).all()
 
         # Siege und Podien aus Ergebnissen
         result_stats = {}
@@ -699,9 +708,10 @@ def api_driver_stats():
 
 @api_bp.route('/api/car-stats')
 def api_car_stats():
-    """Auto-Statistiken ueber alle Sessions."""
+    """Auto-Statistiken. Optional auf eine Strecke gefiltert (?track=Name)."""
     try:
-        rows = db.session.query(
+        track = (request.args.get('track') or '').strip()
+        car_q = db.session.query(
             Lap.car_name,
             func.count(Lap.id).label('total_laps'),
             func.count(func.distinct(Lap.session_id)).label('total_sessions'),
@@ -713,7 +723,10 @@ def api_car_stats():
             Lap.car_name.isnot(None),
             Lap.car_name != '',
             Lap.is_outlier.isnot(True),
-        ).group_by(Lap.car_name).all()
+        )
+        if track:
+            car_q = car_q.filter(Lap.track_name == track)
+        rows = car_q.group_by(Lap.car_name).all()
 
         cars = []
         for r in rows:
