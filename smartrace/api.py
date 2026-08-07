@@ -748,6 +748,65 @@ def api_car_stats():
         return jsonify([])
 
 
+@api_bp.route('/api/lap-progression')
+def api_lap_progression():
+    """Zeitentwicklung: beste (und mittlere) Rundenzeit je Fahrer je Tag.
+
+    Fuer den Verlaufs-Chart (X = Datum, Y = Zeit). Optional ?track=Name und
+    ?drivers=A,B (CSV; ohne Angabe alle Fahrer). Ausreisser werden ausgefiltert.
+    """
+    try:
+        track = (request.args.get('track') or '').strip()
+        drivers_arg = (request.args.get('drivers') or '').strip()
+        wanted = [d for d in drivers_arg.split(',') if d] if drivers_arg else None
+
+        base = db.session.query(
+            Lap.driver_name,
+            func.date(Lap.created_at).label('d'),
+            func.min(Lap.laptime_ms).label('best'),
+            func.avg(Lap.laptime_ms).label('avg'),
+        ).filter(
+            Lap.laptime_ms > 0,
+            Lap.driver_name.isnot(None),
+            Lap.driver_name != '',
+            Lap.is_outlier.isnot(True),
+        )
+        if track:
+            base = base.filter(Lap.track_name == track)
+
+        # Fahrerliste fuers Dropdown (track-gefiltert, aber ohne drivers-Filter)
+        all_drivers = sorted(
+            {r[0] for r in base.with_entities(Lap.driver_name).distinct().all() if r[0]})
+
+        q = base
+        if wanted:
+            q = q.filter(Lap.driver_name.in_(wanted))
+        rows = q.group_by(Lap.driver_name, func.date(Lap.created_at)).all()
+
+        by_driver = {}
+        date_set = set()
+        for r in rows:
+            dt = str(r.d)   # 'YYYY-MM-DD' in SQLite und PostgreSQL
+            date_set.add(dt)
+            by_driver.setdefault(r.driver_name, {})[dt] = {
+                'best': r.best,
+                'avg': round(r.avg) if r.avg else None,
+            }
+
+        dates = sorted(date_set)
+        series = {}
+        for drv, m in by_driver.items():
+            series[drv] = {
+                'best': [m.get(dt, {}).get('best') for dt in dates],
+                'avg': [m.get(dt, {}).get('avg') for dt in dates],
+            }
+
+        return jsonify({'dates': dates, 'series': series, 'all_drivers': all_drivers})
+    except Exception as e:
+        log.error(f"lap-progression: {e}")
+        return jsonify({'dates': [], 'series': {}, 'all_drivers': []})
+
+
 @api_bp.route('/api/filters')
 def api_filters():
     """Filterwerte fuer Dropdowns."""

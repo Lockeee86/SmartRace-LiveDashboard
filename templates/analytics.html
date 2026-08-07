@@ -68,6 +68,35 @@
     </div>
 </div>
 
+<!-- Zeitentwicklung ueber Datum -->
+<div class="card mb-3">
+    <div class="card-header border-0 bg-transparent d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h6 class="mb-0"><i class="fas fa-clock-rotate-left me-2 text-info"></i>Zeitentwicklung
+            <span class="text-muted fw-normal small">(Rundenzeit ueber Datum)</span></h6>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="btn-group btn-group-sm" role="group" aria-label="Metrik">
+                <input type="radio" class="btn-check" name="tdMetric" id="tdMetricBest" value="best" checked>
+                <label class="btn btn-outline-secondary" for="tdMetricBest">Beste</label>
+                <input type="radio" class="btn-check" name="tdMetric" id="tdMetricAvg" value="avg">
+                <label class="btn btn-outline-secondary" for="tdMetricAvg">&Oslash;</label>
+            </div>
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                        id="tdDriverBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="fas fa-users me-1"></i><span id="tdDriverLabel">Fahrer</span>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end p-2" id="tdDriverMenu"
+                     style="max-height:320px; overflow:auto; min-width:220px;">
+                    <span class="text-muted small">Lade...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card-body pt-0">
+        <canvas id="timeDevChart" height="300"></canvas>
+    </div>
+</div>
+
 <!-- Stats Tabelle -->
 <div class="card">
     <div class="card-header border-0 bg-transparent">
@@ -167,6 +196,114 @@ async function loadTrackFilter() {
         });
         sel.value = cur || (active || '');
     } catch (e) { /* bleibt bei "Alle Strecken" */ }
+}
+
+// ---- Zeitentwicklung (Rundenzeit ueber Datum, Mehrfach-Fahrerauswahl) ----
+let timeDevChart = null;
+let tdData = { dates: [], series: {}, all_drivers: [] };
+let tdSelected = new Set();
+
+async function loadTimeDev() {
+    try {
+        const t = currentTrack();
+        const res = await fetch('/api/lap-progression' + (t ? '?track=' + encodeURIComponent(t) : ''));
+        if (!res.ok) return;
+        tdData = await res.json();
+        // Auswahl auf vorhandene Fahrer beschraenken; beim ersten Mal Default (max 3)
+        const avail = new Set(tdData.all_drivers);
+        tdSelected = new Set([...tdSelected].filter(d => avail.has(d)));
+        if (tdSelected.size === 0) tdData.all_drivers.slice(0, 3).forEach(d => tdSelected.add(d));
+        buildDriverMenu();
+        renderTimeDev();
+    } catch (e) {
+        console.error('Zeitentwicklung-Fehler:', e);
+    }
+}
+
+function updateDriverLabel() {
+    const n = tdSelected.size;
+    document.getElementById('tdDriverLabel').textContent = n ? `Fahrer (${n})` : 'Fahrer';
+}
+
+function buildDriverMenu() {
+    const menu = document.getElementById('tdDriverMenu');
+    if (!tdData.all_drivers.length) {
+        menu.innerHTML = '<span class="text-muted small">Keine Fahrer</span>';
+        updateDriverLabel();
+        return;
+    }
+    menu.innerHTML = tdData.all_drivers.map((d, idx) => `
+        <div class="form-check">
+            <input class="form-check-input td-driver-cb" type="checkbox" data-idx="${idx}"
+                   id="td-cb-${idx}"${tdSelected.has(d) ? ' checked' : ''}>
+            <label class="form-check-label small" for="td-cb-${idx}">${d}</label>
+        </div>`).join('');
+    menu.querySelectorAll('.td-driver-cb').forEach(cb => {
+        cb.addEventListener('change', function() {
+            const drv = tdData.all_drivers[parseInt(this.dataset.idx)];
+            if (this.checked) tdSelected.add(drv); else tdSelected.delete(drv);
+            updateDriverLabel();
+            renderTimeDev();
+        });
+    });
+    updateDriverLabel();
+}
+
+function renderTimeDev() {
+    const ctx = document.getElementById('timeDevChart').getContext('2d');
+    if (timeDevChart) timeDevChart.destroy();
+    const metric = (document.querySelector('input[name="tdMetric"]:checked') || {}).value || 'best';
+    const sel = tdData.all_drivers.filter(d => tdSelected.has(d)); // stabile Reihenfolge + Farbe
+    const datasets = sel.map(drv => {
+        const ci = tdData.all_drivers.indexOf(drv);
+        const color = CHART_COLORS[(ci >= 0 ? ci : 0) % CHART_COLORS.length];
+        const arr = (tdData.series[drv] && tdData.series[drv][metric]) || [];
+        return {
+            label: drv,
+            data: arr.map(ms => (ms == null ? null : ms / 1000)),
+            borderColor: color,
+            backgroundColor: color + '20',
+            pointBackgroundColor: color,
+            spanGaps: true, fill: false, tension: 0.3,
+            pointRadius: 3, pointHoverRadius: 6, borderWidth: 2,
+        };
+    });
+    timeDevChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: tdData.dates, datasets },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#8b8fa3' } },
+                tooltip: {
+                    callbacks: {
+                        title: items => items.length ? tdData.dates[items[0].dataIndex] : '',
+                        label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(3) + 's' : '--'),
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Datum', color: '#8b8fa3' },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: {
+                        color: '#8b8fa3',
+                        callback: (v, i) => {
+                            const d = tdData.dates[i];
+                            return d ? d.slice(8, 10) + '.' + d.slice(5, 7) + '.' : '';
+                        },
+                    },
+                },
+                y: {
+                    title: { display: true, text: 'Zeit (Sekunden)', color: '#8b8fa3' },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#8b8fa3' },
+                    beginAtZero: false,
+                }
+            },
+            interaction: { intersect: false, mode: 'index' }
+        }
+    });
 }
 
 function renderCharts(data) {
@@ -389,7 +526,9 @@ function renderStatsTable(data) {
 // Event Listener
 document.addEventListener('DOMContentLoaded', async () => {
     await Promise.all([loadSessions(), loadTrackFilter()]);
-    await Promise.all([loadAnalytics(), loadCarStats()]);
+    document.querySelectorAll('input[name="tdMetric"]').forEach(r =>
+        r.addEventListener('change', renderTimeDev));
+    await Promise.all([loadAnalytics(), loadCarStats(), loadTimeDev()]);
 });
 
 document.getElementById('analyticsSession').addEventListener('change', function() {
@@ -400,13 +539,14 @@ document.getElementById('analyticsSession').addEventListener('change', function(
 document.getElementById('analyticsTrackFilter').addEventListener('change', function() {
     loadAnalytics();
     loadCarStats();
+    loadTimeDev();
 });
 
 document.getElementById('analyticsRefresh').addEventListener('click', async function() {
     this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     this.disabled = true;
     try {
-        await Promise.all([loadAnalytics(), loadCarStats()]);
+        await Promise.all([loadAnalytics(), loadCarStats(), loadTimeDev()]);
     } catch (e) {
         showToast('Fehler beim Aktualisieren', 'danger');
     }
@@ -418,9 +558,10 @@ document.getElementById('analyticsRefresh').addEventListener('click', async func
 socket.on('new_data', () => {
     loadAnalytics();
     loadCarStats();
+    loadTimeDev();
 });
 
 // Fallback
-setInterval(() => { loadAnalytics(); loadCarStats(); }, 30000);
+setInterval(() => { loadAnalytics(); loadCarStats(); loadTimeDev(); }, 30000);
 </script>
 {% endblock %}
