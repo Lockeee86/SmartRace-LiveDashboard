@@ -288,8 +288,8 @@ async function loadTrackRecords() {
             </tr>`;
         }
 
-        html += records.map((r, i) => `<tr${i === 0 ? ' class="table-success"' : ''}>
-                <td class="font-mono fw-bold">${r.laptime_formatted}</td>
+        html += records.map((r, i) => `<tr${i === 0 ? ' style="border-left:3px solid #2ecc71; background:rgba(46,204,113,0.10);"' : ''}>
+                <td class="font-mono fw-bold"${i === 0 ? ' style="color:#2ecc71"' : ''}>${r.laptime_formatted}</td>
                 <td>${r.driver_name || '--'}</td>
                 <td class="text-muted">${r.car_name || '--'}</td>
                 <td class="font-mono small">${formatSector(r.sector_1)}</td>
