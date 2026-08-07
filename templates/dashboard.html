@@ -129,6 +129,12 @@
                 </li>
                 <li>
                     <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="penalties" checked>
+                        <i class="fas fa-triangle-exclamation text-danger"></i> Strafen
+                    </label>
+                </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
                         <input type="checkbox" class="form-check-input m-0 widget-vis-cb" value="ticker" checked>
                         <i class="fas fa-broadcast-tower text-info"></i> Live-Ticker
                     </label>
@@ -217,6 +223,16 @@
                 <div class="stat-label mb-1"><i class="fas fa-stopwatch me-1"></i> Letzte Runden</div>
                 <div id="dashRecentLaps" class="recent-laps-container">
                     <span class="text-muted small">Warte auf Rundendaten...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3 widget-col" data-widget="penalties" draggable="true">
+        <div class="card stat-card stat-card-penalties h-100">
+            <div class="card-body py-2 px-3">
+                <div class="stat-label mb-1"><i class="fas fa-triangle-exclamation me-1"></i> Strafen</div>
+                <div id="dashPenalties" class="penalty-feed">
+                    <span class="text-muted small">Keine Strafen</span>
                 </div>
             </div>
         </div>
@@ -570,6 +586,7 @@ async function updateDashboard() {
         updateDashHeatmap();
         updateRecentLaps();
         updateStandings();
+        updateDashPenalties();
     } catch (e) {
         console.error('Dashboard-Update fehlgeschlagen:', e);
     }
@@ -1048,6 +1065,7 @@ socket.on('penalty', (data) => {
     const secs = data.penalty_seconds || 0;
     const detail = secs > 0 ? `${secs}s` : 'abgesessen';
     addTickerEvent({ type: 'penalty', driver_name: name, penalty_seconds: secs, penalty_type: detail });
+    updateDashPenalties();
 });
 
 socket.on('vsc', (data) => {
@@ -1227,6 +1245,18 @@ function applyWidgetSize(col, key) {
                 });
                 grp.appendChild(btn);
             });
+            // Vollbild-Button (einzelnes Widget gross auf den Screen)
+            const fsBtn = document.createElement('button');
+            fsBtn.type = 'button';
+            fsBtn.className = 'widget-size-btn widget-fs-btn';
+            fsBtn.innerHTML = '<i class="fas fa-expand"></i>';
+            fsBtn.title = 'Vollbild (Esc zum Schliessen)';
+            fsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (document.fullscreenElement === col) document.exitFullscreen?.();
+                else col.requestFullscreen?.();
+            });
+            grp.appendChild(fsBtn);
             card.appendChild(grp);
             addWidgetZoomControls(grp, card, wid, 'sr-widget-zoom-map');
         }
@@ -1238,6 +1268,14 @@ function applyWidgetSize(col, key) {
         applyWidgetSize(col, key);
     });
 })();
+
+// Vollbild-Icon je Widget umschalten (expand <-> compress)
+document.addEventListener('fullscreenchange', () => {
+    document.querySelectorAll('#widgetRow .widget-col .widget-fs-btn i').forEach(icon => {
+        const col = icon.closest('.widget-col');
+        icon.className = (document.fullscreenElement === col) ? 'fas fa-compress' : 'fas fa-expand';
+    });
+});
 
 // ---- Sektorenanalyse Widget ---- (parseSectorMs aus shared-widgets.js)
 function updateDashSectors() {
@@ -1323,6 +1361,16 @@ function updateRecentLaps() {
         includeController: (cid) => visibleControllers.has(cid),
         limit: 8,
     });
+}
+
+// ---- Strafen-Feed ---- (Render via shared-widgets.js)
+async function updateDashPenalties() {
+    try {
+        const res = await fetch('/api/penalties');
+        if (!res.ok) return;
+        const pens = await res.json();
+        renderPenaltyFeed({ containerId: 'dashPenalties', penalties: pens, limit: 12 });
+    } catch (e) {}
 }
 
 // ---- Positionen ---- (Render via shared-widgets.js)

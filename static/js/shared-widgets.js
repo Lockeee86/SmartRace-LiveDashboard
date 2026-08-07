@@ -148,6 +148,7 @@ function renderStandings(opts) {
     });
 
     const leader = drivers.find(d => !d.retired && !d.disqualified) || drivers[0];
+    const globalBest = Math.min(...drivers.map(d => d.best).filter(t => t)) || 0;
 
     let html = '<div class="st-list">';
     drivers.forEach((d, i) => {
@@ -166,7 +167,7 @@ function renderStandings(opts) {
             <span class="controller-badge st-cbadge" style="background:${d.color}">C${d.cid}</span>
             <span class="st-name" style="color:${d.color}">${d.name}</span>
             <span class="st-laps">${d.laps}</span>
-            <span class="st-best font-mono">${d.best ? formatTime(d.best) : '--'}</span>
+            <span class="st-best font-mono ${d.best && d.best === globalBest ? 'sr-fl' : ''}">${d.best ? formatTime(d.best) : '--'}</span>
             <span class="st-gap font-mono">${gap}</span>
         </div>`;
     });
@@ -204,7 +205,7 @@ function renderRecentLaps(opts) {
                 name, color,
                 lap: l.lap, tf: l.laptime_formatted || formatTime(l.laptime_raw),
                 s1: l.sector_1, s2: l.sector_2, s3: l.sector_3,
-                ts: Date.parse(l.timestamp) || 0, seq: seq++, pb: l.is_pb,
+                ts: Date.parse(l.timestamp) || 0, seq: seq++, pb: l.is_pb, raw: l.laptime_raw,
             });
         });
     });
@@ -219,6 +220,10 @@ function renderRecentLaps(opts) {
     const current = all[0];
     const rest = all.slice(1, limit);
 
+    // Farbcodierung: lila = schnellste Runde der Session, gruen = persoenliche Bestzeit
+    const fastestMs = all.length ? Math.min(...all.map(x => x.raw || Infinity)) : 0;
+    const tcls = x => (x.raw && x.raw === fastestMs) ? 'sr-fl' : (x.pb ? 'sr-pb' : '');
+
     const chip = (label, val, i) =>
         `<span class="rl-sector" style="--sc:${SC[i]}"><b>${label}</b> ${val || '--'}</span>`;
 
@@ -227,8 +232,8 @@ function renderRecentLaps(opts) {
             <span class="rl-dot" style="background:${current.color}"></span>
             <span class="rl-name" style="color:${current.color}">${current.name}</span>
             <span class="rl-lapnum">Rd ${current.lap || '-'}</span>
-            <span class="rl-time font-mono">${current.tf}</span>
-            ${current.pb ? '<i class="fas fa-trophy text-warning ms-1"></i>' : ''}
+            <span class="rl-time font-mono ${tcls(current)}">${current.tf}</span>
+            ${tcls(current) === 'sr-fl' ? '<i class="fas fa-bolt sr-fl ms-1"></i>' : (current.pb ? '<i class="fas fa-trophy sr-pb ms-1"></i>' : '')}
         </div>
         <div class="rl-sectors">${chip('S1', formatSector(current.s1), 0)}${chip('S2', formatSector(current.s2), 1)}${chip('S3', formatSector(current.s3), 2)}</div>
     </div>`;
@@ -240,7 +245,7 @@ function renderRecentLaps(opts) {
                 <span class="rl-dot" style="background:${l.color}"></span>
                 <span class="rl-name-sm" style="color:${l.color}">${l.name}</span>
                 <span class="rl-lapnum-sm">Rd ${l.lap || '-'}</span>
-                <span class="rl-time-sm font-mono">${l.tf}</span>
+                <span class="rl-time-sm font-mono ${tcls(l)}">${l.tf}</span>
                 <span class="rl-sectors-sm font-mono">${formatSector(l.s1)} · ${formatSector(l.s2)} · ${formatSector(l.s3)}</span>
             </div>`;
         });
@@ -352,4 +357,51 @@ function renderLapHeatmap(opts) {
     </div>`;
 
     container.innerHTML = legendHtml + html;
+}
+
+// =============================================================================
+// Strafen-Feed (Penalties): kompakte Liste der letzten Strafen
+// =============================================================================
+function srRelTime(iso) {
+    if (!iso) return '';
+    const t = Date.parse(iso);
+    if (isNaN(t)) return '';
+    const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+    if (s < 60) return 'vor ' + s + 's';
+    const m = Math.floor(s / 60);
+    if (m < 60) return 'vor ' + m + ' min';
+    const h = Math.floor(m / 60);
+    if (h < 24) return 'vor ' + h + ' h';
+    return 'vor ' + Math.floor(h / 24) + ' d';
+}
+
+/**
+ * Strafen-Feed rendern.
+ * @param {Object} opts
+ * @param {string} opts.containerId
+ * @param {Array}  opts.penalties  Liste aus /api/penalties (neueste zuerst)
+ * @param {number} [opts.limit]    max. Zeilen (Default 12)
+ */
+function renderPenaltyFeed(opts) {
+    const c = document.getElementById(opts.containerId);
+    if (!c) return;
+    const list = (opts.penalties || []).slice(0, opts.limit || 12);
+    if (!list.length) {
+        c.innerHTML = '<span class="text-muted small">Keine Strafen</span>';
+        return;
+    }
+    c.innerHTML = '<div class="pen-list">' + list.map(p => {
+        const cid = p.controller_id;
+        const color = getControllerColor(cid);
+        const secs = p.penalty_seconds || 0;
+        const badge = secs > 0
+            ? `<span class="pen-secs">+${secs}s</span>`
+            : `<span class="pen-served">abgesessen</span>`;
+        return `<div class="pen-row">
+            <span class="controller-badge pen-badge" style="background:${color}">C${cid}</span>
+            <span class="pen-name" style="color:${color}">${p.driver_name || ('Fahrer ' + cid)}</span>
+            ${badge}
+            <span class="pen-when">${srRelTime(p.timestamp)}</span>
+        </div>`;
+    }).join('') + '</div>';
 }
