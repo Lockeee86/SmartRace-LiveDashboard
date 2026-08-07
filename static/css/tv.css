@@ -94,23 +94,60 @@ body.tv-mode {
 }
 
 /* Main viewport */
-.tv-viewport {
+/* Feste Ansicht: links Zeiten, rechts Strecke */
+.tv-main {
     flex-grow: 1;
-    position: relative;
+    display: flex;
+    gap: 1.25rem;
+    padding: 1.25rem 1.75rem;
+    min-height: 0;
     overflow: hidden;
 }
 
-.tv-view {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    transition: opacity 0.6s ease;
-    padding: 1.5rem 2rem;
-    overflow: hidden;
+.tv-timing {
+    flex: 1 1 66%;
+    min-width: 0;
+    overflow: auto;
 }
 
-.tv-view.active {
-    opacity: 1;
+.tv-track {
+    flex: 0 0 32%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 1rem;
+}
+
+/* Track-Karte fuellt den oberen Bereich, Info-Zeile sitzt unten */
+.tv-track .tv-track-container { flex: 1 1 auto; min-height: 0; }
+
+.tv-track-info {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    padding-top: 0.75rem;
+}
+.tv-ti { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.tv-ti-label {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #8b8fa3; font-weight: 600;
+}
+.tv-ti-val {
+    font-family: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+    font-size: 1.5rem; font-weight: 700; line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+.tv-ti:first-child .tv-ti-val { color: #f5c451; }   /* Streckenrekord */
+.tv-ti:last-child .tv-ti-val { color: #c084fc; }    /* schnellste Runde */
+.tv-ti-sub {
+    font-size: 0.85rem; color: #b6bac6;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 /* Leaderboard View */
@@ -309,50 +346,11 @@ body.tv-mode {
     .tv-stat-value { font-size: 2rem; }
 }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
     .tv-leaderboard { font-size: 1rem; }
     .tv-header { padding: 0 1rem; height: 44px; }
     .tv-brand { font-size: 1rem; }
-    .tv-view { padding: 1rem; }
-}
-
-/* ===== Grid-Modus (alle Views gleichzeitig, frei anordbar) ===== */
-.tv-grid-btn {
-    background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: #fff;
-    border-radius: 6px;
-    padding: 2px 9px;
-    margin-left: 0.5rem;
-    cursor: pointer;
-    font-size: 0.9rem;
-    line-height: 1;
-}
-.tv-grid-btn:hover { border-color: rgba(255, 255, 255, 0.6); }
-.tv-grid-btn.active { background: #3498db; border-color: #3498db; }
-
-/* Rotationsmodus: GridStack-Content-Positionierung neutralisieren */
-.tv-viewport:not(.grid-stack) .grid-stack-item-content {
-    position: static;
-    height: 100%;
-    overflow: visible;
-}
-
-/* Grid-Modus: alle Views sichtbar, GridStack positioniert die Kacheln */
-.tv-viewport.grid-stack { overflow: visible; }
-.tv-viewport.tv-grid-mode .tv-view {
-    opacity: 1 !important;
-    transition: none !important;
-    padding: 0;
-}
-.tv-viewport.tv-grid-mode .grid-stack-item-content {
-    overflow: auto;
-    padding: 0.75rem 1rem;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 8px;
-}
-.tv-viewport.tv-grid-mode.grid-editing .grid-stack-item-content {
-    outline: 2px dashed #3498db;
-    cursor: move;
+    /* Auf schmalen Screens untereinander statt nebeneinander */
+    .tv-main { flex-direction: column; padding: 1rem; }
+    .tv-track { flex: 0 0 auto; min-height: 220px; }
 }
