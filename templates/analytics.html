@@ -291,9 +291,11 @@ function renderTimeDev() {
             borderColor: color,
             backgroundColor: color + '20',
             pointBackgroundColor: color,
-            showLine: !laps,            // Runden-Modus: nur Punkte (Streuung)
-            spanGaps: true, fill: false, tension: 0.3,
-            pointRadius: laps ? 2 : 3, pointHoverRadius: 6, borderWidth: 2,
+            showLine: true,             // in allen Modi verbinden (Verlauf sichtbar)
+            spanGaps: true, fill: false,
+            tension: laps ? 0 : 0.3,    // Runden: gerade Segmente (echte Zeiten)
+            pointRadius: laps ? 1.5 : 3, pointHoverRadius: 6,
+            borderWidth: laps ? 1.5 : 2,
         };
     });
     timeDevChart = new Chart(ctx, {
