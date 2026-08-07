@@ -750,61 +750,61 @@ def api_car_stats():
 
 @api_bp.route('/api/lap-progression')
 def api_lap_progression():
-    """Zeitentwicklung: beste (und mittlere) Rundenzeit je Fahrer je Tag.
+    """Zeitentwicklung fuer den Verlaufs-Chart.
 
-    Fuer den Verlaufs-Chart (X = Datum, Y = Zeit). Optional ?track=Name und
-    ?drivers=A,B (CSV; ohne Angabe alle Fahrer). Ausreisser werden ausgefiltert.
+    Parameter: ?track=Name  ?drivers=A,B (CSV)  ?mode=best|avg|laps
+      - best/avg: je Fahrer je TAG die beste bzw. mittlere Zeit (x = Datum)
+      - laps:     jede einzelne Runde (x = ISO-Zeitstempel), max. 5000
+    Rueckgabe: {all_drivers, series: {fahrer: [[x, laptime_ms], ...]}}, wobei x
+    ein String ist (Datum 'YYYY-MM-DD' bzw. ISO-Zeitstempel). Ausreisser raus.
     """
     try:
         track = (request.args.get('track') or '').strip()
+        mode = (request.args.get('mode') or 'best').strip()
         drivers_arg = (request.args.get('drivers') or '').strip()
         wanted = [d for d in drivers_arg.split(',') if d] if drivers_arg else None
 
-        base = db.session.query(
-            Lap.driver_name,
-            func.date(Lap.created_at).label('d'),
-            func.min(Lap.laptime_ms).label('best'),
-            func.avg(Lap.laptime_ms).label('avg'),
-        ).filter(
-            Lap.laptime_ms > 0,
-            Lap.driver_name.isnot(None),
-            Lap.driver_name != '',
-            Lap.is_outlier.isnot(True),
-        )
+        common = [Lap.laptime_ms > 0, Lap.driver_name.isnot(None),
+                  Lap.driver_name != '', Lap.is_outlier.isnot(True)]
+
+        # Fahrerliste fuers Dropdown (track-gefiltert, ohne drivers-Filter)
+        dq = db.session.query(Lap.driver_name).filter(*common)
         if track:
-            base = base.filter(Lap.track_name == track)
+            dq = dq.filter(Lap.track_name == track)
+        all_drivers = sorted({r[0] for r in dq.distinct().all() if r[0]})
 
-        # Fahrerliste fuers Dropdown (track-gefiltert, aber ohne drivers-Filter)
-        all_drivers = sorted(
-            {r[0] for r in base.with_entities(Lap.driver_name).distinct().all() if r[0]})
-
-        q = base
-        if wanted:
-            q = q.filter(Lap.driver_name.in_(wanted))
-        rows = q.group_by(Lap.driver_name, func.date(Lap.created_at)).all()
-
-        by_driver = {}
-        date_set = set()
-        for r in rows:
-            dt = str(r.d)   # 'YYYY-MM-DD' in SQLite und PostgreSQL
-            date_set.add(dt)
-            by_driver.setdefault(r.driver_name, {})[dt] = {
-                'best': r.best,
-                'avg': round(r.avg) if r.avg else None,
-            }
-
-        dates = sorted(date_set)
         series = {}
-        for drv, m in by_driver.items():
-            series[drv] = {
-                'best': [m.get(dt, {}).get('best') for dt in dates],
-                'avg': [m.get(dt, {}).get('avg') for dt in dates],
-            }
+        if mode == 'laps':
+            q = db.session.query(
+                Lap.driver_name, Lap.created_at, Lap.laptime_ms,
+            ).filter(*common)
+            if track:
+                q = q.filter(Lap.track_name == track)
+            if wanted:
+                q = q.filter(Lap.driver_name.in_(wanted))
+            for r in q.order_by(Lap.created_at.asc()).limit(5000).all():
+                if r.created_at:
+                    series.setdefault(r.driver_name, []).append(
+                        [r.created_at.isoformat(), r.laptime_ms])
+        else:
+            agg = func.avg(Lap.laptime_ms) if mode == 'avg' else func.min(Lap.laptime_ms)
+            q = db.session.query(
+                Lap.driver_name, func.date(Lap.created_at).label('d'), agg.label('v'),
+            ).filter(*common)
+            if track:
+                q = q.filter(Lap.track_name == track)
+            if wanted:
+                q = q.filter(Lap.driver_name.in_(wanted))
+            for r in q.group_by(Lap.driver_name, func.date(Lap.created_at)).all():
+                series.setdefault(r.driver_name, []).append(
+                    [str(r.d), round(r.v) if r.v else None])
+            for drv in series:
+                series[drv].sort(key=lambda p: p[0])
 
-        return jsonify({'dates': dates, 'series': series, 'all_drivers': all_drivers})
+        return jsonify({'all_drivers': all_drivers, 'series': series})
     except Exception as e:
         log.error(f"lap-progression: {e}")
-        return jsonify({'dates': [], 'series': {}, 'all_drivers': []})
+        return jsonify({'all_drivers': [], 'series': {}})
 
 
 @api_bp.route('/api/filters')
