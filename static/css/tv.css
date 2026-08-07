@@ -114,10 +114,40 @@ body.tv-mode {
     flex: 0 0 32%;
     min-width: 0;
     display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 14px;
     padding: 1rem;
+}
+
+/* Track-Karte fuellt den oberen Bereich, Info-Zeile sitzt unten */
+.tv-track .tv-track-container { flex: 1 1 auto; min-height: 0; }
+
+.tv-track-info {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    padding-top: 0.75rem;
+}
+.tv-ti { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.tv-ti-label {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #8b8fa3; font-weight: 600;
+}
+.tv-ti-val {
+    font-family: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+    font-size: 1.5rem; font-weight: 700; line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+.tv-ti:first-child .tv-ti-val { color: #f5c451; }   /* Streckenrekord */
+.tv-ti:last-child .tv-ti-val { color: #c084fc; }    /* schnellste Runde */
+.tv-ti-sub {
+    font-size: 0.85rem; color: #b6bac6;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 /* Leaderboard View */

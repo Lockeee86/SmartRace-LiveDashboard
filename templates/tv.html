@@ -50,6 +50,18 @@
             <div class="tv-track-container" id="tvTrackContainer">
                 <span class="text-muted" style="font-size:1.5rem;">Kein Streckenlayout verfuegbar</span>
             </div>
+            <div class="tv-track-info">
+                <div class="tv-ti">
+                    <span class="tv-ti-label"><i class="fas fa-trophy me-1"></i>Streckenrekord</span>
+                    <span class="tv-ti-val" id="tvRecordTime">--</span>
+                    <span class="tv-ti-sub" id="tvRecordDriver">--</span>
+                </div>
+                <div class="tv-ti">
+                    <span class="tv-ti-label"><i class="fas fa-bolt me-1"></i>Schnellste Runde</span>
+                    <span class="tv-ti-val" id="tvFastestTime">--</span>
+                    <span class="tv-ti-sub" id="tvFastestDriver">--</span>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -92,6 +104,18 @@ async function fetchData() {
         if (!res.ok) return;
         tvData = await res.json();
         renderLeaderboard();
+    } catch (e) {}
+}
+
+async function fetchTrackRecord() {
+    try {
+        const res = await fetch('/api/track-record');
+        if (!res.ok) return;
+        const rec = await res.json();
+        if (rec && rec.laptime_ms) {
+            document.getElementById('tvRecordTime').textContent = rec.laptime_formatted || formatTime(rec.laptime_ms);
+            document.getElementById('tvRecordDriver').textContent = rec.driver_name || '--';
+        }
     } catch (e) {}
 }
 
@@ -184,6 +208,10 @@ function renderLeaderboard() {
             <td class="tv-gap">${gap}</td>
         </tr>`;
     }).join('');
+
+    // Schnellste Runde unter der Strecke aktualisieren
+    document.getElementById('tvFastestTime').textContent = fastest ? formatTime(fastest.time) : '--';
+    document.getElementById('tvFastestDriver').textContent = fastest ? fastest.driver : '--';
 }
 
 // ---- Status ----
@@ -285,6 +313,13 @@ socket.on('vsc', (data) => {
     document.getElementById('tvVscBanner').classList.toggle('d-none', !data.active);
 });
 
+socket.on('track_record', (data) => {
+    if (data && data.laptime_ms) {
+        document.getElementById('tvRecordTime').textContent = data.laptime_formatted || formatTime(data.laptime_ms);
+        document.getElementById('tvRecordDriver').textContent = data.driver_name || '--';
+    }
+});
+
 socket.on('active_track', () => fetchTrackLayout());
 
 // ---- Initial Load ----
@@ -294,6 +329,7 @@ fetch('/api/race-status').then(r => r.ok ? r.json() : null).then(data => {
 
 fetchData();
 fetchTrackLayout();
+fetchTrackRecord();
 setInterval(fetchData, 15000);
 
 // Auto-fullscreen beim ersten Klick
