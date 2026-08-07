@@ -76,9 +76,11 @@
         <div class="d-flex align-items-center gap-2 flex-wrap">
             <div class="btn-group btn-group-sm" role="group" aria-label="Metrik">
                 <input type="radio" class="btn-check" name="tdMetric" id="tdMetricBest" value="best" checked>
-                <label class="btn btn-outline-secondary" for="tdMetricBest">Beste</label>
+                <label class="btn btn-outline-secondary" for="tdMetricBest" title="Beste Zeit pro Tag">Beste</label>
                 <input type="radio" class="btn-check" name="tdMetric" id="tdMetricAvg" value="avg">
-                <label class="btn btn-outline-secondary" for="tdMetricAvg">&Oslash;</label>
+                <label class="btn btn-outline-secondary" for="tdMetricAvg" title="Durchschnitt pro Tag">&Oslash;</label>
+                <input type="radio" class="btn-check" name="tdMetric" id="tdMetricLaps" value="laps">
+                <label class="btn btn-outline-secondary" for="tdMetricLaps" title="Jede einzelne Runde">Runden</label>
             </div>
             <div class="dropdown">
                 <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
@@ -199,14 +201,28 @@ async function loadTrackFilter() {
 }
 
 // ---- Zeitentwicklung (Rundenzeit ueber Datum, Mehrfach-Fahrerauswahl) ----
+// Modi: best/avg = beste/mittlere Zeit pro Tag; laps = jede einzelne Runde.
 let timeDevChart = null;
-let tdData = { dates: [], series: {}, all_drivers: [] };
+let tdData = { series: {}, all_drivers: [] };
 let tdSelected = new Set();
+
+function tdMetric() {
+    return (document.querySelector('input[name="tdMetric"]:checked') || {}).value || 'best';
+}
 
 async function loadTimeDev() {
     try {
-        const t = currentTrack();
-        const res = await fetch('/api/lap-progression' + (t ? '?track=' + encodeURIComponent(t) : ''));
+        const mode = tdMetric();
+        const p = new URLSearchParams();
+        if (currentTrack()) p.set('track', currentTrack());
+        p.set('mode', mode);
+        // Im Runden-Modus nur die gewaehlten Fahrer laden (Datenmenge), sonst alle
+        // (dann kann per Checkbox ohne Neuladen gefiltert werden).
+        if (mode === 'laps') {
+            if (tdSelected.size === 0) { tdData.series = {}; buildDriverMenu(); renderTimeDev(); return; }
+            p.set('drivers', [...tdSelected].join(','));
+        }
+        const res = await fetch('/api/lap-progression?' + p.toString());
         if (!res.ok) return;
         tdData = await res.json();
         // Auswahl auf vorhandene Fahrer beschraenken; beim ersten Mal Default (max 3)
@@ -243,55 +259,67 @@ function buildDriverMenu() {
             const drv = tdData.all_drivers[parseInt(this.dataset.idx)];
             if (this.checked) tdSelected.add(drv); else tdSelected.delete(drv);
             updateDriverLabel();
-            renderTimeDev();
+            // best/avg sind fuer alle Fahrer geladen -> nur neu zeichnen;
+            // im Runden-Modus die Auswahl frisch nachladen.
+            if (tdMetric() === 'laps') loadTimeDev(); else renderTimeDev();
         });
     });
     updateDriverLabel();
 }
 
+function tdFmtDate(ms, withTime) {
+    const d = new Date(ms);
+    const s = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    return withTime ? s + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : s;
+}
+
 function renderTimeDev() {
     const ctx = document.getElementById('timeDevChart').getContext('2d');
     if (timeDevChart) timeDevChart.destroy();
-    const metric = (document.querySelector('input[name="tdMetric"]:checked') || {}).value || 'best';
+    const laps = tdMetric() === 'laps';
     const sel = tdData.all_drivers.filter(d => tdSelected.has(d)); // stabile Reihenfolge + Farbe
     const datasets = sel.map(drv => {
         const ci = tdData.all_drivers.indexOf(drv);
         const color = CHART_COLORS[(ci >= 0 ? ci : 0) % CHART_COLORS.length];
-        const arr = (tdData.series[drv] && tdData.series[drv][metric]) || [];
+        // series[drv] = [[xString, laptime_ms], ...]  (x = Datum oder ISO-Zeitstempel)
+        const pts = (tdData.series[drv] || [])
+            .filter(p => p[1] != null)
+            .map(p => ({ x: Date.parse(p[0]), y: p[1] / 1000 }));
         return {
             label: drv,
-            data: arr.map(ms => (ms == null ? null : ms / 1000)),
+            data: pts,
             borderColor: color,
             backgroundColor: color + '20',
             pointBackgroundColor: color,
+            showLine: !laps,            // Runden-Modus: nur Punkte (Streuung)
             spanGaps: true, fill: false, tension: 0.3,
-            pointRadius: 3, pointHoverRadius: 6, borderWidth: 2,
+            pointRadius: laps ? 2 : 3, pointHoverRadius: 6, borderWidth: 2,
         };
     });
     timeDevChart = new Chart(ctx, {
         type: 'line',
-        data: { labels: tdData.dates, datasets },
+        data: { datasets },
         options: {
             responsive: true, maintainAspectRatio: false,
+            parsing: false,
             plugins: {
                 legend: { labels: { color: '#8b8fa3' } },
                 tooltip: {
                     callbacks: {
-                        title: items => items.length ? tdData.dates[items[0].dataIndex] : '',
+                        title: items => items.length ? tdFmtDate(items[0].parsed.x, laps) : '',
                         label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y != null ? ctx.parsed.y.toFixed(3) + 's' : '--'),
                     }
                 }
             },
             scales: {
                 x: {
+                    type: 'linear',
                     title: { display: true, text: 'Datum', color: '#8b8fa3' },
                     grid: { color: 'rgba(255,255,255,0.05)' },
                     ticks: {
                         color: '#8b8fa3',
-                        callback: (v, i) => {
-                            const d = tdData.dates[i];
-                            return d ? d.slice(8, 10) + '.' + d.slice(5, 7) + '.' : '';
-                        },
+                        maxRotation: 0, autoSkipPadding: 20,
+                        callback: v => tdFmtDate(v, false),
                     },
                 },
                 y: {
@@ -301,7 +329,7 @@ function renderTimeDev() {
                     beginAtZero: false,
                 }
             },
-            interaction: { intersect: false, mode: 'index' }
+            interaction: { intersect: false, mode: laps ? 'nearest' : 'index' }
         }
     });
 }
@@ -527,7 +555,7 @@ function renderStatsTable(data) {
 document.addEventListener('DOMContentLoaded', async () => {
     await Promise.all([loadSessions(), loadTrackFilter()]);
     document.querySelectorAll('input[name="tdMetric"]').forEach(r =>
-        r.addEventListener('change', renderTimeDev));
+        r.addEventListener('change', loadTimeDev));
     await Promise.all([loadAnalytics(), loadCarStats(), loadTimeDev()]);
 });
 
