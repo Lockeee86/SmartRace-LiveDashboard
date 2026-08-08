@@ -1913,3 +1913,20 @@ footer {
 }
 .widget-col:fullscreen .card { width: 100%; height: 100%; margin: 0; }
 .widget-col:fullscreen .card-body { height: 100%; overflow: auto; zoom: 1.5 !important; }
+
+/* ===== Kombinierte "Session-Uebersicht" (Schnellste Runde + Streckenrekord + Stats) ===== */
+.stat-card-sessioninfo .si-tiles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem 1rem;
+}
+.stat-card-sessioninfo .si-tile { min-width: 0; }
+.stat-card-sessioninfo .stat-value { font-size: 1.5rem; }
+.stat-card-sessioninfo .si-stats {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-top: 0.7rem;
+    padding-top: 0.6rem;
+}
+@media (max-width: 380px) {
+    .stat-card-sessioninfo .si-tiles { grid-template-columns: 1fr; }
+}
