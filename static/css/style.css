@@ -1877,3 +1877,39 @@ footer {
 #raceCountdownTime.text-danger {
     animation: pulse 1s infinite;
 }
+
+/* ===== Farbcodierung Rundenzeiten (lila=Session-Bestzeit, gruen=persoenliche Best) ===== */
+.sr-fl { color: #c084fc !important; }
+.sr-pb { color: #2ecc71 !important; }
+
+/* ===== Strafen-Feed Widget ===== */
+.penalty-feed { max-height: 280px; overflow: auto; }
+.pen-list { display: flex; flex-direction: column; gap: 4px; }
+.pen-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.pen-row:last-child { border-bottom: 0; }
+.pen-badge {
+    font-size: 0.68rem; font-weight: 700; color: #0c0e13;
+    padding: 1px 5px; border-radius: 5px; line-height: 1.3;
+}
+.pen-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pen-secs { color: #e74c3c; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pen-served { color: #8b8fa3; font-size: 0.78rem; }
+.pen-when { color: #6b7280; font-size: 0.72rem; white-space: nowrap; }
+
+/* ===== Einzel-Widget-Vollbild ===== */
+.widget-fs-btn i { font-size: 0.72rem; pointer-events: none; }
+.widget-col:fullscreen {
+    background: var(--bs-body-bg, #0f1116);
+    padding: 2.5vh 3vw;
+    display: flex;
+}
+.widget-col:fullscreen .card { width: 100%; height: 100%; margin: 0; }
+.widget-col:fullscreen .card-body { height: 100%; overflow: auto; zoom: 1.5 !important; }
