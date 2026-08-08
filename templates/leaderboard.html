@@ -29,26 +29,14 @@
                 <li class="small text-muted px-2 pb-1">Widgets anzeigen:</li>
                 <li>
                     <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
-                        <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="fastest" checked>
-                        <i class="fas fa-bolt text-info"></i> Schnellste Runde
-                    </label>
-                </li>
-                <li>
-                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
-                        <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="record" checked>
-                        <i class="fas fa-trophy text-success"></i> Streckenrekord
+                        <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="sessioninfo" checked>
+                        <i class="fas fa-circle-info text-info"></i> Session-Uebersicht
                     </label>
                 </li>
                 <li>
                     <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
                         <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="consistency" checked>
                         <i class="fas fa-bullseye text-warning"></i> Konsistenz
-                    </label>
-                </li>
-                <li>
-                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
-                        <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="stats" checked>
-                        <i class="fas fa-chart-bar" style="color: #9b59b6"></i> Session Stats
                     </label>
                 </li>
                 <li>
@@ -101,21 +89,26 @@
 
 <!-- Stat Cards (Drag & Drop) -->
 <div class="row g-3 mb-3" id="lbWidgetRow">
-    <div class="col-md-4 col-lg-3 lb-widget-col" data-widget="fastest" draggable="true">
-        <div class="card stat-card fastest h-100">
+    <div class="col-md-6 col-lg-4 lb-widget-col" data-widget="sessioninfo" draggable="true">
+        <div class="card stat-card stat-card-sessioninfo h-100">
             <div class="card-body py-3">
-                <div class="stat-label mb-1"><i class="fas fa-bolt me-1"></i> Schnellste Runde</div>
-                <div class="stat-value" id="lb-fastestTime">--:--.---</div>
-                <div class="small mt-1" id="lb-fastestDriver">--</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4 col-lg-3 lb-widget-col" data-widget="record" draggable="true">
-        <div class="card stat-card record h-100">
-            <div class="card-body py-3">
-                <div class="stat-label mb-1"><i class="fas fa-trophy me-1"></i> Streckenrekord</div>
-                <div class="stat-value" id="lb-recordTime">--:--.---</div>
-                <div class="small mt-1" id="lb-recordDriver">--</div>
+                <div class="si-tiles">
+                    <div class="si-tile">
+                        <div class="stat-label mb-1"><i class="fas fa-bolt me-1"></i> Schnellste Runde</div>
+                        <div class="stat-value" id="lb-fastestTime">--:--.---</div>
+                        <div class="small mt-1 text-truncate" id="lb-fastestDriver">--</div>
+                    </div>
+                    <div class="si-tile">
+                        <div class="stat-label mb-1"><i class="fas fa-trophy me-1"></i> Streckenrekord</div>
+                        <div class="stat-value" id="lb-recordTime">--:--.---</div>
+                        <div class="small mt-1 text-truncate" id="lb-recordDriver">--</div>
+                    </div>
+                </div>
+                <div class="si-stats row text-center g-2">
+                    <div class="col-4"><div class="fw-bold fs-5" id="lb-totalLaps">0</div><div class="small text-muted">Runden</div></div>
+                    <div class="col-4"><div class="fw-bold fs-5" id="lb-drivers">0</div><div class="small text-muted">Fahrer</div></div>
+                    <div class="col-4"><div class="fw-bold fs-5" id="lb-penalties">0</div><div class="small text-muted">Strafen</div></div>
+                </div>
             </div>
         </div>
     </div>
@@ -125,27 +118,6 @@
                 <div class="stat-label mb-1"><i class="fas fa-bullseye me-1"></i> Konsistenz</div>
                 <div class="stat-value" id="lb-consistencyDriver">--</div>
                 <div class="small mt-1" id="lb-consistencyDetail">Gleichmaessigster Fahrer</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-12 col-lg-3 lb-widget-col" data-widget="stats" draggable="true">
-        <div class="card stat-card stats h-100">
-            <div class="card-body py-3">
-                <div class="stat-label mb-2"><i class="fas fa-chart-bar me-1"></i> Session Stats</div>
-                <div class="row text-center g-2">
-                    <div class="col-4">
-                        <div class="fw-bold fs-5" id="lb-totalLaps">0</div>
-                        <div class="small text-muted">Runden</div>
-                    </div>
-                    <div class="col-4">
-                        <div class="fw-bold fs-5" id="lb-drivers">0</div>
-                        <div class="small text-muted">Fahrer</div>
-                    </div>
-                    <div class="col-4">
-                        <div class="fw-bold fs-5" id="lb-penalties">0</div>
-                        <div class="small text-muted">Strafen</div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
