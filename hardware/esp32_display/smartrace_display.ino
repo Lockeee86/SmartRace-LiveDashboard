@@ -100,6 +100,35 @@ static void fetch_laps();
 static void fetch_recent();
 static void poll_data();
 
+// ---- Streckenansicht (Overlay) ----
+#ifndef SR_TRACK_CARS_DEFAULT
+#define SR_TRACK_CARS_DEFAULT 1     // Live-Autos anfangs an (auf dem Gerät umschaltbar)
+#endif
+#define TRACK_MAX_PTS   260
+#define TRACK_MAX_CARS  6
+#define TRACK_AREA      436         // quadratische Zeichenflaeche (zentriert auf 480)
+#define CAR_R           8           // Radius der Auto-Punkte
+#define TRACK_CARS_POLL_MS 700
+
+static lv_obj_t *trackView = nullptr;      // Vollbild-Overlay
+static lv_obj_t *trackLine = nullptr;
+static lv_obj_t *lblTrackName = nullptr;
+static lv_obj_t *btnTrackCars = nullptr;
+static lv_obj_t *lblTrackCars = nullptr;
+static lv_point_t g_trackPts[TRACK_MAX_PTS];
+static int g_trackPtCount = 0;
+static lv_obj_t *g_carDots[TRACK_MAX_CARS];
+static bool g_trackShown = false;
+static bool g_trackCars = SR_TRACK_CARS_DEFAULT;
+static bool g_trackLoaded = false;
+static uint32_t g_lastTrackCarsPoll = 0;
+
+static void build_track_view(lv_obj_t *parent);
+static void show_track_view(bool on);
+static void fetch_track_path();
+static void fetch_track_cars();
+static void update_track_cars_btn();
+
 // ============================================================================
 // Board-Init: Display (RGB + ST7701) wird DIREKT im Sketch aufgebaut — OHNE die
 // Board-Config-Dateien und OHNE die Board-Klasse von ESP32_Display_Panel. Grund:
@@ -423,10 +452,160 @@ static void build_ui() {
   lv_obj_set_style_text_font(ba, &lv_font_montserrat_20, 0);
   lv_obj_center(ba);
 
+  // Button oben rechts: Streckenansicht oeffnen
+  lv_obj_t *btnTrack = lv_btn_create(scr);
+  lv_obj_set_size(btnTrack, 46, 40);
+  lv_obj_align(btnTrack, LV_ALIGN_TOP_RIGHT, -6, 6);
+  lv_obj_set_style_bg_color(btnTrack, lv_color_hex(0x2b3140), 0);
+  lv_obj_set_style_radius(btnTrack, 8, 0);
+  lv_obj_add_event_cb(btnTrack, [](lv_event_t *e){ show_track_view(true); }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lt = lv_label_create(btnTrack);
+  lv_label_set_text(lt, LV_SYMBOL_GPS);
+  lv_obj_center(lt);
+
+  // Overlay-Streckenansicht (versteckt) aufbauen
+  build_track_view(scr);
+
   // Startzustand: Akzentfarbe + Layout + ausgewaehlten Button setzen
   apply_accent();
   apply_layout();
   style_picker();
+}
+
+// ============================================================================
+// Streckenansicht: Linie aus /api/device/track-path + Live-Autos aus track-cars
+// ============================================================================
+static void build_track_view(lv_obj_t *parent) {
+  trackView = lv_obj_create(parent);
+  lv_obj_set_size(trackView, 480, 480);
+  lv_obj_set_pos(trackView, 0, 0);
+  lv_obj_set_style_bg_color(trackView, lv_color_hex(0x0b0d12), 0);
+  lv_obj_set_style_bg_opa(trackView, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(trackView, 0, 0);
+  lv_obj_set_style_pad_all(trackView, 0, 0);
+  lv_obj_clear_flag(trackView, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(trackView, LV_OBJ_FLAG_HIDDEN);
+
+  lblTrackName = lv_label_create(trackView);
+  lv_label_set_text(lblTrackName, "Strecke");
+  lv_obj_set_style_text_color(lblTrackName, lv_color_hex(0xe8eaf0), 0);
+  lv_obj_set_style_text_font(lblTrackName, &lv_font_montserrat_20, 0);
+  lv_obj_align(lblTrackName, LV_ALIGN_TOP_MID, 0, 10);
+
+  trackLine = lv_line_create(trackView);
+  lv_obj_set_style_line_color(trackLine, lv_color_hex(0xcfd6e6), 0);
+  lv_obj_set_style_line_width(trackLine, 6, 0);
+  lv_obj_set_style_line_rounded(trackLine, true, 0);
+  lv_obj_add_flag(trackLine, LV_OBJ_FLAG_HIDDEN);
+
+  for (int i = 0; i < TRACK_MAX_CARS; i++) {
+    lv_obj_t *d = lv_obj_create(trackView);
+    lv_obj_set_size(d, 2 * CAR_R, 2 * CAR_R);
+    lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(d, lv_color_hex(0xffffff), 0);
+    lv_obj_set_style_border_color(d, lv_color_hex(0xffffff), 0);
+    lv_obj_set_style_border_width(d, 2, 0);
+    lv_obj_clear_flag(d, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(d, LV_OBJ_FLAG_HIDDEN);
+    g_carDots[i] = d;
+  }
+
+  // Zurueck (oben links)
+  lv_obj_t *bBack = lv_btn_create(trackView);
+  lv_obj_set_size(bBack, 64, 44);
+  lv_obj_align(bBack, LV_ALIGN_TOP_LEFT, 6, 6);
+  lv_obj_set_style_radius(bBack, 8, 0);
+  lv_obj_add_event_cb(bBack, [](lv_event_t *e){ show_track_view(false); }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lb = lv_label_create(bBack);
+  lv_label_set_text(lb, LV_SYMBOL_LEFT);
+  lv_obj_center(lb);
+
+  // Autos an/aus (unten)
+  btnTrackCars = lv_btn_create(trackView);
+  lv_obj_set_size(btnTrackCars, 150, 46);
+  lv_obj_align(btnTrackCars, LV_ALIGN_BOTTOM_MID, 0, -10);
+  lv_obj_set_style_radius(btnTrackCars, 8, 0);
+  lv_obj_add_event_cb(btnTrackCars, [](lv_event_t *e){
+    g_trackCars = !g_trackCars;
+    update_track_cars_btn();
+    if (!g_trackCars)
+      for (int i = 0; i < TRACK_MAX_CARS; i++) lv_obj_add_flag(g_carDots[i], LV_OBJ_FLAG_HIDDEN);
+  }, LV_EVENT_CLICKED, NULL);
+  lblTrackCars = lv_label_create(btnTrackCars);
+  lv_obj_center(lblTrackCars);
+  update_track_cars_btn();
+}
+
+static void update_track_cars_btn() {
+  if (!lblTrackCars) return;
+  lv_label_set_text(lblTrackCars, g_trackCars ? "Autos: AN" : "Autos: AUS");
+  lv_obj_set_style_bg_color(btnTrackCars, lv_color_hex(g_trackCars ? 0x2ecc71 : 0x4b5563), 0);
+}
+
+static void show_track_view(bool on) {
+  g_trackShown = on;
+  if (on) {
+    lv_obj_clear_flag(trackView, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(trackView);
+    if (!g_trackLoaded) fetch_track_path();
+  } else {
+    lv_obj_add_flag(trackView, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
+// Streckenlinie einmal laden (Punkte 0..1000 + Aspekt -> Bildschirmkoordinaten)
+static void fetch_track_path() {
+  JsonDocument doc;
+  String url = String(SERVER_BASE) + "/api/device/track-path";
+  if (!http_get_json(url, doc)) return;
+  lv_label_set_text(lblTrackName, doc["name"] | "Strecke");
+
+  float w = doc["w"] | 1.0f, h = doc["h"] | 1.0f;
+  if (w <= 0) w = 1; if (h <= 0) h = 1;
+  float scale = TRACK_AREA / (w > h ? w : h);
+  float offX = (480.0f - w * scale) / 2.0f;
+  float offY = (480.0f - h * scale) / 2.0f + 6;   // etwas Platz fuer den Header
+
+  JsonArray pts = doc["points"].as<JsonArray>();
+  int n = 0;
+  for (JsonArray p : pts) {
+    if (n >= TRACK_MAX_PTS) break;
+    float fx = (float)((int)(p[0] | 0)) / 1000.0f * w;
+    float fy = (float)((int)(p[1] | 0)) / 1000.0f * h;
+    g_trackPts[n].x = (lv_coord_t)(offX + fx * scale);
+    g_trackPts[n].y = (lv_coord_t)(offY + fy * scale);
+    n++;
+  }
+  g_trackPtCount = n;
+  if (n >= 2) {
+    lv_line_set_points(trackLine, g_trackPts, n);
+    lv_obj_clear_flag(trackLine, LV_OBJ_FLAG_HIDDEN);
+    g_trackLoaded = true;
+  }
+}
+
+// Live-Autos: t (0..1000) -> Punkt-Index auf der (laengengleich gesampelten) Linie
+static void fetch_track_cars() {
+  if (g_trackPtCount < 2) return;
+  JsonDocument doc;
+  String url = String(SERVER_BASE) + "/api/device/track-cars";
+  if (!http_get_json(url, doc)) return;
+  JsonArray cars = doc["cars"].as<JsonArray>();
+  int i = 0;
+  for (JsonObject c : cars) {
+    if (i >= TRACK_MAX_CARS) break;
+    int t = c["t"] | 0;
+    uint32_t color = parse_hex_color(c["color"] | "", 0xffffff);
+    int idx = (int)((float)t / 1000.0f * (g_trackPtCount - 1) + 0.5f);
+    if (idx < 0) idx = 0;
+    if (idx >= g_trackPtCount) idx = g_trackPtCount - 1;
+    lv_obj_t *d = g_carDots[i];
+    lv_obj_set_style_bg_color(d, lv_color_hex(color), 0);
+    lv_obj_set_pos(d, g_trackPts[idx].x - CAR_R, g_trackPts[idx].y - CAR_R);
+    lv_obj_clear_flag(d, LV_OBJ_FLAG_HIDDEN);
+    i++;
+  }
+  for (; i < TRACK_MAX_CARS; i++) lv_obj_add_flag(g_carDots[i], LV_OBJ_FLAG_HIDDEN);
 }
 
 // Zeile in der Runden-Liste. driver != NULL -> farbiger Fahrername (Alle-Modus).
@@ -696,6 +875,20 @@ void setup() {
 void loop() {
   // Kein lv_timer_handler() mehr — das erledigt der LVGL-Port in seinem Task.
   uint32_t now = millis();
+
+  // Streckenansicht offen: Auto-Positionen pollen (wenn aktiviert)
+  if (g_trackShown) {
+    if (g_trackLoaded && g_trackCars && now - g_lastTrackCarsPoll >= TRACK_CARS_POLL_MS) {
+      g_lastTrackCarsPoll = now;
+      if (WiFi.status() != WL_CONNECTED) wifi_connect();
+      lvgl_port_lock(-1);
+      fetch_track_cars();
+      lvgl_port_unlock();
+    }
+    delay(5);
+    return;   // Timing-Poll pausiert, solange die Strecke im Vordergrund ist
+  }
+
   if (now - g_lastPoll >= POLL_INTERVAL_MS) {
     g_lastPoll = now;
     if (WiFi.status() != WL_CONNECTED) wifi_connect();
