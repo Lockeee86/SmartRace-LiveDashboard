@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+# Kein apt-get/curl noetig: der Healthcheck laeuft ueber Python (siehe
+# docker-compose.yml) -> Build braucht keine Debian-Paketquellen.
 
 WORKDIR /app
 
