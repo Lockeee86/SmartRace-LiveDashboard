@@ -20,6 +20,7 @@ from .utils import (
     _session_display_name, fmt_ms, reset_active_track_override,
     set_active_track_name,
 )
+from .track_path import parse_sector_seconds, sample_track, t_for_sector
 
 
 def _resolve_active_track():
@@ -618,6 +619,96 @@ def api_device_recent():
     except Exception as e:
         log.error(f"device-recent: {e}")
         return jsonify({'laps': []})
+
+
+@api_bp.route('/api/device/track-path')
+def api_device_track_path():
+    """Streckenlayout als Punkteliste (0..1000, aspect via w/h) fuer das ESP32-Display.
+
+    Der ESP32 kann kein SVG rendern -> wir sampeln den/die Sektorpfad(e) server-
+    seitig in eine gleichmaessige Punkteliste, das Geraet zeichnet daraus eine Linie.
+    """
+    try:
+        track = _resolve_active_track()
+        if not track or not track.svg_layout:
+            return jsonify({'name': track.name if track else None,
+                            'w': 1, 'h': 1, 'points': [], 'sectors': []})
+        s = sample_track(track.svg_layout)
+        if not s or not s['points']:
+            return jsonify({'name': track.name, 'w': 1, 'h': 1, 'points': [], 'sectors': []})
+        _, _, vw, vh = s['vb']
+        pts = [[int(round(x * 1000)), int(round(y * 1000))] for x, y in s['points']]
+        return jsonify({
+            'name': track.name,
+            'w': round(vw, 2), 'h': round(vh, 2),
+            'points': pts,
+            'sectors': s['sector_start_idx'],
+        })
+    except Exception as e:
+        log.error(f"device-track-path: {e}")
+        return jsonify({'name': None, 'w': 1, 'h': 1, 'points': [], 'sectors': []})
+
+
+@api_bp.route('/api/device/track-cars')
+def api_device_track_cars():
+    """Live-Position je Auto als t (0..1000) auf der Gesamtstrecke, fuers ESP32-Display.
+
+    Modell wie in der Web-Ansicht: Durchschnitts-Sektorzeiten + verstrichene Zeit
+    seit der letzten Runde -> Sektor + Fortschritt -> t auf der Strecke.
+    """
+    try:
+        track = _resolve_active_track()
+        if not track or not track.svg_layout:
+            return jsonify({'cars': []})
+        s = sample_track(track.svg_layout)
+        if not s or not s['sector_lengths']:
+            return jsonify({'cars': []})
+
+        latest = db.session.query(Event.session_id).order_by(Event.id.desc()).first()
+        sid = latest.session_id if latest else None
+        q = Lap.query.filter(Lap.is_outlier.isnot(True))
+        if sid:
+            q = q.filter(Lap.session_id == sid)
+
+        ctrls = {}
+        for l in q.all():
+            cid = str(l.controller_id)
+            d = ctrls.setdefault(cid, {'s1': [], 's2': [], 's3': [], 'last': None, 'color': None})
+            a = parse_sector_seconds(l.sector_1)
+            b = parse_sector_seconds(l.sector_2)
+            c = parse_sector_seconds(l.sector_3)
+            if a > 0 and b > 0 and c > 0:
+                d['s1'].append(a); d['s2'].append(b); d['s3'].append(c)
+            if l.created_at and (d['last'] is None or l.created_at > d['last']):
+                d['last'] = l.created_at
+            if not d['color']:
+                d['color'] = l.controller_color or l.car_color
+
+        now = datetime.utcnow()
+        cars = []
+        for cid, d in ctrls.items():
+            if not d['s1'] or not d['last']:
+                continue
+            a1 = sum(d['s1']) / len(d['s1'])
+            a2 = sum(d['s2']) / len(d['s2'])
+            a3 = sum(d['s3']) / len(d['s3'])
+            tot = a1 + a2 + a3
+            if tot <= 0:
+                continue
+            elapsed = max(0.0, (now - d['last']).total_seconds())
+            pos = elapsed % tot
+            if pos < a1:
+                sidx, prog = 0, pos / a1
+            elif pos < a1 + a2:
+                sidx, prog = 1, (pos - a1) / a2
+            else:
+                sidx, prog = 2, (pos - a1 - a2) / a3
+            t = t_for_sector(s, sidx, prog)
+            cars.append({'cid': cid, 'color': d['color'] or '', 't': int(round(t * 1000))})
+        return jsonify({'cars': cars})
+    except Exception as e:
+        log.error(f"device-track-cars: {e}")
+        return jsonify({'cars': []})
 
 
 @api_bp.route('/api/driver-stats')
