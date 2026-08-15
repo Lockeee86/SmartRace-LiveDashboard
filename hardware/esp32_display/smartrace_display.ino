@@ -6,8 +6,10 @@
 //
 // Touch-Navigation:
 //   - Badge/Fahrername oben antippen -> Fahrer-Uebersicht (alle Fahrer).
-//     Zeile antippen waehlt den Controller; Streckenname oeffnet die Rekorde.
+//     Zeile antippen waehlt den Controller; Streckenname oeffnet die Rekorde;
+//     Button unten -> "Letzte Runden" (alle Fahrer gemischt, v5-Ticker).
 //   - GPS-Symbol oben rechts          -> Live-Streckenansicht.
+//   - "Alle"-Button (Picker, ganz rechts) -> ebenfalls "Letzte Runden".
 //
 // Datenquelle: das SmartRace-Dashboard (Flask), Endpunkte:
 //   GET /api/device/laps?controller=N   -> Fahrer, Best/Letzte-Zeit, Position,
@@ -740,13 +742,28 @@ static void build_standings_view(lv_obj_t *parent) {
   lv_obj_add_event_cb(lblStandTitle, [](lv_event_t *e){ show_records(true); }, LV_EVENT_CLICKED, NULL);
 
   standingsList = lv_obj_create(standingsView);
-  lv_obj_set_size(standingsList, 468, 416);
-  lv_obj_align(standingsList, LV_ALIGN_BOTTOM_MID, 0, -6);
+  lv_obj_set_size(standingsList, 468, 360);
+  lv_obj_align(standingsList, LV_ALIGN_TOP_MID, 0, 52);
   lv_obj_set_style_bg_color(standingsList, lv_color_hex(0x0b0d12), 0);
   lv_obj_set_style_border_width(standingsList, 0, 0);
   lv_obj_set_style_pad_all(standingsList, 3, 0);
   lv_obj_set_style_pad_row(standingsList, 5, 0);
   lv_obj_set_flex_flow(standingsList, LV_FLEX_FLOW_COLUMN);
+
+  // Button unten: "Letzte Runden" (alle Fahrer gemischt) — oeffnet den v5-Ticker
+  lv_obj_t *bRecent = lv_btn_create(standingsView);
+  lv_obj_set_size(bRecent, 456, 46);
+  lv_obj_align(bRecent, LV_ALIGN_BOTTOM_MID, 0, -8);
+  lv_obj_set_style_radius(bRecent, 9, 0);
+  lv_obj_set_style_bg_color(bRecent, lv_color_hex(0x2b3140), 0);
+  lv_obj_add_event_cb(bRecent, [](lv_event_t *e){
+    show_standings(false);
+    select_controller(0);   // 0 = "Letzte Runden" (alle Fahrer)
+  }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lr2 = lv_label_create(bRecent);
+  lv_label_set_text(lr2, LV_SYMBOL_LIST "  Letzte Runden");
+  lv_obj_set_style_text_font(lr2, &lv_font_montserrat_18, 0);
+  lv_obj_center(lr2);
 }
 
 // ============================================================================
