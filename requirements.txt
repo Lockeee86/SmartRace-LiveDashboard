@@ -5,3 +5,4 @@ Flask-SocketIO==5.3.6
 psycopg2-binary==2.9.9
 gunicorn==21.2.0
 eventlet==0.35.1
+tzdata==2024.1
