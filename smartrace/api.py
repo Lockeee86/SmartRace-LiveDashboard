@@ -18,7 +18,7 @@ from .models import (
 from .utils import (
     _calc_stddev, _get_active_track_name, _parse_sector_ms,
     _session_display_name, fmt_ms, reset_active_track_override,
-    set_active_track_name,
+    set_active_track_name, to_berlin,
 )
 from .track_path import parse_sector_seconds, sample_track, t_for_sector
 
@@ -188,7 +188,7 @@ def api_live_data():
                 'lap': lap.lap_number or 0,
                 'laptime_raw': lap.laptime_ms or 0,
                 'laptime_formatted': fmt_ms(lap.laptime_ms) or lap.laptime_display or '--',
-                'timestamp': lap.created_at.isoformat() if lap.created_at else None,
+                'timestamp': lap.created_at.isoformat() + 'Z' if lap.created_at else None,
                 'is_pb': lap.is_personal_best,
                 'session_id': lap.session_id,
                 'sector_1': lap.sector_1,
@@ -230,8 +230,8 @@ def api_sessions():
             'display_name': _session_display_name(r.session_id, r.session_type),
             'total_laps': r.total_laps,
             'drivers': r.drivers,
-            'start_time': r.start_time.isoformat() if r.start_time else None,
-            'end_time': r.end_time.isoformat() if r.end_time else None,
+            'start_time': r.start_time.isoformat() + 'Z' if r.start_time else None,
+            'end_time': r.end_time.isoformat() + 'Z' if r.end_time else None,
         } for r in rows])
     except Exception as e:
         log.error(f"sessions: {e}")
@@ -321,7 +321,7 @@ def api_laps():
                 'is_pb': l.is_personal_best,
                 'is_outlier': bool(l.is_outlier),
                 'track_name': l.track_name,
-                'timestamp': l.created_at.isoformat() if l.created_at else None,
+                'timestamp': l.created_at.isoformat() + 'Z' if l.created_at else None,
             } for l in laps],
             'total': total,
             'page': page,
@@ -436,7 +436,7 @@ def api_penalties():
                 'controller_id': p.controller_id,
                 'driver_name': p.driver_name,
                 'penalty_type': p.penalty_type,
-                'timestamp': p.created_at.isoformat() if p.created_at else None,
+                'timestamp': p.created_at.isoformat() + 'Z' if p.created_at else None,
             }
             try:
                 entry['penalty_seconds'] = p.penalty_seconds or 0
@@ -467,7 +467,7 @@ def api_race_status():
                     'session_id': rs.session_id,
                     'status': rs.status,
                     'race_type': rs.race_type,
-                    'updated_at': rs.updated_at.isoformat() if rs.updated_at else None,
+                    'updated_at': rs.updated_at.isoformat() + 'Z' if rs.updated_at else None,
                 })
         return jsonify({'status': 'waiting', 'race_type': '', 'session_id': current_sid or ''})
     except Exception as e:
@@ -778,13 +778,13 @@ def api_device_records():
             Lap.laptime_ms > 1000, Lap.car_name.isnot(None), Lap.car_name != '',
         ).group_by(Lap.car_name).all()
 
-        today = datetime.utcnow().date()
+        today = to_berlin(datetime.utcnow()).date()   # "heute" in deutscher Zeit
         cars = []
         for car_name, best in rows:
             lap = Lap.query.filter_by(
                 track_name=tname, car_name=car_name, laptime_ms=best,
             ).order_by(Lap.created_at.asc()).first()
-            d = lap.created_at if lap else None
+            d = to_berlin(lap.created_at) if lap and lap.created_at else None
             cars.append({
                 'car': car_name,
                 'driver': lap.driver_name if lap else None,
@@ -970,7 +970,7 @@ def api_lap_progression():
             for r in q.order_by(Lap.created_at.asc()).limit(5000).all():
                 if r.created_at:
                     series.setdefault(r.driver_name, []).append(
-                        [r.created_at.isoformat(), r.laptime_ms])
+                        [r.created_at.isoformat() + 'Z', r.laptime_ms])
         else:
             agg = func.avg(Lap.laptime_ms) if mode == 'avg' else func.min(Lap.laptime_ms)
             q = db.session.query(
@@ -1050,7 +1050,7 @@ def api_export_csv():
         for l in laps:
             w.writerow([
                 l.session_id or '', l.session_type or '',
-                l.created_at.strftime('%Y-%m-%d %H:%M:%S') if l.created_at else '',
+                to_berlin(l.created_at).strftime('%Y-%m-%d %H:%M:%S') if l.created_at else '',
                 l.controller_id or '', l.driver_name or '', l.car_name or '',
                 l.lap_number or 0, l.laptime_ms or 0,
                 fmt_ms(l.laptime_ms) or l.laptime_display or '',
@@ -1086,7 +1086,7 @@ def api_track_record():
                 'car_name': rec.car_name,
                 'session_id': rec.session_id,
                 'track_name': rec.track_name,
-                'created_at': rec.created_at.isoformat() if rec.created_at else None,
+                'created_at': rec.created_at.isoformat() + 'Z' if rec.created_at else None,
             })
         return jsonify(None)
     except Exception as e:
@@ -1116,7 +1116,7 @@ def api_track_records():
                 'car_name': r.car_name,
                 'session_id': r.session_id,
                 'track_name': r.track_name,
-                'created_at': r.created_at.isoformat() if r.created_at else None,
+                'created_at': r.created_at.isoformat() + 'Z' if r.created_at else None,
                 'sector_1': lap.sector_1 if lap else None,
                 'sector_2': lap.sector_2 if lap else None,
                 'sector_3': lap.sector_3 if lap else None,
@@ -1269,7 +1269,7 @@ def api_live_feed():
                 Lap.created_at.desc()).limit(limit).all():
             items.append({
                 'type': 'lap',
-                'timestamp': lap.created_at.isoformat() if lap.created_at else None,
+                'timestamp': lap.created_at.isoformat() + 'Z' if lap.created_at else None,
                 'controller_id': lap.controller_id,
                 'driver_name': lap.driver_name,
                 'car_name': lap.car_name,
@@ -1285,7 +1285,7 @@ def api_live_feed():
             for p in Penalty.query.order_by(Penalty.created_at.desc()).limit(10).all():
                 entry = {
                     'type': 'penalty',
-                    'timestamp': p.created_at.isoformat() if p.created_at else None,
+                    'timestamp': p.created_at.isoformat() + 'Z' if p.created_at else None,
                     'controller_id': p.controller_id,
                     'driver_name': p.driver_name,
                     'penalty_type': p.penalty_type,
@@ -1303,7 +1303,7 @@ def api_live_feed():
         for s in RaceStatus.query.order_by(RaceStatus.updated_at.desc()).limit(5).all():
             items.append({
                 'type': 'status',
-                'timestamp': s.updated_at.isoformat() if s.updated_at else None,
+                'timestamp': s.updated_at.isoformat() + 'Z' if s.updated_at else None,
                 'status': s.status,
                 'race_type': s.race_type,
             })
@@ -1315,7 +1315,7 @@ def api_live_feed():
             ).order_by(RaceResult.created_at.desc()).limit(5).all():
                 items.append({
                     'type': 'dnf' if r.retired else 'dq',
-                    'timestamp': r.created_at.isoformat() if r.created_at else None,
+                    'timestamp': r.created_at.isoformat() + 'Z' if r.created_at else None,
                     'controller_id': r.controller_id,
                     'driver_name': r.driver_name,
                 })
@@ -1327,7 +1327,7 @@ def api_live_feed():
         for tr in TrackRecord.query.order_by(TrackRecord.created_at.desc()).limit(5).all():
             items.append({
                 'type': 'record',
-                'timestamp': tr.created_at.isoformat() if tr.created_at else None,
+                'timestamp': tr.created_at.isoformat() + 'Z' if tr.created_at else None,
                 'driver_name': tr.driver_name,
                 'car_name': tr.car_name,
                 'laptime_ms': tr.laptime_ms,
@@ -1648,7 +1648,7 @@ def api_tracks():
                     'laptime_formatted': fmt_ms(r.laptime_ms),
                     'driver_name': r.driver_name,
                     'car_name': r.car_name,
-                    'date': r.created_at.isoformat() if r.created_at else None,
+                    'date': r.created_at.isoformat() + 'Z' if r.created_at else None,
                     'sector_1': lap.sector_1 if lap else None,
                     'sector_2': lap.sector_2 if lap else None,
                     'sector_3': lap.sector_3 if lap else None,
@@ -1659,7 +1659,7 @@ def api_tracks():
                 'laptime_ms': p.laptime_ms,
                 'laptime_formatted': fmt_ms(p.laptime_ms),
                 'car_name': p.car_name,
-                'date': p.updated_at.isoformat() if p.updated_at else None,
+                'date': p.updated_at.isoformat() + 'Z' if p.updated_at else None,
             } for p in track_pbs]
 
             track_data = {
@@ -1671,8 +1671,8 @@ def api_tracks():
                 'is_active': (t.name == active_name),
                 'min_laptime_ms': t.min_laptime_ms,
                 'max_laptime_ms': t.max_laptime_ms,
-                'last_used': t.last_used.isoformat() if t.last_used else None,
-                'created_at': t.created_at.isoformat() if t.created_at else None,
+                'last_used': t.last_used.isoformat() + 'Z' if t.last_used else None,
+                'created_at': t.created_at.isoformat() + 'Z' if t.created_at else None,
                 'records': recs_data,
                 'personal_records': pbs_data,
             }
@@ -1698,7 +1698,7 @@ def api_tracks():
                 'laptime_formatted': fmt_ms(r.laptime_ms),
                 'driver_name': r.driver_name,
                 'car_name': r.car_name,
-                'date': r.created_at.isoformat() if r.created_at else None,
+                'date': r.created_at.isoformat() + 'Z' if r.created_at else None,
                 'sector_1': lap.sector_1 if lap else None,
                 'sector_2': lap.sector_2 if lap else None,
                 'sector_3': lap.sector_3 if lap else None,
@@ -1712,7 +1712,7 @@ def api_tracks():
                 'laptime_ms': p.laptime_ms,
                 'laptime_formatted': fmt_ms(p.laptime_ms),
                 'car_name': p.car_name,
-                'date': p.updated_at.isoformat() if p.updated_at else None,
+                'date': p.updated_at.isoformat() + 'Z' if p.updated_at else None,
             } for p in unassigned_pbs],
         })
     except Exception as e:
@@ -2072,7 +2072,7 @@ def api_cleanup():
         return jsonify({
             'status': 'ok',
             'deleted_events': deleted,
-            'cutoff_date': cutoff.isoformat(),
+            'cutoff_date': cutoff.isoformat() + 'Z',
         })
     except Exception as e:
         db.session.rollback()
@@ -2101,7 +2101,7 @@ def api_debug_events():
                 'id': e.id,
                 'session_id': e.session_id,
                 'event_type': e.event_type,
-                'timestamp': e.created_at.isoformat() if e.created_at else None,
+                'timestamp': e.created_at.isoformat() + 'Z' if e.created_at else None,
                 'event_data': raw.get('event_data', {}),
                 'raw_keys': list(raw.keys()),
             })
@@ -2128,8 +2128,8 @@ def api_db_stats():
         # Aeltester und neuester Eintrag
         oldest = Lap.query.order_by(Lap.created_at.asc()).first()
         newest = Lap.query.order_by(Lap.created_at.desc()).first()
-        stats['oldest_lap'] = oldest.created_at.isoformat() if oldest and oldest.created_at else None
-        stats['newest_lap'] = newest.created_at.isoformat() if newest and newest.created_at else None
+        stats['oldest_lap'] = oldest.created_at.isoformat() + 'Z' if oldest and oldest.created_at else None
+        stats['newest_lap'] = newest.created_at.isoformat() + 'Z' if newest and newest.created_at else None
 
         return jsonify(stats)
     except Exception as e:

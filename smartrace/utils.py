@@ -1,10 +1,37 @@
 """Hilfsfunktionen: Formatierung, Sektor-Parsing, Session-Ermittlung, aktive Strecke."""
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .extensions import db, log
 from .models import Event, Lap, RaceStatus, SessionName, Track
+
+# =============================================================================
+# Zeitzone: In der DB liegen alle Zeitstempel als naive UTC (datetime.utcnow).
+# Fuer serverseitige Anzeige (Session-Namen, Rekord-Datum) nach Europe/Berlin
+# umrechnen. An die Weboberflaeche gehen ISO-Strings mit 'Z' (UTC) -> der
+# Browser rechnet dort selbst in die lokale Zeit um.
+# =============================================================================
+try:
+    from zoneinfo import ZoneInfo
+    _BERLIN = ZoneInfo('Europe/Berlin')
+except Exception:  # pragma: no cover - Fallback ohne tzdata
+    _BERLIN = None
+
+
+def to_berlin(dt):
+    """Naive-UTC (DB) -> Europe/Berlin (aware). None bleibt None."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(_BERLIN) if _BERLIN else dt
+
+
+def fmt_local(dt, fmt):
+    """Naive-UTC -> Berlin -> formatierter String (oder None)."""
+    d = to_berlin(dt)
+    return d.strftime(fmt) if d else None
 
 # =============================================================================
 # Aktive Strecke
@@ -177,7 +204,7 @@ def _session_display_name(session_id, session_type=None):
         first_event = Event.query.filter_by(session_id=session_id).order_by(
             Event.created_at.asc()).first()
         if first_event and first_event.created_at:
-            date_str = first_event.created_at.strftime('%d.%m.%Y %H:%M')
+            date_str = fmt_local(first_event.created_at, '%d.%m.%Y %H:%M')
             return f"{type_label} — {date_str}"
     except Exception:
         pass
