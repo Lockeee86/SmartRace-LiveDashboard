@@ -711,6 +711,100 @@ def api_device_track_cars():
         return jsonify({'cars': []})
 
 
+@api_bp.route('/api/device/standings')
+def api_device_standings():
+    """Alle Controller der aktuellen Session mit Best/Letzte/Position fuers Display.
+
+    Fuer die Fahrer-Uebersicht auf dem ESP32: eine Zeile je aktivem Controller,
+    sortiert nach Position (meiste Runden, dann Bestzeit). Antippen einer Zeile
+    waehlt auf dem Geraet den Controller aus.
+    """
+    try:
+        latest = db.session.query(Event.session_id).order_by(Event.id.desc()).first()
+        sid = latest.session_id if latest else None
+        base = Lap.query.filter(Lap.is_outlier.isnot(True), Lap.laptime_ms > 0)
+        if sid:
+            base = base.filter(Lap.session_id == sid)
+
+        rows = {}
+        # neueste zuerst -> die erste Runde je Controller ist die "letzte"
+        for l in base.order_by(Lap.created_at.desc()).all():
+            cid = str(l.controller_id)
+            r = rows.get(cid)
+            if r is None:
+                r = rows[cid] = {
+                    'controller': cid, 'driver': l.driver_name, 'car': l.car_name,
+                    'color': l.controller_color or l.car_color,
+                    'best_ms': None, 'last_ms': l.laptime_ms, 'maxlap': 0,
+                }
+            if l.laptime_ms and (r['best_ms'] is None or l.laptime_ms < r['best_ms']):
+                r['best_ms'] = l.laptime_ms
+            if l.lap_number and l.lap_number > r['maxlap']:
+                r['maxlap'] = l.lap_number
+
+        order = sorted(rows.values(),
+                       key=lambda r: (-(r['maxlap'] or 0), r['best_ms'] or 9_999_999))
+        result = [{
+            'controller': r['controller'], 'position': i + 1,
+            'driver': r['driver'], 'car': r['car'], 'color': r['color'],
+            'best': fmt_ms(r['best_ms']), 'last': fmt_ms(r['last_ms']),
+            'best_ms': r['best_ms'], 'last_ms': r['last_ms'], 'lap_count': r['maxlap'],
+        } for i, r in enumerate(order)]
+
+        return jsonify({'track': _get_active_track_name() or '', 'status': _device_status(sid),
+                        'drivers': result})
+    except Exception as e:
+        log.error(f"device-standings: {e}")
+        return jsonify({'drivers': []})
+
+
+@api_bp.route('/api/device/records')
+def api_device_records():
+    """Bestzeiten pro Auto auf der aktiven Strecke (Allzeit) fuers ESP32-Display.
+
+    Erreichbar ueber den Streckennamen: oben der Streckenrekord, darunter je Auto
+    die beste je auf dieser Strecke gefahrene Runde mit Fahrer und Datum.
+    """
+    try:
+        tname = _get_active_track_name()
+        result = {'track': tname or '', 'record': None, 'cars': []}
+        if not tname:
+            return jsonify(result)
+
+        rows = db.session.query(
+            Lap.car_name, func.min(Lap.laptime_ms).label('best'),
+        ).filter(
+            Lap.track_name == tname, Lap.is_outlier.isnot(True),
+            Lap.laptime_ms > 1000, Lap.car_name.isnot(None), Lap.car_name != '',
+        ).group_by(Lap.car_name).all()
+
+        today = datetime.utcnow().date()
+        cars = []
+        for car_name, best in rows:
+            lap = Lap.query.filter_by(
+                track_name=tname, car_name=car_name, laptime_ms=best,
+            ).order_by(Lap.created_at.asc()).first()
+            d = lap.created_at if lap else None
+            cars.append({
+                'car': car_name,
+                'driver': lap.driver_name if lap else None,
+                'color': (lap.controller_color or lap.car_color) if lap else None,
+                'best': fmt_ms(best), 'best_ms': best,
+                'date': d.strftime('%d.%m.') if d else None,
+                'today': bool(d and d.date() == today),
+            })
+        cars.sort(key=lambda c: c['best_ms'] or 9_999_999)
+        result['cars'] = cars
+        if cars:
+            top = cars[0]
+            result['record'] = {'car': top['car'], 'driver': top['driver'],
+                                'best': top['best'], 'best_ms': top['best_ms']}
+        return jsonify(result)
+    except Exception as e:
+        log.error(f"device-records: {e}")
+        return jsonify({'track': '', 'record': None, 'cars': []})
+
+
 @api_bp.route('/api/driver-stats')
 def api_driver_stats():
     """Fahrer-Statistiken. Optional auf eine Strecke gefiltert (?track=Name)."""
