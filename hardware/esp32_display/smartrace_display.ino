@@ -4,10 +4,17 @@
 // Zeigt die Live-Rundenzeiten eines Controllers auf einem ESP32-S3 4"-Touch-LCD
 // (Waveshare ESP32-S3-Touch-LCD-4). Unten ein fester Picker C1-C6 (Touch).
 //
+// Touch-Navigation:
+//   - Badge/Fahrername oben antippen -> Fahrer-Uebersicht (alle Fahrer).
+//     Zeile antippen waehlt den Controller; Streckenname oeffnet die Rekorde.
+//   - GPS-Symbol oben rechts          -> Live-Streckenansicht.
+//
 // Datenquelle: das SmartRace-Dashboard (Flask), Endpunkte:
 //   GET /api/device/laps?controller=N   -> Fahrer, Best/Letzte-Zeit, Position,
 //                                          Status, letzte 10 Runden + Sektoren
 //   GET /api/device/controllers         -> Fahrernamen fuer die Buttons
+//   GET /api/device/standings           -> alle Fahrer (Position, Best/Letzte)
+//   GET /api/device/records             -> Bestzeiten pro Auto auf der Strecke
 //
 // WICHTIG - Board-Setup (einmalig):
 //   Diese Datei kuemmert sich um NETZWERK + UI (LVGL). Die Display-/Touch-/LVGL-
@@ -128,6 +135,25 @@ static void show_track_view(bool on);
 static void fetch_track_path();
 static void fetch_track_cars();
 static void update_track_cars_btn();
+
+// ---- Uebersicht (alle Fahrer) + Bestzeiten pro Auto (Overlays) ----
+static lv_obj_t *standingsView = nullptr;   // Fahrer-Uebersicht (Vollbild-Overlay)
+static lv_obj_t *standingsList = nullptr;
+static lv_obj_t *lblStandTitle = nullptr;   // Streckenname (tappbar -> Rekorde)
+static bool g_standingsShown = false;
+
+static lv_obj_t *recordsView = nullptr;     // Bestzeiten pro Auto (Vollbild-Overlay)
+static lv_obj_t *recordsList = nullptr;
+static lv_obj_t *lblRecVal = nullptr;       // Streckenrekord-Zeit (gross, gold)
+static lv_obj_t *lblRecWho = nullptr;       // Auto + Fahrer des Rekords
+static bool g_recordsShown = false;
+
+static void build_standings_view(lv_obj_t *parent);
+static void build_records_view(lv_obj_t *parent);
+static void show_standings(bool on);
+static void show_records(bool on);
+static void fetch_standings();
+static void fetch_records();
 
 // ============================================================================
 // Board-Init: Display (RGB + ST7701) wird DIREKT im Sketch aufgebaut — OHNE die
@@ -360,12 +386,18 @@ static void build_ui() {
   lv_obj_set_style_pad_hor(lblBadge, 8, 0);
   lv_obj_set_style_pad_ver(lblBadge, 3, 0);
   lv_obj_align(lblBadge, LV_ALIGN_TOP_LEFT, 12, 14);
+  // Badge antippen -> Fahrer-Uebersicht (alle Fahrer)
+  lv_obj_add_flag(lblBadge, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(lblBadge, [](lv_event_t *e){ show_standings(true); }, LV_EVENT_CLICKED, NULL);
 
   // --- Kopf: Fahrer + Position + Status ---
   lblDriver = lv_label_create(scr);
   lv_label_set_text(lblDriver, "Warte auf Daten...");
   lv_obj_set_style_text_font(lblDriver, &lv_font_montserrat_20, 0);
   lv_obj_align(lblDriver, LV_ALIGN_TOP_LEFT, 58, 16);
+  // Fahrername antippen -> Fahrer-Uebersicht (grosses Touch-Ziel)
+  lv_obj_add_flag(lblDriver, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(lblDriver, [](lv_event_t *e){ show_standings(true); }, LV_EVENT_CLICKED, NULL);
 
   lblPos = lv_label_create(scr);
   lv_label_set_text(lblPos, "P-");
@@ -463,8 +495,10 @@ static void build_ui() {
   lv_label_set_text(lt, LV_SYMBOL_GPS);
   lv_obj_center(lt);
 
-  // Overlay-Streckenansicht (versteckt) aufbauen
+  // Overlays (versteckt) aufbauen: Streckenansicht, Fahrer-Uebersicht, Rekorde
   build_track_view(scr);
+  build_standings_view(scr);
+  build_records_view(scr);
 
   // Startzustand: Akzentfarbe + Layout + ausgewaehlten Button setzen
   apply_accent();
@@ -606,6 +640,286 @@ static void fetch_track_cars() {
     i++;
   }
   for (; i < TRACK_MAX_CARS; i++) lv_obj_add_flag(g_carDots[i], LV_OBJ_FLAG_HIDDEN);
+}
+
+// ============================================================================
+// Uebersicht (alle Fahrer) — Overlay. Antippen einer Zeile waehlt den Controller.
+// Der Titel (Streckenname) oeffnet die "Bestzeiten pro Auto".
+// ============================================================================
+static void standings_row_cb(lv_event_t *e) {
+  int cid = (int)(intptr_t)lv_event_get_user_data(e);   // 1..6
+  show_standings(false);
+  select_controller(cid);
+}
+
+static void add_standings_row(int pos, int cid, uint32_t color, const char *name,
+                              const char *car, const char *last, const char *best) {
+  lv_obj_t *row = lv_obj_create(standingsList);
+  lv_obj_set_size(row, LV_PCT(100), 60);
+  lv_obj_set_style_bg_color(row, lv_color_hex(0x14171e), 0);
+  lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(row, 0, 0);
+  lv_obj_set_style_radius(row, 6, 0);
+  lv_obj_set_style_pad_all(row, 6, 0);
+  lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(row, standings_row_cb, LV_EVENT_CLICKED, (void *)(intptr_t)cid);
+
+  lv_obj_t *rail = lv_obj_create(row);           // Farb-Schiene links
+  lv_obj_set_size(rail, 5, 48);
+  lv_obj_align(rail, LV_ALIGN_LEFT_MID, -2, 0);
+  lv_obj_set_style_bg_color(rail, lv_color_hex(color), 0);
+  lv_obj_set_style_border_width(rail, 0, 0);
+  lv_obj_set_style_radius(rail, 2, 0);
+
+  lv_obj_t *lp = lv_label_create(row);           // Position
+  lv_label_set_text_fmt(lp, "%d", pos);
+  lv_obj_set_style_text_font(lp, &lv_font_montserrat_20, 0);
+  lv_obj_align(lp, LV_ALIGN_LEFT_MID, 12, 0);
+
+  lv_obj_t *chip = lv_label_create(row);         // C#-Chip
+  lv_label_set_text_fmt(chip, "C%d", cid);
+  lv_obj_set_style_text_font(chip, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_color(chip, lv_color_hex(0x0c0e13), 0);
+  lv_obj_set_style_bg_color(chip, lv_color_hex(color), 0);
+  lv_obj_set_style_bg_opa(chip, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(chip, 4, 0);
+  lv_obj_set_style_pad_hor(chip, 6, 0);
+  lv_obj_set_style_pad_ver(chip, 2, 0);
+  lv_obj_align(chip, LV_ALIGN_LEFT_MID, 42, 0);
+
+  lv_obj_t *nm = lv_label_create(row);           // Fahrername
+  lv_label_set_text(nm, (name && name[0]) ? name : "-");
+  lv_obj_set_style_text_font(nm, &lv_font_montserrat_18, 0);
+  lv_obj_set_style_text_color(nm, lv_color_hex(0xe8eaf0), 0);
+  lv_obj_align(nm, LV_ALIGN_LEFT_MID, 82, -8);
+
+  lv_obj_t *cr = lv_label_create(row);           // Auto
+  lv_label_set_text(cr, car ? car : "");
+  lv_obj_set_style_text_font(cr, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_color(cr, lv_color_hex(0x8a8f98), 0);
+  lv_obj_align(cr, LV_ALIGN_LEFT_MID, 82, 13);
+
+  lv_obj_t *lbBest = lv_label_create(row);       // Beste (oben, lila)
+  lv_label_set_text(lbBest, (best && best[0]) ? best : "--");
+  lv_obj_set_style_text_font(lbBest, &lv_font_montserrat_18, 0);
+  lv_obj_set_style_text_color(lbBest, lv_color_hex(0xc084fc), 0);
+  lv_obj_align(lbBest, LV_ALIGN_RIGHT_MID, -14, -8);
+
+  lv_obj_t *lbLast = lv_label_create(row);       // Aktuell (unten, grau)
+  lv_label_set_text(lbLast, (last && last[0]) ? last : "--");
+  lv_obj_set_style_text_font(lbLast, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_color(lbLast, lv_color_hex(0x9aa0a6), 0);
+  lv_obj_align(lbLast, LV_ALIGN_RIGHT_MID, -14, 13);
+}
+
+static void build_standings_view(lv_obj_t *parent) {
+  standingsView = lv_obj_create(parent);
+  lv_obj_set_size(standingsView, 480, 480);
+  lv_obj_set_pos(standingsView, 0, 0);
+  lv_obj_set_style_bg_color(standingsView, lv_color_hex(0x0b0d12), 0);
+  lv_obj_set_style_bg_opa(standingsView, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(standingsView, 0, 0);
+  lv_obj_set_style_pad_all(standingsView, 0, 0);
+  lv_obj_clear_flag(standingsView, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(standingsView, LV_OBJ_FLAG_HIDDEN);
+
+  lv_obj_t *bBack = lv_btn_create(standingsView);       // Zurueck -> Timing
+  lv_obj_set_size(bBack, 56, 40);
+  lv_obj_align(bBack, LV_ALIGN_TOP_LEFT, 6, 6);
+  lv_obj_set_style_radius(bBack, 8, 0);
+  lv_obj_add_event_cb(bBack, [](lv_event_t *e){ show_standings(false); }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lb = lv_label_create(bBack); lv_label_set_text(lb, LV_SYMBOL_LEFT); lv_obj_center(lb);
+
+  lblStandTitle = lv_label_create(standingsView);       // Streckenname (tappbar -> Rekorde)
+  lv_label_set_text(lblStandTitle, "Strecke  " LV_SYMBOL_RIGHT);
+  lv_obj_set_style_text_color(lblStandTitle, lv_color_hex(0xe8eaf0), 0);
+  lv_obj_set_style_text_font(lblStandTitle, &lv_font_montserrat_18, 0);
+  lv_obj_align(lblStandTitle, LV_ALIGN_TOP_MID, 12, 16);
+  lv_obj_add_flag(lblStandTitle, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(lblStandTitle, [](lv_event_t *e){ show_records(true); }, LV_EVENT_CLICKED, NULL);
+
+  standingsList = lv_obj_create(standingsView);
+  lv_obj_set_size(standingsList, 468, 416);
+  lv_obj_align(standingsList, LV_ALIGN_BOTTOM_MID, 0, -6);
+  lv_obj_set_style_bg_color(standingsList, lv_color_hex(0x0b0d12), 0);
+  lv_obj_set_style_border_width(standingsList, 0, 0);
+  lv_obj_set_style_pad_all(standingsList, 3, 0);
+  lv_obj_set_style_pad_row(standingsList, 5, 0);
+  lv_obj_set_flex_flow(standingsList, LV_FLEX_FLOW_COLUMN);
+}
+
+// ============================================================================
+// Bestzeiten pro Auto (Streckenrekorde) — Overlay
+// ============================================================================
+static void add_records_row(bool crown, uint32_t color, const char *car,
+                            const char *driver, const char *best, const char *date, bool today) {
+  lv_obj_t *row = lv_obj_create(recordsList);
+  lv_obj_set_size(row, LV_PCT(100), 58);
+  lv_obj_set_style_bg_color(row, lv_color_hex(crown ? 0x1f1c10 : 0x14171e), 0);
+  lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(row, 0, 0);
+  lv_obj_set_style_radius(row, 6, 0);
+  lv_obj_set_style_pad_all(row, 6, 0);
+  lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *rail = lv_obj_create(row);
+  lv_obj_set_size(rail, 5, 46);
+  lv_obj_align(rail, LV_ALIGN_LEFT_MID, -2, 0);
+  lv_obj_set_style_bg_color(rail, lv_color_hex(color), 0);
+  lv_obj_set_style_border_width(rail, 0, 0);
+  lv_obj_set_style_radius(rail, 2, 0);
+
+  lv_obj_t *cm = lv_label_create(row);           // Auto (mit Markierung beim Rekord)
+  lv_label_set_text_fmt(cm, "%s%s", crown ? LV_SYMBOL_GPS " " : "", (car && car[0]) ? car : "-");
+  lv_obj_set_style_text_font(cm, &lv_font_montserrat_18, 0);
+  lv_obj_set_style_text_color(cm, lv_color_hex(0xe8eaf0), 0);
+  lv_obj_align(cm, LV_ALIGN_LEFT_MID, 14, -8);
+
+  lv_obj_t *dr = lv_label_create(row);           // Fahrer
+  lv_label_set_text(dr, driver ? driver : "");
+  lv_obj_set_style_text_font(dr, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_color(dr, lv_color_hex(0x8a8f98), 0);
+  lv_obj_align(dr, LV_ALIGN_LEFT_MID, 14, 13);
+
+  lv_obj_t *bv = lv_label_create(row);           // Bestzeit
+  lv_label_set_text(bv, (best && best[0]) ? best : "--");
+  lv_obj_set_style_text_font(bv, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_color(bv, lv_color_hex(crown ? 0xf5c451 : (today ? 0x2ecc71 : 0xe8eaf0)), 0);
+  lv_obj_align(bv, LV_ALIGN_RIGHT_MID, -14, -8);
+
+  lv_obj_t *dt = lv_label_create(row);           // Datum / "heute neu"
+  lv_label_set_text(dt, today ? "heute neu" : (date ? date : ""));
+  lv_obj_set_style_text_font(dt, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_color(dt, lv_color_hex(today ? 0x2ecc71 : 0x5f6675), 0);
+  lv_obj_align(dt, LV_ALIGN_RIGHT_MID, -14, 13);
+}
+
+static void build_records_view(lv_obj_t *parent) {
+  recordsView = lv_obj_create(parent);
+  lv_obj_set_size(recordsView, 480, 480);
+  lv_obj_set_pos(recordsView, 0, 0);
+  lv_obj_set_style_bg_color(recordsView, lv_color_hex(0x0b0d12), 0);
+  lv_obj_set_style_bg_opa(recordsView, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(recordsView, 0, 0);
+  lv_obj_set_style_pad_all(recordsView, 0, 0);
+  lv_obj_clear_flag(recordsView, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(recordsView, LV_OBJ_FLAG_HIDDEN);
+
+  lv_obj_t *bBack = lv_btn_create(recordsView);         // Zurueck -> Uebersicht
+  lv_obj_set_size(bBack, 56, 40);
+  lv_obj_align(bBack, LV_ALIGN_TOP_LEFT, 6, 6);
+  lv_obj_set_style_radius(bBack, 8, 0);
+  lv_obj_add_event_cb(bBack, [](lv_event_t *e){ show_records(false); }, LV_EVENT_CLICKED, NULL);
+  lv_obj_t *lb = lv_label_create(bBack); lv_label_set_text(lb, LV_SYMBOL_LEFT); lv_obj_center(lb);
+
+  lv_obj_t *title = lv_label_create(recordsView);
+  lv_label_set_text(title, "Bestzeiten pro Auto");
+  lv_obj_set_style_text_color(title, lv_color_hex(0xe8eaf0), 0);
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 12, 16);
+
+  // Streckenrekord-Banner
+  lv_obj_t *banner = lv_obj_create(recordsView);
+  lv_obj_set_size(banner, 456, 70);
+  lv_obj_align(banner, LV_ALIGN_TOP_MID, 0, 54);
+  lv_obj_set_style_bg_color(banner, lv_color_hex(0x211d10), 0);
+  lv_obj_set_style_border_color(banner, lv_color_hex(0xf5c451), 0);
+  lv_obj_set_style_border_width(banner, 1, 0);
+  lv_obj_set_style_radius(banner, 10, 0);
+  lv_obj_set_style_pad_all(banner, 10, 0);
+  lv_obj_clear_flag(banner, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t *bl = lv_label_create(banner);
+  lv_label_set_text(bl, LV_SYMBOL_GPS "  STRECKENREKORD");
+  lv_obj_set_style_text_font(bl, &lv_font_montserrat_14, 0);
+  lv_obj_set_style_text_color(bl, lv_color_hex(0xf5c451), 0);
+  lv_obj_align(bl, LV_ALIGN_TOP_LEFT, 0, 0);
+
+  lblRecWho = lv_label_create(banner);
+  lv_label_set_text(lblRecWho, "-");
+  lv_obj_set_style_text_font(lblRecWho, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_color(lblRecWho, lv_color_hex(0xe8eaf0), 0);
+  lv_obj_align(lblRecWho, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+
+  lblRecVal = lv_label_create(banner);
+  lv_label_set_text(lblRecVal, "--");
+  lv_obj_set_style_text_font(lblRecVal, &lv_font_montserrat_20, 0);
+  lv_obj_set_style_text_color(lblRecVal, lv_color_hex(0xf5c451), 0);
+  lv_obj_align(lblRecVal, LV_ALIGN_RIGHT_MID, 0, 0);
+
+  recordsList = lv_obj_create(recordsView);
+  lv_obj_set_size(recordsList, 468, 330);
+  lv_obj_align(recordsList, LV_ALIGN_BOTTOM_MID, 0, -6);
+  lv_obj_set_style_bg_color(recordsList, lv_color_hex(0x0b0d12), 0);
+  lv_obj_set_style_border_width(recordsList, 0, 0);
+  lv_obj_set_style_pad_all(recordsList, 3, 0);
+  lv_obj_set_style_pad_row(recordsList, 5, 0);
+  lv_obj_set_flex_flow(recordsList, LV_FLEX_FLOW_COLUMN);
+}
+
+static void fetch_standings() {
+  JsonDocument doc;
+  String url = String(SERVER_BASE) + "/api/device/standings";
+  if (!http_get_json(url, doc)) return;
+  const char *track = doc["track"] | "";
+  lv_label_set_text_fmt(lblStandTitle, "%s  " LV_SYMBOL_RIGHT,
+                        (track && track[0]) ? track : "Strecke");
+  lv_obj_clean(standingsList);
+  for (JsonObject d : doc["drivers"].as<JsonArray>()) {
+    int cid = atoi((const char *)(d["controller"] | "0"));
+    if (cid < 1 || cid > 6) continue;
+    uint32_t color = parse_hex_color(d["color"] | "", g_ctrlColors[cid - 1]);
+    g_ctrlColors[cid - 1] = color;
+    add_standings_row(d["position"] | 0, cid, color, d["driver"] | "",
+                      d["car"] | "", d["last"] | "--", d["best"] | "--");
+  }
+}
+
+static void fetch_records() {
+  JsonDocument doc;
+  String url = String(SERVER_BASE) + "/api/device/records";
+  if (!http_get_json(url, doc)) return;
+  JsonObject rec = doc["record"].as<JsonObject>();
+  if (!rec.isNull()) {
+    lv_label_set_text(lblRecVal, rec["best"] | "--");
+    lv_label_set_text_fmt(lblRecWho, "%s  -  %s",
+                          (const char *)(rec["car"] | "-"),
+                          (const char *)(rec["driver"] | "-"));
+  } else {
+    lv_label_set_text(lblRecVal, "--");
+    lv_label_set_text(lblRecWho, "keine Daten");
+  }
+  lv_obj_clean(recordsList);
+  bool first = true;
+  for (JsonObject c : doc["cars"].as<JsonArray>()) {
+    uint32_t color = parse_hex_color(c["color"] | "", 0x8a8f98);
+    add_records_row(first, color, c["car"] | "-", c["driver"] | "",
+                    c["best"] | "--", c["date"] | "", c["today"] | false);
+    first = false;
+  }
+}
+
+static void show_standings(bool on) {
+  g_standingsShown = on;
+  if (on) {
+    fetch_standings();
+    lv_obj_clear_flag(standingsView, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(standingsView);
+  } else {
+    lv_obj_add_flag(standingsView, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
+static void show_records(bool on) {
+  g_recordsShown = on;
+  if (on) {
+    fetch_records();
+    lv_obj_clear_flag(recordsView, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(recordsView);
+  } else {
+    lv_obj_add_flag(recordsView, LV_OBJ_FLAG_HIDDEN);   // zurueck zur Uebersicht
+  }
 }
 
 // Zeile in der Runden-Liste. driver != NULL -> farbiger Fahrername (Alle-Modus).
@@ -856,7 +1170,7 @@ static void poll_data() {
 void setup() {
   Serial.begin(115200);
   delay(300);
-  sr_mark("\n=== SMARTRACE BUILD touch-off-v4 === setup() gestartet ===");
+  sr_mark("\n=== SMARTRACE BUILD v5 (Uebersicht + Rekorde) === setup() gestartet ===");
   board_init();     // Display (Touch per SR_ENABLE_TOUCH schaltbar)
 
   // UI aufbauen — lv_* nur unter dem LVGL-Lock.
@@ -888,6 +1202,9 @@ void loop() {
     delay(5);
     return;   // Timing-Poll pausiert, solange die Strecke im Vordergrund ist
   }
+
+  // Uebersicht/Rekorde offen: statischer Schnappschuss -> Timing-Poll pausieren
+  if (g_standingsShown || g_recordsShown) { delay(5); return; }
 
   if (now - g_lastPoll >= POLL_INTERVAL_MS) {
     g_lastPoll = now;
