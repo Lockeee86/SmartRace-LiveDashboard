@@ -939,9 +939,10 @@ static void show_records(bool on) {
   }
 }
 
-// Zeile in der Runden-Liste. driver != NULL -> farbiger Fahrername (Alle-Modus).
-static void add_lap_row(const char *driver, uint32_t col, int lap, const char *t,
-                        const char *s1, const char *s2, const char *s3) {
+// Zeile in der Runden-Liste. driver != NULL -> farbiger Fahrername + C#-Chip
+// (Alle-Modus). ctrl 1..6 zeichnet den Farbchip; ctrl 0 = kein Chip (Einzel-Modus).
+static void add_lap_row(const char *driver, uint32_t col, int ctrl, int lap,
+                        const char *t, const char *s1, const char *s2, const char *s3) {
   lv_obj_t *row = lv_obj_create(lapList);
   lv_obj_set_size(row, LV_PCT(100), 30);
   lv_obj_set_style_bg_opa(row, LV_OPA_0, 0);
@@ -951,17 +952,31 @@ static void add_lap_row(const char *driver, uint32_t col, int lap, const char *t
 
   int xTime = 60;
   if (driver && driver[0]) {
+    int xName = 4;
+    if (ctrl >= 1 && ctrl <= 6) {
+      lv_obj_t *chip = lv_label_create(row);       // C#-Farbchip
+      lv_label_set_text_fmt(chip, "C%d", ctrl);
+      lv_obj_set_style_text_font(chip, &lv_font_montserrat_14, 0);
+      lv_obj_set_style_text_color(chip, lv_color_hex(0x0c0e13), 0);
+      lv_obj_set_style_bg_color(chip, lv_color_hex(col), 0);
+      lv_obj_set_style_bg_opa(chip, LV_OPA_COVER, 0);
+      lv_obj_set_style_radius(chip, 4, 0);
+      lv_obj_set_style_pad_hor(chip, 5, 0);
+      lv_obj_set_style_pad_ver(chip, 0, 0);
+      lv_obj_align(chip, LV_ALIGN_LEFT_MID, 2, 0);
+      xName = 36;
+    }
     lv_obj_t *dn = lv_label_create(row);           // Fahrername (farbig)
     lv_label_set_text(dn, driver);
     lv_obj_set_style_text_font(dn, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(dn, lv_color_hex(col), 0);
-    lv_obj_align(dn, LV_ALIGN_LEFT_MID, 4, 0);
+    lv_obj_align(dn, LV_ALIGN_LEFT_MID, xName, 0);
 
     lv_obj_t *rn = lv_label_create(row);           // "R{n}"
     lv_label_set_text_fmt(rn, "R%d", lap);
     lv_obj_set_style_text_color(rn, lv_color_hex(0x9aa0a6), 0);
-    lv_obj_align(rn, LV_ALIGN_LEFT_MID, 128, 0);
-    xTime = 172;
+    lv_obj_align(rn, LV_ALIGN_LEFT_MID, 150, 0);
+    xTime = 190;
   } else {
     lv_obj_t *ln = lv_label_create(row);
     lv_label_set_text_fmt(ln, "R%d", lap);
@@ -1083,7 +1098,7 @@ static void fetch_laps() {
   int shown = 0;
   for (JsonObject l : laps) {
     if (shown++ >= LAP_LIST_COUNT) break;
-    add_lap_row(NULL, 0, l["lap"] | 0, l["t"] | "--", l["s1"] | "--",
+    add_lap_row(NULL, 0, 0, l["lap"] | 0, l["t"] | "--", l["s1"] | "--",
                 l["s2"] | "--", l["s3"] | "--");
   }
 }
@@ -1117,7 +1132,8 @@ static void fetch_recent() {
     if (first) {                          // neueste Runde gross oben
       first = false;
       set_accent(lv_color_hex(g_ctrlColors[ctrl - 1]));  // Kopf in Fahrerfarbe
-      lv_label_set_text(lblDriver, (driver[0] ? driver : "Letzte Runden"));
+      if (driver[0]) lv_label_set_text_fmt(lblDriver, "C%d  %s", ctrl, driver);
+      else           lv_label_set_text(lblDriver, "Letzte Runden");
       lv_label_set_text_fmt(lblPos, "R%d", (int)(l["lap"] | 0));
       lv_label_set_text(lblLast, t);
       lv_label_set_text_fmt(lblSec[0], "S1 %s", s1);
@@ -1127,7 +1143,7 @@ static void fetch_recent() {
     }
 
     if (shown++ >= LAP_LIST_COUNT) break;
-    add_lap_row(driver, g_ctrlColors[ctrl - 1], l["lap"] | 0, t, s1, s2, s3);
+    add_lap_row(driver, g_ctrlColors[ctrl - 1], ctrl, l["lap"] | 0, t, s1, s2, s3);
   }
 
   if (first) {                            // keine Daten
