@@ -19,6 +19,19 @@ class TrackPositionMap {
         this.sectorLengths = [];
         this.dotsGroup = null;
         this.intervalId = null;
+        // Live-Autos ein-/ausblendbar (global gemerkt, Standard: an)
+        this.showCars = (localStorage.getItem('sr-track-cars') !== '0');
+    }
+
+    /** Live-Autos ein-/ausblenden (persistiert in localStorage). */
+    setShowCars(on) {
+        this.showCars = !!on;
+        try { localStorage.setItem('sr-track-cars', on ? '1' : '0'); } catch (e) {}
+        if (!on) {
+            if (this.dotsGroup) this.dotsGroup.innerHTML = '';
+        } else {
+            this.update();
+        }
     }
 
     init() {
@@ -82,6 +95,11 @@ class TrackPositionMap {
     }
 
     update() {
+        // Autos deaktiviert -> keine Punkte zeichnen
+        if (!this.showCars) {
+            if (this.dotsGroup) this.dotsGroup.innerHTML = '';
+            return;
+        }
         const data = this.getData();
         if (!data || !this.dotsGroup) return;
 

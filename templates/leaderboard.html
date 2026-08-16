@@ -129,7 +129,12 @@
     <div class="col-md-6 col-lg-3 lb-widget-col" data-widget="tracklayout" draggable="true">
         <div class="card stat-card stat-card-track h-100">
             <div class="card-body py-2 px-3">
-                <div class="stat-label mb-1"><i class="fas fa-draw-polygon me-1"></i> Strecke <span class="fw-normal text-muted ms-1" id="lbTrackLayoutName">--</span></div>
+                <div class="stat-label mb-1 d-flex align-items-center">
+                    <span><i class="fas fa-draw-polygon me-1"></i> Strecke <span class="fw-normal text-muted ms-1" id="lbTrackLayoutName">--</span></span>
+                    <button type="button" class="btn btn-sm btn-outline-light track-cars-toggle ms-auto active" id="lbTrackCarsToggle" title="Live-Autos ein-/ausblenden">
+                        <i class="fas fa-car-side me-1"></i>Autos
+                    </button>
+                </div>
                 <div id="lbTrackLayout" class="text-center track-layout-widget">
                     <span class="text-muted small">Kein Layout</span>
                 </div>
@@ -912,6 +917,20 @@ async function loadLbTrackLayout() {
             colorTrackSectors(container);
             lbTrackMap = new TrackPositionMap('lbTrackLayout', () => lbData);
             lbTrackMap.init();
+            // Autos-Umschalter (einmal verdrahten; Zustand kommt aus dem Map-Objekt)
+            const carsBtn = document.getElementById('lbTrackCarsToggle');
+            if (carsBtn) {
+                const sync = () => carsBtn.classList.toggle('active', !!(lbTrackMap && lbTrackMap.showCars));
+                if (!carsBtn.dataset.bound) {
+                    carsBtn.dataset.bound = '1';
+                    carsBtn.addEventListener('click', () => {
+                        if (!lbTrackMap) return;
+                        lbTrackMap.setShowCars(!lbTrackMap.showCars);
+                        sync();
+                    });
+                }
+                sync();
+            }
             // Streckenrekord mit Sektoren unter der Karte anzeigen
             renderTrackRecordBar('lbTrackRecordBar', data.name);
         } else {
