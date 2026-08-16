@@ -1948,3 +1948,10 @@ footer {
 .stat-card-sessioninfo .fl-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stat-card-sessioninfo .fl-car { font-size: 0.8rem; text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stat-card-sessioninfo .fastlap-row.is-best .fl-time { color: #c084fc; }
+
+/* Umschalter "Live-Autos" in der Kopfzeile des Strecken-Widgets */
+.track-cars-toggle {
+    --bs-btn-padding-y: 0.08rem; --bs-btn-padding-x: 0.5rem;
+    --bs-btn-font-size: 0.72rem;
+    line-height: 1.25; text-transform: none; letter-spacing: 0; white-space: nowrap;
+}
