@@ -4,6 +4,8 @@
 // Zeigt die Live-Rundenzeiten eines Controllers auf einem ESP32-S3 4"-Touch-LCD
 // (Waveshare ESP32-S3-Touch-LCD-4). Unten ein fester Picker C1-C6 (Touch).
 //
+// Startbildschirm ueber START_VIEW (config.h): 0 = Timing, 1 = Fahrer-Uebersicht.
+//
 // Touch-Navigation:
 //   - Badge/Fahrername oben antippen -> Fahrer-Uebersicht (alle Fahrer).
 //     Zeile antippen waehlt den Controller; Streckenname oeffnet die Rekorde;
@@ -75,6 +77,7 @@ static uint32_t parse_hex_color(const char *s, uint32_t fallback) {
 static int g_controller = DEFAULT_CONTROLLER;   // 1..6
 static uint32_t g_lastPoll = 0;
 static uint32_t g_lastCtrlPoll = 0;
+static uint32_t g_lastStandPoll = 0;   // Aktualisierung der Fahrer-Uebersicht (wenn offen)
 
 // ---- UI-Objekte ----
 static lv_obj_t *accentBar;      // obere Farbleiste in Controller-Farbe
@@ -1216,6 +1219,9 @@ void setup() {
   lvgl_port_lock(-1);
   fetch_controllers();
   poll_data();
+#if START_VIEW == 1
+  show_standings(true);   // Startbildschirm = Fahrer-Uebersicht
+#endif
   lvgl_port_unlock();
 }
 
@@ -1236,8 +1242,20 @@ void loop() {
     return;   // Timing-Poll pausiert, solange die Strecke im Vordergrund ist
   }
 
-  // Uebersicht/Rekorde offen: statischer Schnappschuss -> Timing-Poll pausieren
-  if (g_standingsShown || g_recordsShown) { delay(5); return; }
+  // Rekorde offen: statischer Schnappschuss -> kein Poll
+  if (g_recordsShown) { delay(5); return; }
+  // Uebersicht offen (auch als Startbildschirm): regelmaessig aktualisieren
+  if (g_standingsShown) {
+    if (now - g_lastStandPoll >= 1500) {
+      g_lastStandPoll = now;
+      if (WiFi.status() != WL_CONNECTED) wifi_connect();
+      lvgl_port_lock(-1);
+      fetch_standings();
+      lvgl_port_unlock();
+    }
+    delay(5);
+    return;
+  }
 
   if (now - g_lastPoll >= POLL_INTERVAL_MS) {
     g_lastPoll = now;

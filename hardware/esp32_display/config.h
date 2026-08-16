@@ -19,6 +19,11 @@
 // --- Start-Ansicht: 0 = "Letzte Runden" (alle Fahrer), 1..6 = Controller C1..C6 ---
 #define DEFAULT_CONTROLLER  1
 
+// --- Startbildschirm beim Einschalten ---
+//   0 = Timing-Ansicht (DEFAULT_CONTROLLER)
+//   1 = Fahrer-Uebersicht (alle Fahrer; Zeile antippen -> Timing)
+#define START_VIEW  1
+
 // --- Wie viele Runden in der Liste anzeigen (max 10, so viele liefert die API) ---
 #define LAP_LIST_COUNT  10
 
