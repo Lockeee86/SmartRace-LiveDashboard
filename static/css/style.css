@@ -1930,3 +1930,21 @@ footer {
 @media (max-width: 380px) {
     .stat-card-sessioninfo .si-tiles { grid-template-columns: 1fr; }
 }
+.stat-card-sessioninfo .si-record { text-align: center; }
+.stat-card-sessioninfo .si-fastlaps {
+    display: flex; flex-direction: column; gap: 0.15rem;
+    max-height: 260px; overflow-y: auto;
+}
+.stat-card-sessioninfo .fastlap-row {
+    display: grid; grid-template-columns: 10px auto 1fr auto; gap: 0.5rem;
+    align-items: center; padding: 0.22rem 0.15rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.stat-card-sessioninfo .fastlap-row:last-child { border-bottom: 0; }
+.stat-card-sessioninfo .fl-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.stat-card-sessioninfo .fl-time {
+    font-family: 'Courier New', monospace; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.stat-card-sessioninfo .fl-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-card-sessioninfo .fl-car { font-size: 0.8rem; text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-card-sessioninfo .fastlap-row.is-best .fl-time { color: #c084fc; }
