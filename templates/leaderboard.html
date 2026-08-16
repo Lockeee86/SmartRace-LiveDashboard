@@ -92,23 +92,18 @@
     <div class="col-md-6 col-lg-4 lb-widget-col" data-widget="sessioninfo" draggable="true">
         <div class="card stat-card stat-card-sessioninfo h-100">
             <div class="card-body py-3">
-                <div class="si-tiles">
-                    <div class="si-tile">
-                        <div class="stat-label mb-1"><i class="fas fa-bolt me-1"></i> Schnellste Runde</div>
-                        <div class="stat-value" id="lb-fastestTime">--:--.---</div>
-                        <div class="small mt-1 text-truncate" id="lb-fastestDriver">--</div>
-                    </div>
-                    <div class="si-tile">
-                        <div class="stat-label mb-1"><i class="fas fa-trophy me-1"></i> Streckenrekord</div>
-                        <div class="stat-value" id="lb-recordTime">--:--.---</div>
-                        <div class="small mt-1 text-truncate" id="lb-recordDriver">--</div>
-                    </div>
+                <div class="si-record mb-2">
+                    <div class="stat-label mb-1"><i class="fas fa-trophy me-1"></i> Streckenrekord</div>
+                    <div class="stat-value" id="lb-recordTime">--:--.---</div>
+                    <div class="small mt-1 text-truncate" id="lb-recordDriver">--</div>
                 </div>
                 <div class="si-stats row text-center g-2">
                     <div class="col-4"><div class="fw-bold fs-5" id="lb-totalLaps">0</div><div class="small text-muted">Runden</div></div>
                     <div class="col-4"><div class="fw-bold fs-5" id="lb-drivers">0</div><div class="small text-muted">Fahrer</div></div>
                     <div class="col-4"><div class="fw-bold fs-5" id="lb-penalties">0</div><div class="small text-muted">Strafen</div></div>
                 </div>
+                <div class="stat-label mt-3 mb-1"><i class="fas fa-bolt me-1"></i> Schnellste Runde je Auto</div>
+                <div class="si-fastlaps" id="lb-fastLaps"></div>
             </div>
         </div>
     </div>
@@ -383,17 +378,25 @@ function updateLeaderboard() {
     document.getElementById('lb-drivers').textContent = drivers.length;
     document.getElementById('lb-penalties').textContent = totalPenalties;
 
-    if (fastest) {
-        document.getElementById('lb-fastestTime').textContent = formatTime(fastest.time);
-        document.getElementById('lb-fastestDriver').textContent = fastest.driver;
-        if (!lbTrackRecord || fastest.time < lbTrackRecord.time) {
-            lbTrackRecord = fastest;
-        }
+    if (fastest && (!lbTrackRecord || fastest.time < lbTrackRecord.time)) {
+        lbTrackRecord = fastest;
     }
     if (lbTrackRecord) {
         document.getElementById('lb-recordTime').textContent = formatTime(lbTrackRecord.time);
         document.getElementById('lb-recordDriver').textContent = lbTrackRecord.driver;
     }
+
+    // Schnellste Runde je Auto (mit Fahrer), aufsteigend sortiert
+    const flRows = drivers.filter(d => d.bestTime).sort((a, b) => a.bestTime - b.bestTime);
+    document.getElementById('lb-fastLaps').innerHTML = flRows.length
+        ? flRows.map((d, i) => `
+            <div class="fastlap-row${i === 0 ? ' is-best' : ''}">
+                <span class="fl-dot" style="background:${d.color}"></span>
+                <span class="fl-time">${formatTime(d.bestTime)}</span>
+                <span class="fl-name">${d.name}</span>
+                <span class="fl-car text-muted">${d.car}</span>
+            </div>`).join('')
+        : '<div class="small text-muted">Noch keine Runden</div>';
 
     // Leaderboard Tabelle
     const tbody = document.getElementById('leaderboardBody');

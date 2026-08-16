@@ -146,17 +146,10 @@
     <div class="col-md-6 col-lg-4 widget-col" data-widget="sessioninfo" draggable="true">
         <div class="card stat-card stat-card-sessioninfo h-100">
             <div class="card-body py-3">
-                <div class="si-tiles">
-                    <div class="si-tile">
-                        <div class="stat-label mb-1"><i class="fas fa-bolt me-1"></i> Schnellste Runde</div>
-                        <div class="stat-value" id="fastestTime">--:--.---</div>
-                        <div class="small mt-1 text-truncate" id="fastestDriver">Warte auf Daten...</div>
-                    </div>
-                    <div class="si-tile">
-                        <div class="stat-label mb-1"><i class="fas fa-trophy me-1"></i> Streckenrekord</div>
-                        <div class="stat-value" id="recordTime">--:--.---</div>
-                        <div class="small mt-1 text-truncate" id="recordDriver">--</div>
-                    </div>
+                <div class="si-record mb-2">
+                    <div class="stat-label mb-1"><i class="fas fa-trophy me-1"></i> Streckenrekord</div>
+                    <div class="stat-value" id="recordTime">--:--.---</div>
+                    <div class="small mt-1 text-truncate" id="recordDriver">--</div>
                 </div>
                 <div class="si-stats row text-center g-2">
                     <div class="col-3"><div class="fw-bold fs-5" id="totalLaps">0</div><div class="small text-muted">Runden</div></div>
@@ -164,6 +157,8 @@
                     <div class="col-3"><div class="fw-bold fs-5" id="sessionDuration">--</div><div class="small text-muted">Dauer</div></div>
                     <div class="col-3"><div class="fw-bold fs-5 font-mono" id="avgLap">--</div><div class="small text-muted">Schnitt</div></div>
                 </div>
+                <div class="stat-label mt-3 mb-1"><i class="fas fa-bolt me-1"></i> Schnellste Runde je Auto</div>
+                <div class="si-fastlaps" id="dashFastLaps"></div>
             </div>
         </div>
     </div>
@@ -578,6 +573,7 @@ function renderStats() {
     let totalLaps = 0, activeDrivers = 0, allTimes = [];
     let fastest = null;
     let startTime = null, endTime = null;
+    const flDrivers = [];
 
     Object.entries(dashboardData).forEach(([cid, cd]) => {
         const laps = getSessionLaps(cd);
@@ -599,24 +595,37 @@ function renderStats() {
         if (cd.best_time_raw && (!fastest || cd.best_time_raw < fastest.time)) {
             fastest = { time: cd.best_time_raw, driver: cd.name || ('Fahrer ' + cid) };
         }
+        if (cd.best_time_raw) {
+            const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
+            flDrivers.push({ name: cd.name || ('Fahrer ' + cid), car: cd.car || ('Auto ' + cid),
+                             color, bestTime: cd.best_time_raw });
+        }
     });
 
     document.getElementById('totalLaps').textContent = totalLaps;
     document.getElementById('activeDrivers').textContent = activeDrivers;
 
-    if (fastest) {
-        document.getElementById('fastestTime').textContent = formatTime(fastest.time);
-        document.getElementById('fastestDriver').textContent = fastest.driver;
-
-        if (!trackRecord || fastest.time < trackRecord.time) {
-            trackRecord = { time: fastest.time, driver: fastest.driver };
-        }
+    if (fastest && (!trackRecord || fastest.time < trackRecord.time)) {
+        trackRecord = { time: fastest.time, driver: fastest.driver };
     }
 
     if (trackRecord) {
         document.getElementById('recordTime').textContent = formatTime(trackRecord.time);
         document.getElementById('recordDriver').textContent = trackRecord.driver || '--';
     }
+
+    // Schnellste Runde je Auto (mit Fahrer), aufsteigend sortiert
+    const flRows = flDrivers.sort((a, b) => a.bestTime - b.bestTime);
+    const flEl = document.getElementById('dashFastLaps');
+    if (flEl) flEl.innerHTML = flRows.length
+        ? flRows.map((d, i) => `
+            <div class="fastlap-row${i === 0 ? ' is-best' : ''}">
+                <span class="fl-dot" style="background:${d.color}"></span>
+                <span class="fl-time">${formatTime(d.bestTime)}</span>
+                <span class="fl-name">${d.name}</span>
+                <span class="fl-car text-muted">${d.car}</span>
+            </div>`).join('')
+        : '<div class="small text-muted">Noch keine Runden</div>';
 
     // Dauer
     if (startTime && endTime) {
