@@ -872,6 +872,16 @@ body {
     margin-top: 0.15rem;
 }
 
+/* Tank-Widget */
+.fuel-row { padding: 0.4rem 0; border-bottom: 1px solid var(--sr-border); }
+.fuel-row:last-child { border-bottom: 0; }
+.fuel-row-head { display: flex; justify-content: space-between; align-items: center; }
+.fuel-name { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fuel-dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; flex: none; }
+.fuel-pct { font-family: 'Courier New', monospace; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.fuel-bar-container.fuel-bar-lg { height: 8px; margin-top: 0.4rem; }
+
 /* Animations */
 @keyframes pulse {
     0%, 100% { opacity: 1; }
