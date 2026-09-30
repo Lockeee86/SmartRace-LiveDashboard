@@ -81,6 +81,12 @@
                         <i class="fas fa-broadcast-tower text-info"></i> Live-Ticker
                     </label>
                 </li>
+                <li>
+                    <label class="dropdown-item d-flex align-items-center gap-2 rounded py-1 px-2">
+                        <input type="checkbox" class="form-check-input m-0 lb-widget-vis-cb" value="fuel" checked>
+                        <i class="fas fa-gas-pump text-info"></i> Tankinhalt
+                    </label>
+                </li>
             </ul>
         </div>
         <span class="badge bg-danger pulse" id="liveBadge">LIVE</span>
@@ -104,6 +110,14 @@
                 </div>
                 <div class="stat-label mt-3 mb-1"><i class="fas fa-bolt me-1"></i> Schnellste Runde je Auto</div>
                 <div class="si-fastlaps" id="lb-fastLaps"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-4 lb-widget-col" data-widget="fuel" draggable="true">
+        <div class="card stat-card stat-card-fuel h-100">
+            <div class="card-body py-3">
+                <div class="stat-label mb-2"><i class="fas fa-gas-pump me-1"></i> Tankinhalt</div>
+                <div id="lb-fuelWidget"></div>
             </div>
         </div>
     </div>
@@ -402,6 +416,23 @@ function updateLeaderboard() {
                 <span class="fl-car text-muted">${d.car}</span>
             </div>`).join('')
         : '<div class="small text-muted">Noch keine Runden</div>';
+
+    // Tank-Widget: Fahrer mit Tankdaten, wenigster Sprit zuerst
+    const fuelRows = drivers.filter(d => d.fuel >= 0).sort((a, b) => a.fuel - b.fuel);
+    const fuelEl = document.getElementById('lb-fuelWidget');
+    if (fuelEl) fuelEl.innerHTML = fuelRows.length
+        ? fuelRows.map(d => {
+            const fc = d.fuel > 50 ? 'var(--sr-success)' : d.fuel > 20 ? 'var(--sr-warning)' : 'var(--sr-danger)';
+            const low = d.fuel <= 20;
+            return `<div class="fuel-row">
+                <div class="fuel-row-head">
+                    <span class="fuel-name"><span class="fuel-dot" style="background:${d.color}"></span>${d.name}</span>
+                    <span class="fuel-pct${low ? ' text-danger fw-bold' : ''}">${low ? '<i class="fas fa-triangle-exclamation me-1"></i>' : ''}${d.fuel}%</span>
+                </div>
+                <div class="fuel-bar-container fuel-bar-lg"><div class="fuel-bar-fill" style="width:${d.fuel}%;background:${fc}"></div></div>
+            </div>`;
+        }).join('')
+        : '<div class="text-muted small py-2">Keine Tankdaten – die Tankfunktion in SmartRace aktivieren.</div>';
 
     // Leaderboard Tabelle
     const tbody = document.getElementById('leaderboardBody');
