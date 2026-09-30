@@ -1140,7 +1140,7 @@ function renderFuelWidget() {
         const fuel = fuelLevels[cid];
         if (fuel === undefined || fuel < 0) return;
         const color = (cd.color && cd.color !== '#333333') ? cd.color : getControllerColor(cid);
-        rows.push({ name: cd.name || ('Fahrer ' + cid), fuel, color });
+        rows.push({ car: cd.car || ('Auto ' + cid), fuel, color });
     });
     rows.sort((a, b) => a.fuel - b.fuel);   // wenigster Sprit zuerst (Pitstop-Bedarf)
     if (!rows.length) {
@@ -1152,7 +1152,7 @@ function renderFuelWidget() {
         const low = r.fuel <= 20;
         return `<div class="fuel-row">
             <div class="fuel-row-head">
-                <span class="fuel-name"><span class="fuel-dot" style="background:${r.color}"></span>${r.name}</span>
+                <span class="fuel-name"><span class="fuel-dot" style="background:${r.color}"></span>${r.car}</span>
                 <span class="fuel-pct${low ? ' text-danger fw-bold' : ''}">${low ? '<i class="fas fa-triangle-exclamation me-1"></i>' : ''}${r.fuel}%</span>
             </div>
             <div class="fuel-bar-container fuel-bar-lg"><div class="fuel-bar-fill" style="width:${r.fuel}%;background:${fc}"></div></div>
